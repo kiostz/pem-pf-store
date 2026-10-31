@@ -27,6 +27,13 @@ describe('HomeScreen', () => {
     expect(links[0]).toHaveAttribute('href', '#/shop')
   })
 
+  it('gives the steps card the same 1 px hairline as the shop cards', () => {
+    // catches: S7, the white steps block melting into the stone page for want of its edge
+    render(<HomeScreen data={loading} />)
+    const card = screen.getByRole('list') // the ordered list is the white block
+    expect(card).toHaveClass('border', 'border-border-subtle')
+  })
+
   it('lists the three steps in an ordered list, in order', () => {
     // catches: steps out of order or not a list
     render(<HomeScreen data={loading} />)

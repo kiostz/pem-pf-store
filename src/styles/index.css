@@ -19,8 +19,8 @@
   --color-trash: #c62828; /* the trash icon, 4.5:1 on the soft fill, 5.6:1 on a card */
   --color-tag-warning: #fdf0dc; /* the Unavailable tag's fill */
   --color-on-tag-warning: #8a4b00; /* the Unavailable tag's text, 6.1:1 */
-  --color-bg-inverse: #1d1d1f; /* the Removed note's fill */
-  --color-on-inverse: #f3f0ec; /* text on the Removed note, 14.8:1 */
+  --color-bg-inverse: #1b1b1d; /* the Removed note's fill; the red trash on it is 3.06:1 */
+  --color-on-inverse: #f3f0ec; /* text on the Removed note, 15.1:1 */
   --color-note-close: #c62828; /* the red circle of the failure note's close button, the same in both themes */
   --color-on-note-close: #ffffff; /* the white x on it, 5.6:1 */
   --color-focus-ring: #3b82f6; /* a blue that is not the brand colour: 3.2:1 on the page, 3.7:1 on a card, 4.0:1 on the band */
@@ -32,9 +32,9 @@
   --color-band-action: #e8b4bc; /* the rose Browse the shop pill, the same in both themes: 8.2:1 under its lettering */
   --color-on-band-action: #4a1520; /* oxblood lettering on the rose pill */
   /* The three trace colours are read by EmblemTrace as hex: keep them opaque hex the build cannot shorten to a colour name (#ff0000 becomes red), or the trace silently stops playing on the built site. */
-  --color-trace: #e8b4bc; /* the emblem trace's rose, 8.2:1 on the light band and 10.6:1 on the dark one */
+  --color-trace: #e8b4bc; /* the emblem trace's rose, 8.2:1 on the light band and 10.08:1 on the dark one */
   --color-trace-bright: #fff3f5; /* the trace's bright point and trail head */
-  --color-trace-core: #ffffff; /* the spark's white-hot core, 15.3:1 on the light band */
+  --color-trace-core: #ffffff; /* the spark's white-hot core, 14.80:1 on the light band */
 
   /* Type: the system stack, no font download. */
   --font-sans:
@@ -109,7 +109,7 @@
   box-shadow: var(--shadow-pill); /* a shadow in light, a hairline in dark */
 }
 
-/* A focused field or the captcha scrolls clear of the floating pill and the line over it (144 px), and of the failure note too while it shows (about 100 px more). */
+/* A focused field or the captcha scrolls clear of the floating pill and the line over it (144 px), and of the failure note too while it shows (128 px more). */
 html {
   scroll-padding-bottom: 9rem; /* the strip, the pill and the gaps */
 }
@@ -392,7 +392,7 @@ body {
     --color-trash: #c62828; /* the light-mode trash red */
     --color-tag-warning: #fdf0dc; /* the light-mode tag fill */
     --color-on-tag-warning: #8a4b00; /* the light-mode tag text */
-    --color-bg-inverse: #1d1d1f; /* the light-mode note fill */
+    --color-bg-inverse: #1b1b1d; /* the light-mode note fill */
     --color-on-inverse: #f3f0ec; /* the light-mode note text */
   }
 }

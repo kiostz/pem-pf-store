@@ -63,7 +63,7 @@ export function HomeScreen({ data }: { data: CatalogueLoad }) {
         </section>
         <section className="flex flex-col gap-3">
           <h2 className="text-lg font-bold">How ordering works</h2> {/* the steps' heading */}
-          <ol className="bg-bg-surface rounded-card flex flex-col">
+          <ol className="bg-bg-surface border-border-subtle rounded-card flex flex-col border">
             {/* One row per step. */}
             {STEPS.map((step, index) => (
               <li

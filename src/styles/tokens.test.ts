@@ -87,6 +87,7 @@ const TEXT_PAIRS: [string, string][] = [
 const ICON_PAIRS: [string, string][] = [
   ['trash', 'bg-soft'], // the trash on the stepper pill
   ['trash', 'bg-surface'], // the trash on a card
+  ['trash', 'bg-inverse'], // the trash beside "removed" on the Removed note (catches: S9, a note fill that leaves the red icon under 3:1)
   ['focus-ring', 'bg-app'], // the ring on the page
   ['focus-ring', 'bg-surface'], // the ring on a card
   ['focus-ring', 'header'], // the ring on the band

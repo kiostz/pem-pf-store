@@ -12,7 +12,7 @@ The tokens live in `src/styles/index.css`; this file says why they are what they
 - **Brand limits:**
   - The name is always "PEM Pathfinder Store".
   - Words come from the project glossary (honor, not badge or product).
-  - The site never copies the official Pathfinder emblem or uniform.
+  - The emblem is used on the public site: Home traces its outline (see The welcome band and the emblem trace). The trademark risk is accepted and a takedown would mean removing the trace.
   - English only.
 
 ## Direction
@@ -24,31 +24,40 @@ The tokens live in `src/styles/index.css`; this file says why they are what they
 
 ## Palette
 
-| Role                      | Light                                                      | Dark                                                    |
-| ------------------------- | ---------------------------------------------------------- | ------------------------------------------------------- |
-| page                      | `#F3F0EC` stone                                            | `#000000`                                               |
-| card                      | `#FFFFFF`                                                  | `#1C1C1E`                                               |
-| soft fill (stepper pill)  | `#ECE6E1`                                                  | `#2C2C2E`                                               |
-| ink (text)                | `#1D1D1F` (14.8:1 on page)                                 | `#F5F5F7` (19.3:1)                                      |
-| muted                     | `#55555A` (6.5:1 on page, 6.0:1 on soft fill)              | `#A1A1A6` (8.2:1 on page, 5.4:1 on soft fill)           |
-| hairline                  | `#D2D2D7`                                                  | `#38383A`                                               |
-| oxblood (header, buttons) | `#4A1520`; hover `#33101A`                                 | header `#2A0C12`                                        |
-| stone (text on oxblood)   | `#F3F0EC` (13.0:1; 15.0:1 on hover)                        | `#F3F0EC` (15.9:1 on the header)                        |
-| rose (dark buttons)       | not used                                                   | `#E8B4BC` (11.7:1 on page)                              |
-| button                    | oxblood fill, stone text (13.0:1)                          | rose fill, oxblood text (8.2:1; hover `#F0C4CA`, 9.5:1) |
-| errors                    | `#B91C1C` (5.7:1 on page)                                  | `#F87171` (6.2:1 on a card)                             |
-| trash icon                | `#C62828` (4.5:1 on soft fill)                             | `#FF6B6B` (5.0:1 on soft fill)                          |
-| Unavailable tag           | `#8A4B00` on `#FDF0DC` (6.1:1)                             | `#F5C26B` on `#3D2A0F`                                  |
-| Removed note              | `#F3F0EC` on `#1D1D1F` (14.8:1)                            | `#F5F5F7` on `#3A3A3C` (10.4:1)                         |
-| close mark on the failure note | white `#FFFFFF` on a `#C62828` circle, the same in both themes (5.6:1; the circle is 3.0:1 against the light note fill and 2.0:1 against the dark one, so the white × carries it) | same                                                    |
-| focus ring                | `#3B82F6` (3.2:1 on page, 3.7:1 on card, 4.0:1 on oxblood) | `#8AB4FF` (10.1:1 on page, 8.7:1 on the header)         |
+Every ratio below is measured from the values in `src/styles/index.css` (WCAG 2 relative luminance), not copied from an earlier draft. "Page" is the stone or black ground, "card" the white or dark surface, "soft" the stepper fill.
+
+| Role                           | Light                                                       | Dark                                                    |
+| ------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------- |
+| page                           | `#F3F0EC` stone                                             | `#000000`                                               |
+| card                           | `#FFFFFF`                                                   | `#1C1C1E`                                               |
+| soft fill (stepper pill, tab capsule) | `#ECE6E1`                                            | `#2C2C2E`                                               |
+| ink (text)                     | `#1D1D1F` (14.8:1 on page, 16.8:1 on card, 13.6:1 on soft)  | `#F5F5F7` (19.3:1 on page, 15.6:1 on card, 12.8:1 on soft) |
+| muted                          | `#55555A` (6.5:1 on page, 7.4:1 on card, 6.0:1 on soft)     | `#A1A1A6` (8.2:1 on page, 6.6:1 on card, 5.4:1 on soft) |
+| hairline                       | `#D2D2D7` (1.3:1 on page, 1.5:1 on card)                    | `#38383A` (1.8:1 on page, 1.5:1 on card)                |
+| oxblood (header, buttons)      | `#4A1520` (13.0:1 on page); hover `#33101A`                 | header `#2A0C12`                                        |
+| stone (text on oxblood)        | `#F3F0EC` (13.0:1; 15.0:1 on hover)                         | `#F3F0EC` (15.9:1 on the header)                        |
+| rose (dark buttons)            | not used for buttons                                        | `#E8B4BC` (11.7:1 on page, 9.5:1 on card)               |
+| button                         | oxblood fill, stone text (13.0:1)                           | rose fill, oxblood text (8.2:1; hover `#F0C4CA`, 9.5:1) |
+| Browse the shop pill (Home)    | rose `#E8B4BC` with oxblood text (8.2:1); 8.2:1 against the band | the same; 10.1:1 against the dark band             |
+| errors                         | `#B91C1C` (5.7:1 on page, 6.5:1 on card)                    | `#F87171` (7.6:1 on page, 6.2:1 on card)                |
+| trash icon                     | `#C62828` (4.5:1 on soft, 5.6:1 on card, 3.06:1 on the Removed note) | `#FF6B6B` (5.0:1 on soft, 6.1:1 on card, 4.1:1 on the note) |
+| Unavailable tag                | `#8A4B00` on `#FDF0DC` (6.1:1)                              | `#F5C26B` on `#3D2A0F` (8.3:1)                          |
+| Removed note                   | `#F3F0EC` on `#1B1B1D` (15.1:1)                             | `#F5F5F7` on `#3A3A3C` (10.4:1)                         |
+| close mark on the failure note | white `#FFFFFF` on a `#C62828` circle, the same in both themes (5.6:1). The circle is 3.06:1 against the light note fill and 2.0:1 against the dark one, so the white x carries it, not the circle | same |
+| focus ring                     | `#3B82F6` (3.2:1 on page, 3.7:1 on card, 4.0:1 on oxblood)  | `#8AB4FF` (10.1:1 on page, 8.2:1 on card, 8.7:1 on the header) |
+| cart stepper focus ring        | oxblood (12.0:1 on soft, 14.8:1 on card)                    | `#8AB4FF` (6.7:1 on soft, 8.2:1 on card)                |
+| emblem trace                   | rose `#E8B4BC` (8.2:1 on the band)                          | the same (10.1:1 on the dark band)                      |
 
 - The Category mark colours stay as ruled (real patch backgrounds).
-- Red is kept for errors and the trash icon only.
+- Red is kept for errors, the trash icon and the failure note's close circle.
 - Tan `#B89A7A` is not used: it is 2.6:1 on white, so never text.
-- The focus ring is blue (`#3B82F6`) so it never matches the oxblood it sits on. It measures 2.97:1 on the soft fill, so the cart stepper has its own ring: oxblood in light (12.0:1 on the soft fill, 14.8:1 on a card) and `#8AB4FF` in dark (6.7:1 on the soft fill, 8.2:1 on a card).
-- Print keeps the light values.
-- A test (`src/styles/tokens.test.ts`) holds the listed text pairs at 4.5:1 and the listed icon and ring pairs at 3:1, in light, dark and print.
+- The focus ring is blue (`#3B82F6`) so it never matches the oxblood it sits on. It measures 2.97:1 on the soft fill, so the cart stepper has its own ring (above).
+- The hairline is a quiet edge, not a boundary a reader depends on: it is about 1.5:1, below the 3:1 a control edge would need. Every control that must be found (fields, steppers, buttons) has text or a fill that carries it, and the card edge only tidies the grouping.
+- The trash icon beside "removed" in the light Removed note is 3.06:1 on the note fill `#1B1B1D`, held at 3:1 by the test. The red `#C62828` is ruled, so the note fill was darkened from `#1D1D1F` to reach it.
+- Tile names: near-black `#171717` on the two light tiles (9.1:1 on Household Arts `#F6A949`, 15.9:1 on Nature `#F0F2ED`; the tile colours are patch colours), white elsewhere, always over a dark halo (see Components).
+- Print keeps the light values on a white page.
+- A test (`src/styles/tokens.test.ts`) holds the listed text pairs at 4.5:1 and the listed icon and ring pairs at 3:1, in light, dark and print, plus the close mark, the Browse the shop pill and the trace.
+- The three trace colours (`trace`, `trace-bright`, `trace-core`) are read by the trace's canvas code as hex. Keep them opaque hex that the build cannot shorten to a colour name (`#ff0000` would become `red`). The build does shorten `#ffffff` to `#fff`, so the reader accepts the three-digit form too; a value it cannot read leaves the trace as the still outline.
 
 ## Type
 
@@ -60,19 +69,23 @@ The tokens live in `src/styles/index.css`; this file says why they are what they
 ## Layout
 
 ```
-375 px                              desktop (1440)
-PEM Pathfinder Store      [◐ v]      PEM Pathfinder Store                 [◐ System v]
-( ⌕ Search honors          )        ( ⌕ Search honors   )  [ All categories v ]
+Shop, 375 px                        Shop, desktop (1440)
+PEM Pathfinder Store  [☀]           PEM Pathfinder Store                          [☀]
+Shop                                Shop
+( ⌕ Search items           )        ( ⌕ Search items   )  [ All categories v ]
 [ All categories v ]
-┌──────────┐ ┌──────────┐           ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
-│  ( ◉ )   │ │  ( ◉ )   │           │ ( ◉ )  │ │ ( ◉ )  │ │ ( ◉ )  │ │ ( ◉ )  │
-│Knot Tying│ │Camping I │           │Knot T. │ │Camp. I │ │First A.│ │Swimming│
-│Outdoor   │ │Recreation│           │RM 4.00 │ │RM 4.00 │ │RM 4.00 │ │RM 4.00 │
-│RM 4.00   │ │RM 4.00   │           │ (Add)  │ │(− 1 +) │ │ (Add)  │ │ (Add)  │
-│  (Add)   │ │ (− 1 +)  │           └────────┘ └────────┘ └────────┘ └────────┘
+┌──────────┐ ┌──────────┐           ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐
+│  ( ◉ )   │ │  ( ◉ )   │           │ ( ◉ )│ │ ( ◉ )│ │ ( ◉ )│ │ ( ◉ )│ │ ( ◉ )│
+│Knot Tying│ │Camping I │           │Knot T│ │Camp. │ │First │ │Swim. │ │Nature│
+│Outdoor   │ │Recreation│           │RM4.00│ │RM4.00│ │RM4.00│ │RM4.00│ │RM4.00│
+│RM 4.00   │ │RM 4.00   │           │ (Add)│ │(−1+) │ │ (Add)│ │ (Add)│ │ (Add)│
+│  (Add)   │ │ (− 1 +)  │           └──────┘ └──────┘ └──────┘ └──────┘ └──────┘
 └──────────┘ └──────────┘
 [ Home ][ Shop ][ Cart ]              tab pill floating at the bottom of Home and Shop
 (Home)(Shop)( 3 items · RM 12.00  › ) the Cart tab grows once something is picked
+```
+
+Columns: 1 under 348 px, 2 from 348 px, 3 from 640 px, 4 from 768 px, 5 from 1,024 px. The site name sits small above the "Shop" heading; Home's title is big (see Spacing and sizes).
 ```
 
 Home, the landing page at `#/` (375 px):
@@ -104,24 +117,122 @@ Cart                           Cart, nothing to order      Details
   RM 20.00      [Checkout >] )                             ( Send order · RM 24.00 )
 ```
 
-- The pill is one shape on every screen: white, 64 px tall, 16 px from the sides, 22 px from the bottom, 420 px at most and centred, with the shadow (a hairline in dark). Home and Shop fill it with tabs; the cart with the total and Checkout; the details page with Send order. The action is an oxblood pill 52 px tall, with a small › where it leads on (not on Send order).
-- Whatever is stacked above the pill (the Removed note, the failure note, the no-payment line) sits 12 px over it, in a stack as wide as the pill.
-- The cart's pill reads "Estimated total · 5 items" over the total on the left and Checkout on the right. With nothing to order it holds one full-width Browse more.
-- The details page's pill holds "Send order · RM 24.00" at full width. The line above it sits on a stone strip so it reads over the form scrolling beneath it. If a send fails, a dark note appears above the line, like the Removed note but with a white × on a red 32 px circle (44 px tap area) in place of Undo; it stays until the next send or the ×, because a buyer has to act on it.
-- Order sent has no pill; Save as PDF or print stays in the page. No pill prints.
+Content is centred in a 1,200 px column on desktop; the cart, details and Order sent screens use a 768 px column.
 
-- Cards: white, large radius, no shadow in light mode, a hairline in dark mode.
-- The header is an oxblood band in one grid on every screen: a 44 px left slot, the title, a 44 px right slot, so the title never moves. Home shows the big "PEM Pathfinder Store" (18 px under 400 px, so it stays on one line; balanced over two lines if it must wrap) and, on the right, the theme button. Shop shows a small "PEM Pathfinder Store" over "Shop" and the theme button. Inner screens (cart, details, confirmation) show a solid < back button on the left and a small "PEM Pathfinder Store" above the page title, with no theme button.
-- The theme button is a 44 px outlined circle: a sun while the page is light, a moon while it is dark. A tap flips between the two and remembers the pick; the first visit follows the device.
-- Home's welcome band runs the full width under the header with rounded bottom corners; its text sits in the 1,200 px column. Browse the shop is a rose pill (the same rose in light and dark).
-- A category tile is the category's full patch colour with its name bottom-left. The name follows the category mark's rule: near-black `#171717` on the two light tiles (Nature, Household Arts), white on the rest. White names sit in a dark halo (`text-shadow-halo`), and on Arts and Crafts, where white is only 3.6:1, in a stronger, tighter one (`text-shadow-halo-strong`). Near-black names have no halo.
-- `on-patch` (`#FFFFFF`, the same in light and dark) is the white of those tile names; it is used only over the halo.
-- The emblem trace is decoration. It draws once when Home opens, in under 5 s, then only the outline stays: a rose line, 2 px at 55 % opacity. Each piece of line takes its colour from the time since the point passed it: white-hot for a moment, then a rose glow, then the resting outline, drawn with additive blending, so the head glows and cools to rose. A copy of each frame at half size, blurred by 8 px and added on top, makes the hot parts bleed a soft bloom. The head has a white core, a rose disc, a halo and four flickering rays, and it throws about 40 rose sparks a second. The canvases reach 16 px beyond the 174 × 170 box on every side so the head's glow is never cut flat; the box itself does not change. A static SVG holds the one path; it is the resting outline and the geometry the canvases read, and it is hidden only while the canvases play. With Reduce Motion, with no canvas, and after the play it is the whole drawing. The text column stops short of the drawing from 640 px and the drawing sits under the text on a phone, so no letter lies over the line (stone text on the line blended into the band would fall to 3.8:1). Two canvases repaint for the 4.8 s, accepted because per-piece colour with additive blending and a blur is not something one SVG can do cheaply, and it is one short drawing; the frame loop stops and both canvases clear at 4.8 s, so nothing moves after 5 s and it needs no pause control. With Reduce Motion the loop never starts.
-- The tab pill floats on Home and Shop only: Home, Shop and Cart. The current tab sits on the stone capsule (`bg-soft`) in oxblood (rose in dark). With an empty cart the three tabs are equal. Once an item is orderable, Home and Shop shrink to 64 px and the Cart tab grows into an oxblood button reading the Item count over the estimated total (the full words "Estimated total" from 640 px), then ›. Its accessible name is "Cart, 5 items, estimated total RM 20.00". Order sent shows no pill. The cart and the details page end in the same floating pill with other contents (below), and keep the <. The Shop tab reopens the last Shop address.
-- The tab pill's width change is 250 ms (`duration-toggle`, `ease-in-out-soft`: the move stays on screen). The tabs are flex items that transition `flex-grow` and `flex-basis`, because a grid's `1fr` and `64px` tracks do not interpolate. That animates layout, not only transform and opacity; it is accepted for one 64 px bar. With Reduce Motion the widths jump and the content takes a plain quick fade.
-- The pill's edge: a soft shadow (`--shadow-pill`, drawn by `.pill-edge`) in light, and in dark a 1 px `border-subtle` hairline in its place, because a shadow does not read on black (cards do the same).
-- Buttons are pills. Add turns into a − 1 + pill on the card after the first tap.
-- Content is centred in a 1,200 px column on desktop.
+## Components
+
+### The header
+
+- An oxblood band in one grid on every screen: a 44 px left slot, the title, a 44 px right slot, so the title never moves. On paper the band drops its fill and takes ink.
+- Home shows the big "PEM Pathfinder Store" (18 px under 400 px so it stays on one line, 20 px to 640 px, 28 px from 640 px; balanced over two lines if it must wrap) and the theme button on the right.
+- Shop shows a small "PEM Pathfinder Store" over "Shop" and the theme button.
+- Inner screens (cart, details, Order sent) show a solid < back button on the left and a small "PEM Pathfinder Store" above the page title, with no theme button. The < is frozen while an order sends.
+
+### The theme button
+
+A 44 px outlined circle in the header of Home and Shop: a sun while the page is light, a moon while it is dark. A tap flips between the two and remembers the pick; the first visit follows the device. It does not print.
+
+### The floating pill
+
+- One shape on every screen that has one: white, 64 px tall, 16 px from the sides, 22 px from the bottom, 420 px at most and centred. Its edge is a soft oxblood-tinted shadow (`--shadow-pill`, drawn by `.pill-edge`) in light, and in dark a 1 px `border-subtle` hairline in its place, because a shadow does not read on black.
+- Four contents:
+  - Home and Shop: the tabs (Home, Shop, Cart).
+  - Cart: "Estimated total · 5 items" over the total on the left, Checkout on the right. With nothing to order, one full-width Browse more.
+  - Details: "Send order · RM 24.00" at full width.
+  - Order sent: no pill. Save as PDF or print stays in the page.
+- The action inside is an oxblood pill 52 px tall, with a small › where it leads on (not on Send order).
+- Whatever is stacked above the pill (the Removed note, the failure note, the no-payment line) sits 12 px over it, as wide as the pill. The no-payment line sits on a stone strip so it reads over the form scrolling beneath it.
+- No pill prints.
+
+### The tab pill
+
+- Home, Shop and Cart. The current tab sits on the stone capsule (`bg-soft`) in oxblood (rose in dark). With an empty cart the three tabs are equal.
+- Once an item is orderable, Home and Shop shrink to 64 px and the Cart tab grows into an oxblood button reading the Item count over the estimated total (the full words "Estimated total" from 640 px), then ›. Its accessible name is "Cart, 5 items, estimated total RM 20.00", and a hidden status line announces the count and total.
+- The Shop tab reopens the last Shop address.
+
+### Cards
+
+- White (dark `#1C1C1E`), 16 px radius, and a 1 px `border-subtle` hairline in both themes. No shadow in either theme: the hairline alone gives the edge, so a card looks the same whichever way the theme is set.
+- This holds for the Honor card, the cart card, and the cards on Order sent. Home's "How ordering works" list has it too, with hairline dividers between steps in the soft fill.
+- The patch picture is the hero of an Honor card; the name wraps rather than truncates; the Category label is a quiet text box (not a control); the price is muted in tabular figures; Add sits at the same height on every card in a row.
+
+### Buttons and steppers
+
+- Buttons are pills, 44 px tall at least, with a press feedback of scale 0.97 over 100 ms and the focus ring outside.
+- Add turns into a - 1 + pill on the card after the first tap (134 px wide).
+- The cart's stepper pill is 36 px drawn on the soft fill with a 44 px tap area per control. At quantity 1 the minus becomes the trash.
+
+### The Removed note and the failure note
+
+- Both are the same dark note (`bg-inverse`), as wide as the pill, stacked 12 px above it.
+- The Removed note names the honor and has Undo. It slides up and fades in; it holds 5 s, fades in its last 150 ms, pauses while the pointer or focus is on it, and restarts at 5 s when they leave. With Reduce Motion it fades only.
+- The send-failure note shows when sending fails: a white x on a red 32 px circle (44 px tap area) in place of Undo. It stays until the next send or the x, because a buyer has to act on it.
+
+### Category tiles
+
+- A tile is the category's full patch colour, 104 x 88 px, its name bottom-left, in a row that scrolls sideways so the next tile shows in part.
+- The name follows the category mark's rule: near-black `#171717` on the two light tiles (Nature, Household Arts), white on the rest. White names sit in a dark halo (`text-shadow-halo`), and on Arts and Crafts, where white is only 3.6:1, in a stronger, tighter one (`text-shadow-halo-strong`). Near-black names have no halo.
+- `on-patch` (`#FFFFFF`, the same in light and dark) is the white of those names; it is used only over the halo.
+
+### The welcome band and the emblem trace
+
+- Home's band runs the full width under the header with 16 px bottom corners; its text sits in the 1,200 px column. Browse the shop is a rose pill (the same rose in light and dark), the one primary action.
+- The emblem trace is decoration. It draws once when Home opens, in under 5 s, then only the outline stays: a rose line, 2 px at 55 % opacity, print hidden.
+  - Each piece of line takes its colour from the time since the point passed it: white-hot for a moment, then a rose glow, then the resting outline, drawn with additive blending, so the head glows and cools to rose.
+  - A copy of each frame at half size, blurred by 8 px and added on top, makes the hot parts bleed a soft bloom (a CSS filter on the element, not the canvas context's, which older Safari lacks).
+  - The head has a white core, a rose disc, a halo and four flickering rays, and it throws about 40 rose sparks a second.
+  - The canvases reach 16 px beyond the 174 x 170 box on every side so the head's glow is never cut flat; the box itself does not change.
+  - A static SVG holds the one path; it is the resting outline and the geometry the canvases read, and it is hidden only while the canvases play. With Reduce Motion, with no canvas, and after the play it is the whole drawing.
+  - The text column stops short of the drawing from 640 px and the drawing sits under the text on a phone, so no letter lies over the line (stone text on the line blended into the band would fall to 3.8:1).
+- Why it repaints: two canvases repaint for the 4.8 s because per-piece colour with additive blending and a blur is not something one SVG can do cheaply, and it is one short drawing. The frame loop stops and both canvases clear at 4.8 s, so nothing moves after 5 s and it needs no pause control. With Reduce Motion the loop never starts. It plays again each time Home opens.
+
+## Radius and motion
+
+| Token                 | Value                                   | Use                                                              |
+| --------------------- | --------------------------------------- | ---------------------------------------------------------------- |
+| `radius-card`         | 16 px                                   | cards, notes, the band's bottom corners                          |
+| `radius-pill`         | full                                    | buttons, fields, the floating pill                               |
+| `radius-picture`      | 10 px                                   | the cart row's Patch picture                                     |
+| `duration-press`      | 100 ms                                  | press feedback (scale 0.97)                                      |
+| `duration-fast`       | 150 ms                                  | menus fading, Reduce Motion fades       |
+| `duration-enter`      | 240 ms                                  | the one entrance fade, the Removed note's slide                  |
+| `duration-exit`       | 150 ms                                  | things leaving, the Removed note's exit                          |
+| `duration-toggle`     | 250 ms                                  | the tab pill's width change                                      |
+| `duration-trace`      | 4,800 ms                                | the emblem trace's whole play, under 5 s                         |
+| `delay-loader`        | 300 ms                                  | a spinner or skeleton stays hidden this long, so quick waits flash nothing |
+| `ease-out-soft`       | `cubic-bezier(0.22, 1, 0.36, 1)`        | things entering                                                  |
+| `ease-in-soft`        | `cubic-bezier(0.4, 0, 1, 1)`            | things leaving                                                   |
+| `ease-in-out-soft`    | `cubic-bezier(0.65, 0, 0.35, 1)`        | a move that stays on screen: the tabs changing width             |
+
+- Motion is short and plain. The one entrance is a fade. The Removed note slides up 16 px while it fades in.
+- The tab pill's width change is 250 ms (`duration-toggle`, `ease-in-out-soft`). The tabs are flex items that transition `flex-grow` and `flex-basis`, because a grid's `1fr` and `64px` tracks do not interpolate. That animates layout, not only transform and opacity; it is accepted for one 64 px bar. With Reduce Motion the widths jump and the content takes a plain quick fade.
+- The emblem trace repaints two canvases for under 5 s (see Components); it is the only animation that is not a transition or a fade.
+- Reduce Motion: no width change, no slide, no canvases. The still SVG outline stays.
+- The send spinner is hidden for 300 ms, then fades in and turns round once every 0.8 s until the send ends.
+- Scrolling: a focused field or the captcha scrolls clear of the floating pill and the line over it (144 px), and 272 px while the failure note shows.
+
+## States per screen
+
+- **Home:** the band and the steps never wait on the data. The tiles show skeleton tiles while loading, then the tiles; on a failed load, the load error with Try again; with nothing switched on, "Nothing is in the shop yet. Check back soon." The tab pill shows with the Cart tab plain or grown.
+- **Shop:** skeleton toolbar, count and cards of the cards' own shape while loading (nothing for the first 300 ms); the grid fades in once as a whole. The count line is polite-live. With no match: "No items match ..." and Clear filters. With nothing switched on: the empty message. On a failed load: the load error and Try again. Cards fall to one column under 348 px, where two would be too narrow for the stepper.
+- **Cart:** lines in one card, each with a stepper; an Unavailable line is greyed, tagged and left out of the total, with a trash and a note under the heading saying how many items are no longer available. Removing a line shows the Removed note with Undo. Empty cart: a soft circle, "Your cart is empty" and one full-width Browse more in the pill, which returns to the Shop entry it came from. Loading shows lines of the same shape after 300 ms; a failed load shows the load error and Try again.
+- **Details:** the form in a 768 px column with Send order in the pill. A page that cannot lead to a right order (empty cart, an Unavailable line still in it, a typed address) goes back to the cart. While sending, the heading and fields are inert and Send order shows the spinner. After a failed send the failure note shows above the pill.
+- **Order sent:** the whole order for the buyer to keep or print: order number, date, lines, estimated total and the buyer's details. It leaves only by its <. No pill. With no order in this tab: "There is no order to show here." and Browse more.
+
+## Print
+
+- Print uses the light values on a white page whatever the theme; the dark rules are screen only.
+- The header and Home's band drop their fills and take ink. The theme button, the floating pill, notes, the trace and the print button do not print.
+- Order sent's blocks do not break across pages.
+
+## Replaced rulings
+
+- Cards no longer have "no edge in light": they keep the 1 px hairline in both themes.
+- The trace is the canvas heat tracer; the earlier SVG tails and CSS rider are gone, and so are the `duration-trace-build` and `duration-trace-flicker` tokens.
+- Tile names are dark on the two light tiles and white with a halo on the others (not an all-white halo).
+- The name is "PEM Pathfinder Store" everywhere; no earlier name appears.
+- One floating pill on every screen with one, with the failure note's white x on red.
+- The theme control is one button (sun or moon), not a dropdown.
 
 ## Spacing and sizes
 
@@ -158,7 +269,7 @@ All spacing is on a 4 px scale (Tailwind steps). The gap inside a group is small
 | Tab pill tabs                           | 52 px tall in 6 px padding, 4 px gaps; Home and Shop 64 px wide once Cart grows | `h-13 px-1.5 gap-1 basis-16` |
 | Bottom clearance under every screen     | 112 px: 26 px above the pill's top edge (64 + 22 = 86 px) | `pb-28`      |
 | Pill action (Checkout, Send order, Browse more) | 52 px tall in the 64 px pill (6 px round it), 24 px side padding inside Checkout | `h-13 px-6` |
-| Pill start padding (cart total)         | 20 px (the design draws 22; 20 is on the 4 px scale) | `ps-5`            |
+| Pill start padding (cart total)         | 20 px (20 is on the 4 px scale) | `ps-5`            |
 | Stack above the pill                    | 12 px between the pill and what sits over it | `gap-3`                  |
 | Bottom clearance, cart and details      | 208 px: the screen's 96 px plus 112 px, clearing the note (about 52 px), the 12 px gap and the pill (64 + 22 px); on the details page while the failure note shows, 352 px (240 + 112) so the note never covers a line of the form | `pb-24`, `pb-60` |
 | Home title                              | 18 px under 400 px, 20 px to 640 px, 28 px from 640 px | `text-lg min-[400px]:text-xl sm:text-title` |
@@ -175,10 +286,11 @@ All spacing is on a 4 px scale (Tailwind steps). The gap inside a group is small
 
 ## Principles
 
-- Oxblood marks every action and the header; nothing else uses it. Dark mode swaps the buttons to rose.
+- Oxblood marks every action and the header; nothing else uses it, except the rose Browse the shop pill on Home's band. Dark mode swaps the buttons to rose.
 - The patch is the hero of every card. Text stays small and grey under it.
-- Quiet chrome: no gradients and no decoration. The space between things does the separating.
+- Quiet chrome: no gradients and no decoration except Home's emblem trace. The space between things does the separating.
 - The theme button sits in the header on Home and Shop only.
+- Cards have the 1 px hairline and no shadow; only the floating pill casts one, and only in light.
 - One way back on inner screens: the < button in the header. Other buttons say "Browse more" when they lead to the catalogue.
 
 ## Fixed choices
