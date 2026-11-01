@@ -1,0 +1,85 @@
+# Deploys the API Worker to Cloudflare when its code or data changes on main; a test job without secrets gates a deploy job whose install runs no package scripts, so install scripts never hold the Cloudflare token.
+name: Deploy API Worker # name shown in the Actions tab
+
+on: # when the workflow runs
+  push: # on a push
+    branches: ['main'] # only the main branch
+    paths: # only when one of these changes
+      - 'workers/**' # Worker code
+      - 'public/data/**' # the data the import tests read
+      - '.nvmrc' # the Node version
+      - '.github/workflows/deploy-workers.yml' # this file
+  workflow_dispatch: # also from the Actions tab by hand; the deploy job still runs only on main
+
+permissions: # every job token may only read the repository
+  contents: read # read the repository
+
+concurrency: # one Worker deploy at a time, apart from the Pages deploy
+  group: worker # shared group name
+  cancel-in-progress: false # a running deploy finishes; only the newest queued run waits its turn
+
+jobs: # the jobs of this workflow
+  test: # typecheck and tests; holds no secrets, so install scripts may run here
+    runs-on: ubuntu-latest # runner image
+    timeout-minutes: 15 # a hung test cannot hold the runner for hours
+    defaults: # every run step works in workers/
+      run: # shell defaults
+        working-directory: workers # the Workers npm project
+    steps: # run in order; a failure stops the workflow and the live Worker stays as it was
+      - name: Checkout # fetch the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: # action inputs
+          persist-credentials: false # do not leave the job token in .git/config
+      - name: Set up Node # Node from .nvmrc with the npm cache
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with: # action inputs
+          node-version-file: .nvmrc # same Node as local
+          cache: 'npm' # cache npm downloads
+          cache-dependency-path: workers/package-lock.json # the Workers lockfile
+      - name: Install dependencies # exact versions from the lockfile, install scripts on (workerd for the tests)
+        run: npm ci # clean install
+      - name: Typecheck # types
+        run: npm run typecheck # tsc on the Worker, tests and import
+      - name: Test # Worker and import tests
+        run: npm test # vitest and the writer check
+  deploy: # publish the API Worker once the tests pass; remote migrations stay manual
+    needs: test # runs only if typecheck and tests passed
+    if: github.ref == 'refs/heads/main' # never from another branch, even by hand
+    runs-on: ubuntu-latest # runner image
+    timeout-minutes: 10 # a deploy is quick
+    defaults: # every run step works in workers/
+      run: # shell defaults
+        working-directory: workers # the Workers npm project
+    steps: # run in order
+      - name: Check for Cloudflare secrets # skip cleanly until the one-time setup has added them
+        id: secrets # lets later steps read ready
+        env: # secrets as env, never echoed
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }} # deploy token
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }} # account id
+        working-directory: . # workers/ is not checked out yet
+        run: | # sets ready=true only when both are present
+          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; else echo "::notice::Cloudflare secrets not set yet; Worker deploy skipped."; fi
+      - name: Checkout # fetch the code
+        if: steps.secrets.outputs.ready == 'true' # only once set up
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: # action inputs
+          persist-credentials: false # do not leave the job token in .git/config
+      - name: Set up Node # Node from .nvmrc with the npm cache
+        if: steps.secrets.outputs.ready == 'true' # only once set up
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with: # action inputs
+          node-version-file: .nvmrc # same Node as local
+          cache: 'npm' # cache npm downloads
+          cache-dependency-path: workers/package-lock.json # the Workers lockfile
+      - name: Install dependencies without scripts # no package script runs in a job that holds the token
+        if: steps.secrets.outputs.ready == 'true' # only once set up
+        run: npm ci --ignore-scripts # clean install, scripts off
+      - name: Deploy # publish the API Worker with the lockfile's wrangler
+        if: steps.secrets.outputs.ready == 'true' # only once set up
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
+        with: # action inputs
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }} # scoped to the one account, Workers deploy only
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }} # the account that holds the Worker
+          workingDirectory: workers # where wrangler and the config live
+          wranglerVersion: '4.151.1' # same wrangler as the lockfile, so the action uses the installed copy
+          command: deploy --config api/wrangler.jsonc # deploy the API Worker only

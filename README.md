@@ -86,14 +86,17 @@ The API Worker answers `GET` only, with JSON and `Cache-Control: no-store`:
 
 Paths match exactly, so `/items/` is 404. Errors are a short code only: 404 `not-found`, 405 `method-not-allowed` (with `Allow: GET`), 429 `rate-limited` (with `Retry-After: 60`), 500 `server`. CORS: `Access-Control-Allow-Origin` is sent only when `Origin` is exactly `https://kiostz.github.io` (the `SHOP_ORIGIN` var); other callers still get the body. A rate limit of 60 requests per 60 seconds per client IP (the `RATE_LIMITER` binding in `api/wrangler.jsonc`) answers 429 past it; `wrangler dev` enforces it locally too. Cloudflare's docs imply the free plan includes this binding; confirm it at the first deploy.
 
-### Deploying the API Worker (owner, one time)
+### Deploying the API Worker (one time, on the Mac)
 
-On the Mac, from `workers/`, in this order:
+From `workers/`, in this order:
 
 1. `npx wrangler login`.
 2. `npx wrangler d1 create pem-pathfinder-store --location apac`.
 3. Paste the printed `database_id` into `api/wrangler.jsonc` and commit it (it is not a secret).
-4. `npm run db:migrate:remote`, then `npm run db:import:remote`.
-5. Make a Cloudflare API token scoped to the one account (Workers Scripts and D1 edit) and save it as the repository secret `CLOUDFLARE_API_TOKEN`, with `CLOUDFLARE_ACCOUNT_ID` beside it.
+4. `npm run db:migrate:remote`, then `npm run db:import:remote`. These use your wrangler login, never the CI token.
+5. Make a Cloudflare API token for this one account with Workers Scripts: Edit only (no D1 permission; CI never touches the database) and save it as the repository secret `CLOUDFLARE_API_TOKEN`, with `CLOUDFLARE_ACCOUNT_ID` beside it. If the first deploy says a permission is missing, add only what it names.
+6. In the Actions tab, run "Deploy API Worker" by hand once (Run workflow on `main`).
 
-Later, a push to `main` that touches `workers/` is meant to run a Worker job in GitHub Actions (`npm ci`, typecheck and tests in `workers/`, then `cloudflare/wrangler-action` deploys; a failing test stops the deploy). That CI job does not exist yet: the workflow change waits for the deploy checklist. Remote migrations stay manual (step 4), never in CI. After the first deploy, open `https://pem-pathfinder-store-api.<account>.workers.dev/items`.
+After that, a push to `main` that touches `workers/`, `public/data/` or `.nvmrc` runs `.github/workflows/deploy-workers.yml`. A test job with no secrets runs `npm ci`, typecheck and tests; only if they pass, a deploy job installs with `npm ci --ignore-scripts` (no package script ever runs next to the token) and `cloudflare/wrangler-action` deploys. A failing test stops the deploy and the live Worker stays as it was. Only `main` deploys, even from the Run workflow button. Until both secrets exist the deploy job skips with a notice. Remote migrations stay manual (step 4), never in CI. After each deploy, open `https://pem-pathfinder-store-api.<account>.workers.dev/items`: 200 with a JSON list.
+
+To undo a bad deploy: run `npx wrangler rollback --config api/wrangler.jsonc` from `workers/` on the Mac, then revert the bad commit and push, or the next push deploys it again. A rollback restores the Worker code only; it never undoes a database migration or the import.
