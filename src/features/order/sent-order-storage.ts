@@ -2,7 +2,7 @@
 
 import type { SentOrder } from './order-email.ts' // the stored shape
 
-export const SENT_ORDER_STORAGE_KEY = 'pathfinder-honors-store-my:sent-order' // repo name in the key: the site origin is shared by the account's other sites
+export const SENT_ORDER_STORAGE_KEY = 'pem-pf-store:sent-order' // repo name in the key: the site origin is shared by the account's other sites
 const SENT_ORDER_VERSION = 1 // the stored format
 
 let heldOrder: SentOrder | null = null // the order of this tab when sessionStorage could not take it

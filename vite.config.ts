@@ -12,7 +12,7 @@ import { defineConfig } from 'vite'
 // Exported Vite configuration used by `vite` and `vite build`.
 export default defineConfig({
   // The site lives under the repository name on GitHub Pages.
-  base: '/pathfinder-honors-store-my/',
+  base: '/pem-pf-store/',
   // React first, then Tailwind's CSS plugin.
   plugins: [react(), tailwindcss()],
   // Keep `/*! */` licence comments (Tabler's MIT notice) in the built JS.

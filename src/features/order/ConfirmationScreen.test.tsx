@@ -81,7 +81,7 @@ describe('ConfirmationScreen', () => {
     // catches: the stored value read and warned about on every render
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     window.sessionStorage.setItem(
-      'pathfinder-honors-store-my:sent-order',
+      'pem-pf-store:sent-order',
       JSON.stringify({ version: 1, order: { number: 'x' } }),
     )
     const { rerender } = render(<ConfirmationScreen onBack={() => {}} />)
@@ -153,7 +153,7 @@ describe('ConfirmationScreen', () => {
     // catches: a foreign stored order throwing in the confirmation render
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     window.sessionStorage.setItem(
-      'pathfinder-honors-store-my:sent-order',
+      'pem-pf-store:sent-order',
       JSON.stringify({ version: 1, order: { number: 'PF-20261028-4K7Q' } }),
     )
     render(<ConfirmationScreen onBack={() => {}} />)
@@ -163,7 +163,7 @@ describe('ConfirmationScreen', () => {
   it('shows the empty state for bad JSON in the stored order', () => {
     // catches: a parse error reaching the page
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    window.sessionStorage.setItem('pathfinder-honors-store-my:sent-order', '{oops')
+    window.sessionStorage.setItem('pem-pf-store:sent-order', '{oops')
     render(<ConfirmationScreen onBack={() => {}} />)
     expect(screen.getByText('There is no order to show here.')).toBeInTheDocument()
   })
@@ -195,7 +195,7 @@ describe('ConfirmationScreen', () => {
     first.unmount()
     render(<ConfirmationScreen onBack={() => {}} />)
     expect(screen.getByText('PF-20261028-4K7Q')).toBeInTheDocument()
-    expect(window.sessionStorage.getItem('pathfinder-honors-store-my:sent-order')).not.toBeNull()
+    expect(window.sessionStorage.getItem('pem-pf-store:sent-order')).not.toBeNull()
   })
 
   it('shows text typed by the buyer as text, not as markup', () => {

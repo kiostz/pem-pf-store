@@ -1,6 +1,6 @@
 # PEM Pathfinder Store
 
-Honors store for Pathfinder clubs. Static site (React, Vite, TypeScript, Tailwind) hosted on GitHub Pages at https://kiostz.github.io/pathfinder-honors-store-my/.
+Honors store for Pathfinder clubs. Static site (React, Vite, TypeScript, Tailwind) hosted on GitHub Pages at https://kiostz.github.io/pem-pf-store/.
 
 ## Run locally
 
@@ -9,7 +9,7 @@ Needs Node 24 (see `.nvmrc`).
     npm ci
     npm run dev
 
-Open the address Vite prints. For the production build: `npm run build && npm run preview`, then open http://localhost:4173/pathfinder-honors-store-my/.
+Open the address Vite prints. For the production build: `npm run build && npm run preview`, then open http://localhost:4173/pem-pf-store/.
 
 ## Order form settings
 

@@ -2,7 +2,7 @@
 
 import { clampQuantity, type CartQuantities } from './cart.ts' // the quantity rules
 
-export const CART_STORAGE_KEY = 'pathfinder-honors-store-my:cart' // repo name in the key: the site origin is shared by the account's other sites
+export const CART_STORAGE_KEY = 'pem-pf-store:cart' // repo name in the key: the site origin is shared by the account's other sites
 const CART_VERSION = 1 // the stored format
 
 /**

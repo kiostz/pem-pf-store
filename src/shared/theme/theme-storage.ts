@@ -1,7 +1,7 @@
 // The buyer's saved theme pick in localStorage, read and written without ever throwing, so blocked storage cannot break the page.
 
 export type ThemeChoice = 'system' | 'light' | 'dark' // the three picks of the theme control
-export const THEME_STORAGE_KEY = 'pathfinder-honors-store-my:theme' // the key; index.html's inline script reads the same one
+export const THEME_STORAGE_KEY = 'pem-pf-store:theme' // the key; index.html's inline script reads the same one
 
 /**
  * Reads the saved pick.

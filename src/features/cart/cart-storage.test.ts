@@ -29,8 +29,8 @@ describe('cart-storage', () => {
   it('writes the exact JSON under the repo-scoped key', () => {
     // catches: a key that collides with the account's other sites, or a changed format
     writeCart({ 'knot-tying': 2 })
-    expect(CART_STORAGE_KEY).toBe('pathfinder-honors-store-my:cart')
-    expect(window.localStorage.getItem('pathfinder-honors-store-my:cart')).toBe(
+    expect(CART_STORAGE_KEY).toBe('pem-pf-store:cart')
+    expect(window.localStorage.getItem('pem-pf-store:cart')).toBe(
       '{"version":1,"quantities":{"knot-tying":2}}',
     )
   })

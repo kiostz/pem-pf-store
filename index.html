@@ -10,7 +10,7 @@
         // keeps the names below out of the page's globals
         // blocked storage throws
         try {
-          var theme = localStorage.getItem('pathfinder-honors-store-my:theme') // same key as theme-storage.ts
+          var theme = localStorage.getItem('pem-pf-store:theme') // same key as theme-storage.ts
           if (theme === 'light' || theme === 'dark')
             document.documentElement.dataset.theme = theme // same attribute as use-theme.ts
         } catch (error) {
