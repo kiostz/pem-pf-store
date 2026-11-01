@@ -11,7 +11,7 @@ const handler = createHandler(pages)
 
 // How a test shapes the Access context and env of one call.
 export interface CallOptions {
-  access?: 'none' | { aud?: string; email?: string | null } // Absent ctx.access, or its aud and identity email.
+  access?: 'none' | { aud?: string; email?: string | null; throws?: boolean } // Absent ctx.access, or its aud, identity email and whether the lookup throws.
   env?: Partial<Env> // Env overrides, such as ADMIN_EMAILS or a failing DB.
 }
 
@@ -35,7 +35,10 @@ export async function call(path: string, init: RequestInit = {}, options: CallOp
       : {
           access: {
             aud: access.aud ?? 'local-dev', // Matches ACCESS_AUD by default.
-            getIdentity: async () => (access.email === null ? undefined : { email: access.email ?? 'admin@example.test' }), // No identity when null.
+            getIdentity: async () => {
+              if (access.throws) throw new Error('lookup failed') // The identity call fails.
+              return access.email === null ? undefined : { email: access.email ?? 'admin@example.test' } // No identity when null.
+            },
           },
         }),
   } as unknown as ExecutionContext // The test ctx carries only what the handler reads.

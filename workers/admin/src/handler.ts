@@ -17,6 +17,75 @@ const MAX_BODY_BYTES = 64 * 1024
 // What the page may load and do; scripts and styles come from the same origin only.
 const CSP = "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 
+// Where "Browse more" leads.
+const SHOP_URL = 'https://kiostz.github.io/pem-pf-store/'
+// The not-allowed page's styles, in the shop's tokens (light, and dark by the browser setting); inline, so its CSP carries their hash.
+const NOT_ALLOWED_STYLE = `
+:root{color-scheme:light dark;--page:#F3F0EC;--card:#FFFFFF;--ink:#1D1D1F;--muted:#55555A;--line:#D2D2D7;--btn:#4A1520;--btn-hover:#33101A;--btn-ink:#F3F0EC;--ring:#3B82F6}
+@media (prefers-color-scheme: dark){:root{--page:#000000;--card:#1C1C1E;--ink:#F5F5F7;--muted:#A1A1A6;--line:#38383A;--btn:#E8B4BC;--btn-hover:#F0C4CA;--btn-ink:#4A1520;--ring:#8AB4FF}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--page);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+main{width:100%;max-width:420px;padding:32px 24px;background:var(--card);border:1px solid var(--line);border-radius:24px}
+p.brand{margin:0 0 8px;font-size:14px;color:var(--muted)}
+h1{margin:0 0 12px;font-size:28px;line-height:1.15;font-weight:700}
+p.body{margin:0 0 24px;color:var(--muted)}
+a{display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:999px;font-weight:600;text-decoration:none}
+a.primary{background:var(--btn);color:var(--btn-ink)}
+a.primary:hover{background:var(--btn-hover)}
+a.quiet{margin-top:8px;color:var(--ink)}
+a.quiet:hover{text-decoration:underline}
+a:focus-visible{outline:3px solid var(--ring);outline-offset:2px}
+`
+// The not-allowed page; it never carries the signed-in email or which check failed.
+const NOT_ALLOWED_HTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Not allowed · PEM Pathfinder Store</title>
+<style>${NOT_ALLOWED_STYLE}</style>
+</head>
+<body>
+<main>
+<p class="brand">PEM Pathfinder Store</p>
+<h1>This account can't open the admin</h1>
+<p class="body">You're signed in, but this account isn't on the admin list. Sign in with another account, or ask the store admin to add you.</p>
+<a class="primary" href="/cdn-cgi/access/logout">Sign in with another account</a>
+<a class="quiet" href="${SHOP_URL}">Browse more</a>
+</main>
+</body>
+</html>
+`
+// The CSP of the not-allowed page: nothing loads, and only the one inline style (by hash) applies; computed on first use.
+let notAllowedCsp: Promise<string> | undefined
+
+/**
+ * Builds a not-allowed page CSP carrying the hash of its inline style.
+ * @return The policy text, cached after the first call.
+ */
+function getNotAllowedCsp(): Promise<string> {
+  notAllowedCsp ??= crypto.subtle.digest('SHA-256', new TextEncoder().encode(NOT_ALLOWED_STYLE)).then((digest) => { // Hash the exact style text.
+    const hash = btoa(String.fromCharCode(...new Uint8Array(digest))) // Base64 of the digest.
+    return `default-src 'none'; style-src 'sha256-${hash}'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` // No script, no loads.
+  })
+  return notAllowedCsp
+}
+
+/**
+ * Builds the 403 page for a refused page request (HEAD gets the headers only).
+ * @param method The request method, GET or HEAD.
+ * @return The response.
+ */
+async function notAllowedPage(method: string): Promise<Response> {
+  return respond(method === 'HEAD' ? '' : NOT_ALLOWED_HTML, 403, { // No body for HEAD.
+    'Content-Type': 'text/html; charset=utf-8', // An HTML page.
+    'Content-Security-Policy': await getNotAllowedCsp(), // Strict policy with the style hash.
+    'X-Content-Type-Options': 'nosniff', // Types stay as declared.
+    'Referrer-Policy': 'no-referrer', // Nothing leaks in the Referer.
+  })
+}
+
 /**
  * Builds a response with the headers every answer carries.
  * @param body The response body.
@@ -160,8 +229,11 @@ export function createHandler(pages: Pages): ExportedHandlerFetchHandler<Env> {
     ['/api/items/changes', ['POST', postChanges]], // The save.
   ])
   return async (request, env, ctx) => { // The fetch handler.
-    if (!(await isAllowed(ctx, env))) return json({ error: 'forbidden' }, 403) // The gate runs first, on every path and method.
     const path = new URL(request.url).pathname // The request path.
+    if (!(await isAllowed(ctx, env))) { // The gate runs first, on every path and method.
+      const isPageRequest = (request.method === 'GET' || request.method === 'HEAD') && !path.startsWith('/api/') // A browser asking for a page.
+      return isPageRequest ? notAllowedPage(request.method) : json({ error: 'forbidden' }, 403) // Page for people, JSON for the admin page's calls.
+    }
     const route = routes.get(path) // The matching route.
     if (route === undefined) return json({ error: 'not-found' }, 404) // Unknown path.
     const [method, run] = route // Method and handler.

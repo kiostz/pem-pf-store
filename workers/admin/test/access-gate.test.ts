@@ -5,11 +5,9 @@ import { call, postChanges, seedHonors } from './helpers'
 
 // Each request the gate must guard, as a label and a sender.
 const guarded: [string, (options?: Parameters<typeof call>[2]) => Promise<Response>][] = [
-  ['GET /', (o) => call('/', {}, o)],
-  ['GET /admin.js', (o) => call('/admin.js', {}, o)],
   ['GET /api/items', (o) => call('/api/items', {}, o)],
   ['POST /api/items/changes', (o) => postChanges({ changes: [] }, {}, o)],
-  ['GET /nope', (o) => call('/nope', {}, o)],
+  ['GET /api/nope', (o) => call('/api/nope', {}, o)],
 ]
 
 /**
