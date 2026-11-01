@@ -1,0 +1,18 @@
+// TypeScript config for the import: the Workers test types for the test, Node types for the writer, JSON imports of the shop's data files.
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // Pool module types (cloudflare:test) plus Node for the writer.
+    "types": ["@cloudflare/vitest-plugin/types", "node"],
+    // The test imports ../../public/data/*.json.
+    "resolveJsonModule": true,
+    // Node runs the writer as TypeScript, so it imports `.ts` files.
+    "allowImportingTsExtensions": true
+  },
+  // The import code, the generated runtime types and the migrations binding type.
+  "include": [
+    "./**/*.ts",
+    "../api/worker-configuration.d.ts",
+    "../api/test/env.d.ts"
+  ]
+}

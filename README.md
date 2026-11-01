@@ -60,3 +60,18 @@ The shop's backend lives in `workers/`, its own npm project (Node 24). Root `npm
     npm run typecheck
 
 Tests run inside workerd with the migrations applied. After changing `api/wrangler.jsonc`, run `npm run types` and commit `api/worker-configuration.d.ts`.
+
+### One-time import
+
+D1 starts empty. `npm run db:import:local` (in `workers/`, after `npm run db:migrate:local`) reads `public/data/honors.json`, `clubs.json` and `settings.json`, checks all three, and writes `workers/import/out/import.sql` (git-ignored) before running it on the local database. It creates every honor with stock 0 (`active` when `enabled` is true, otherwise `hidden`), price in whole cents (RM 4.00 becomes 400), the clubs at positions 1 to n, and the settings with the order email On. A bad file stops it before anything is written and the message names the file and entry.
+
+The settings row goes in first, so a second run fails at once with `UNIQUE constraint failed: settings.id` and changes nothing; the import can never overwrite stock the admin has set. To start over locally, delete `workers/api/.wrangler/` and run `db:migrate:local` again. `db:import:remote` is the same against the real database and is run by the owner only, after the first deploy steps.
+
+If a remote import stops part-way (for example the network drops), the settings row is already in and every re-run is refused. While the shop has no real stock or orders, empty the three import tables and run it again; run these from `workers/`, as the owner:
+
+    npx wrangler d1 execute pem-pathfinder-store --remote --config api/wrangler.jsonc --command "DELETE FROM honors; DELETE FROM clubs; DELETE FROM settings;"
+    npm run db:import:remote
+
+Never do this once an admin has set stock or an order has arrived: it wipes the stock. The `orders` and `order_lines` tables are not touched by it, and Task 11 or later may keep them.
+
+After the import, D1 is the source of truth. Do not edit the three JSON files in the meantime: a change there never reaches D1. The files stay until the shop reads from the Worker.

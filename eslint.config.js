@@ -37,7 +37,12 @@ export default defineConfig([
   },
   {
     // Config files and seed scripts run in Node, not the browser.
-    files: ['*.config.{ts,js}', 'workers/*.config.ts', 'scripts/**/*.ts'],
+    files: [
+      '*.config.{ts,js}',
+      'workers/*.config.ts',
+      'workers/import/write-import-sql.ts',
+      'scripts/**/*.ts',
+    ],
     languageOptions: { globals: globals.node },
   },
 ])

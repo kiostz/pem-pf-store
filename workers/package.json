@@ -8,15 +8,19 @@
   },
   "scripts": {
     "dev": "wrangler dev --config api/wrangler.jsonc",
-    "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p api/test/tsconfig.json --noEmit",
+    "test": "vitest run && npm run test:writer",
+    "test:writer": "node --test import/write-import-sql.check.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p api/test/tsconfig.json --noEmit && tsc -p import/tsconfig.json --noEmit",
     "types": "wrangler types --config api/wrangler.jsonc api/worker-configuration.d.ts",
     "db:migrate:local": "wrangler d1 migrations apply pem-pathfinder-store --local --config api/wrangler.jsonc",
     "db:migrate:remote": "wrangler d1 migrations apply pem-pathfinder-store --remote --config api/wrangler.jsonc",
+    "db:import:local": "node import/write-import-sql.ts && wrangler d1 execute pem-pathfinder-store --local --config api/wrangler.jsonc --file=import/out/import.sql",
+    "db:import:remote": "node import/write-import-sql.ts && wrangler d1 execute pem-pathfinder-store --remote --config api/wrangler.jsonc --file=import/out/import.sql",
     "deploy": "wrangler deploy --config api/wrangler.jsonc"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.4.4",
+    "@types/node": "24.19.2",
     "typescript": "6.0.3",
     "vitest": "5.0.5",
     "wrangler": "4.151.1"

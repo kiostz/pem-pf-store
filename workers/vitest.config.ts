@@ -20,7 +20,7 @@ export default defineConfig(async () => {
       // Applies migrations before each test file.
       setupFiles: ['./api/test/apply-migrations.ts'],
       // Worker tests only.
-      include: ['api/test/**/*.test.ts'],
+      include: ['api/test/**/*.test.ts', 'import/**/*.test.ts'],
     },
   }
 })
