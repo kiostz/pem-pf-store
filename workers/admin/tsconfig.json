@@ -1,0 +1,6 @@
+// TypeScript config for the Admin Worker source: same strict settings as the API Worker, its own generated types.
+{
+  "extends": "../tsconfig.json",
+  // Source and the generated runtime types; the built page files are typed by ui-modules.d.ts.
+  "include": ["src", "worker-configuration.d.ts"]
+}

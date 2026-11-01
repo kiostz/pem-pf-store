@@ -10,3 +10,5 @@ dist
 .dev.vars*
 # Generated import SQL, never committed.
 workers/import/out
+# Built admin page, produced by the admin Vite build.
+workers/admin/ui-dist

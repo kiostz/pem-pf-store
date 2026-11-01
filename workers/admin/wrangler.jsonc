@@ -1,0 +1,33 @@
+// Admin Worker config: the admin page and API behind Cloudflare Access, sharing the API Worker's D1.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  // Worker name; the address is pem-pathfinder-store-admin.<account>.workers.dev.
+  "name": "pem-pathfinder-store-admin",
+  // The Cloudflare account that holds the Workers and D1; an id, not a secret.
+  "account_id": "ba2ef6d4564416a1b85b1c868def978a",
+  // Entry file of the Worker.
+  "main": "src/index.ts",
+  // Same compatibility date as the API Worker.
+  "compatibility_date": "2026-10-12",
+  // Serve on the workers.dev subdomain, where Access protects it.
+  "workers_dev": true,
+  // No preview URLs: they would sit outside the Access policy.
+  "preview_urls": false,
+  // Turn Workers Logs on (never log the body, the email or the identity).
+  "observability": { "enabled": true },
+  // Placeholder AUD: refuses everything until the real Access AUD tag is pasted in.
+  "vars": { "ACCESS_AUD": "set-after-access" },
+  // Local simulation of Access; wrangler leaves it out of an upload.
+  "access": { "dev": { "aud": "local-dev", "identity": { "email": "admin@example.test" } } },
+  // The admin page files are built into ui-dist and imported as text.
+  "rules": [{ "type": "Text", "globs": ["**/ui-dist/*.js", "**/ui-dist/*.css"], "fallthrough": true }],
+  "d1_databases": [
+    {
+      // Name of the binding in code: env.DB.
+      "binding": "DB",
+      "database_name": "pem-pathfinder-store",
+      // The same database the API Worker reads; not a secret.
+      "database_id": "8f152bd0-fd5b-4b1e-93c4-0eb4098c4b19",
+    },
+  ],
+}

@@ -86,6 +86,19 @@ The API Worker answers `GET` only, with JSON and `Cache-Control: no-store`:
 
 Paths match exactly, so `/items/` is 404. Errors are a short code only: 404 `not-found`, 405 `method-not-allowed` (with `Allow: GET`), 429 `rate-limited` (with `Retry-After: 60`), 500 `server`. CORS: `Access-Control-Allow-Origin` is sent only when `Origin` is exactly `https://kiostz.github.io` (the `SHOP_ORIGIN` var); other callers still get the body. A rate limit of 60 requests per 60 seconds per client IP (the `RATE_LIMITER` binding in `api/wrangler.jsonc`) answers 429 past it; `wrangler dev` enforces it locally too. Cloudflare's docs imply the free plan includes this binding; confirm it at the first deploy.
 
+### Admin Worker (local)
+
+`workers/admin/` is the Admin Worker: the admin API (and, from the next part, the admin page) behind Cloudflare Access. Every path answers 403 unless Access signed in an admin whose email is in `ADMIN_EMAILS`. Locally `wrangler dev` simulates Access (`access.dev` in `admin/wrangler.jsonc`), reading `workers/admin/.dev.vars` (git-ignored). Create it once:
+
+    ACCESS_AUD=local-dev
+    ADMIN_EMAILS=admin@example.test, second@example.test
+
+Then, with the API Worker's database migrated and imported, from `workers/`:
+
+    npm run dev:admin
+
+It serves http://localhost:8788 (`/api/items`, `POST /api/items/changes`) on the same local D1 as `npm run dev`. After changing `admin/wrangler.jsonc`, make sure `admin/.dev.vars` exists first (`wrangler types` reads it to put `ADMIN_EMAILS` into `Env`; without it the typecheck fails), then run `npm run types:admin` and commit `admin/worker-configuration.d.ts`. The built page files in `admin/ui-dist/` are git-ignored.
+
 ### Deploying the API Worker (one time, on the Mac)
 
 From `workers/`, in this order:

@@ -15,8 +15,8 @@ import tseslint from 'typescript-eslint'
 
 // Exported flat-config array.
 export default defineConfig([
-  // Never lint build output, local Wrangler state or generated Worker types.
-  globalIgnores(['dist', '**/.wrangler', '**/worker-configuration.d.ts']),
+  // Never lint build output, local Wrangler state, generated Worker types or the built admin page.
+  globalIgnores(['dist', '**/.wrangler', '**/worker-configuration.d.ts', 'workers/admin/ui-dist']),
   {
     // All TypeScript and TSX source files.
     files: ['**/*.{ts,tsx}'],
