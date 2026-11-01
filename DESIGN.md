@@ -40,6 +40,7 @@ Every ratio below is measured from the values in `src/styles/index.css` (WCAG 2 
 | button                         | oxblood fill, stone text (13.0:1)                           | rose fill, oxblood text (8.2:1; hover `#F0C4CA`, 9.5:1) |
 | Browse the shop pill (Home)    | rose `#E8B4BC` with oxblood text (8.2:1); 8.2:1 against the band | the same; 10.1:1 against the dark band             |
 | errors                         | `#B91C1C` (5.7:1 on page, 6.5:1 on card)                    | `#F87171` (7.6:1 on page, 6.2:1 on card)                |
+| success (Active switch track)  | `#15803D` (5.0:1 on card, 4.4:1 on page; white thumb 5.0:1 on it) | `#22C55E` (7.5:1 on card, 9.2:1 on page; card-coloured thumb 7.5:1 on it) |
 | trash icon                     | `#C62828` (4.5:1 on soft, 5.6:1 on card, 3.06:1 on the Removed note) | `#FF6B6B` (5.0:1 on soft, 6.1:1 on card, 4.1:1 on the note) |
 | Unavailable tag                | `#8A4B00` on `#FDF0DC` (6.1:1)                              | `#F5C26B` on `#3D2A0F` (8.3:1)                          |
 | Removed note                   | `#F3F0EC` on `#1B1B1D` (15.1:1)                             | `#F5F5F7` on `#3A3A3C` (10.4:1)                         |
@@ -284,9 +285,26 @@ All spacing is on a 4 px scale (Tailwind steps). The gap inside a group is small
 - The Removed note holds 5 s (Customer.io's snackbar timing), pauses while the pointer or focus is on it, and restarts at 5 s when they leave.
 - A new value needs a reason written here first.
 
+## Admin Items screen
+
+The admin page (`admin.html`) reuses every token above; it adds no colour, radius or duration. Values it uses, with the reason for each one that is new:
+
+| Use                         | Value                                   | Reason                                                                 |
+| --------------------------- | --------------------------------------- | ---------------------------------------------------------------------- |
+| Column                      | 768 px max, 16 px gutter                | the cart's column: a row is a name and two controls                    |
+| Row                         | card, `p-3`, 12 px between rows         | the cart's values                                                      |
+| Row layout                  | two lines under 768 px, one from 768 px | the status control and stepper (about 290 px) do not fit beside a name at 375 px |
+| Pending row edge            | 4 px inset oxblood on the start side (`shadow-[inset_4px_0_0_var(--color-accent)]`) | new: marks a pending row without changing its size; the "Changed" label says it too, so it is never colour alone |
+| Status control              | one switch, 44 px target: 44 x 24 px track, green (`success`) when Active, grey (`text-muted`, 7.4:1 on card) when Hidden, the word beside it | green is the one new token: the track must hold 3:1 against the card as a non-text control, and green says shown where grey says off; the word means it is never colour alone |
+| Stock stepper number        | 56 px wide (`w-14`), controls 44 px     | new: room for four digits (9,999) at 18 px; the cart's number is 44 px for two |
+| Conflict flag               | Unavailable tag colours                 | the one existing amber pair, 6.1:1 and 8.3:1                           |
+| Notes above the pill        | the Removed note's dark note, 12 px over the pill | the same note shape and slide-up                                |
+| Bottom clearance            | 208 px (`pb-52`)                        | the cart's clearance: a note (about 52 px), the 12 px gap and the pill |
+| Skeleton row                | 124 px under 768 px, 72 px from 768 px  | stand-ins for a row's two heights; shown after `delay-loader`          |
+
 ## Principles
 
-- Oxblood marks every action and the header; nothing else uses it, except the rose Browse the shop pill on Home's band. Dark mode swaps the buttons to rose.
+- Oxblood marks every action and the header; nothing else uses it, except the rose Browse the shop pill on Home's band, and, on the admin Items screen, the edge and "Changed" label of a row with changes waiting to be saved (they tie to the oxblood Save button). Dark mode swaps the buttons to rose.
 - The patch is the hero of every card. Text stays small and grey under it.
 - Quiet chrome: no gradients and no decoration except Home's emblem trace. The space between things does the separating.
 - The theme button sits in the header on Home and Shop only.

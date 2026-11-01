@@ -15,6 +15,7 @@
   --color-header: #4a1520; /* the oxblood band */
   --color-on-header: #f3f0ec; /* the stone title and control on the band, 13.0:1 */
   --color-danger: #b91c1c; /* errors only */
+  --color-success: #15803d; /* the Active switch track: 5.0:1 on a card, 4.4:1 on the page */
   --color-bg-soft: #ece6e1; /* soft fill: the cart's stepper pill, 12.0:1 under the oxblood symbols */
   --color-trash: #c62828; /* the trash icon, 4.5:1 on the soft fill, 5.6:1 on a card */
   --color-tag-warning: #fdf0dc; /* the Unavailable tag's fill */
@@ -138,6 +139,7 @@ body {
     --color-header: #2a0c12; /* the dark oxblood band */
     --color-on-header: #f3f0ec; /* the stone title and control on the band, 15.9:1 */
     --color-danger: #f87171; /* errors only, 7.6:1 on the page */
+    --color-success: #22c55e; /* the Active switch track: 7.5:1 on a card, 9.2:1 on the page */
     --color-bg-soft: #2c2c2e; /* the stepper pill, 7.8:1 under the rose symbols */
     --color-trash: #ff6b6b; /* the trash icon, 5.0:1 on the soft fill, 4.1:1 on the note */
     --color-tag-warning: #3d2a0f; /* the Unavailable tag's fill */
@@ -168,6 +170,7 @@ body {
     --color-header: #2a0c12; /* the dark oxblood band */
     --color-on-header: #f3f0ec; /* the stone title and control on the band, 15.9:1 */
     --color-danger: #f87171; /* errors only, 7.6:1 on the page */
+    --color-success: #22c55e; /* the Active switch track: 7.5:1 on a card, 9.2:1 on the page */
     --color-bg-soft: #2c2c2e; /* the stepper pill, 7.8:1 under the rose symbols */
     --color-trash: #ff6b6b; /* the trash icon, 5.0:1 on the soft fill, 4.1:1 on the note */
     --color-tag-warning: #3d2a0f; /* the Unavailable tag's fill */
@@ -388,6 +391,7 @@ body {
     --color-header: #4a1520; /* the light-mode band */
     --color-on-header: #f3f0ec; /* text on that band */
     --color-danger: #b91c1c; /* the light-mode red */
+    --color-success: #15803d; /* the light-mode green */
     --color-bg-soft: #ece6e1; /* the light-mode soft fill */
     --color-trash: #c62828; /* the light-mode trash red */
     --color-tag-warning: #fdf0dc; /* the light-mode tag fill */

@@ -88,7 +88,7 @@ Paths match exactly, so `/items/` is 404. Errors are a short code only: 404 `not
 
 ### Admin Worker (local)
 
-`workers/admin/` is the Admin Worker: the admin API (and, from the next part, the admin page) behind Cloudflare Access. Every path answers 403 unless Access signed in an admin whose email is in `ADMIN_EMAILS`. Locally `wrangler dev` simulates Access (`access.dev` in `admin/wrangler.jsonc`), reading `workers/admin/.dev.vars` (git-ignored). Create it once:
+`workers/admin/` is the Admin Worker: the admin page (the Items screen) and the admin API behind Cloudflare Access. Every path answers 403 unless Access signed in an admin whose email is in `ADMIN_EMAILS`. Locally `wrangler dev` simulates Access (`access.dev` in `admin/wrangler.jsonc`), reading `workers/admin/.dev.vars` (git-ignored). Create it once:
 
     ACCESS_AUD=local-dev
     ADMIN_EMAILS=admin@example.test, second@example.test
@@ -97,7 +97,7 @@ Then, with the API Worker's database migrated and imported, from `workers/`:
 
     npm run dev:admin
 
-It serves http://localhost:8788 (`/api/items`, `POST /api/items/changes`) on the same local D1 as `npm run dev`. After changing `admin/wrangler.jsonc`, make sure `admin/.dev.vars` exists first (`wrangler types` reads it to put `ADMIN_EMAILS` into `Env`; without it the typecheck fails), then run `npm run types:admin` and commit `admin/worker-configuration.d.ts`. The built page files in `admin/ui-dist/` are git-ignored.
+`dev:admin` first runs the root `build:admin` (the Vite build of `admin.html` and `src/admin-main.tsx` into `admin/ui-dist/`), so a fresh clone serves the real page; `deploy:admin` does the same. It serves http://localhost:8788 (the Items screen at `/`, `/api/items`, `POST /api/items/changes`) on the same local D1 as `npm run dev`. To rebuild the page alone, run `npm run build:admin` in the repo root. After changing `admin/wrangler.jsonc`, make sure `admin/.dev.vars` exists first (`wrangler types` reads it to put `ADMIN_EMAILS` into `Env`; without it the typecheck fails), then run `npm run types:admin` and commit `admin/worker-configuration.d.ts`. The built page files in `admin/ui-dist/` are git-ignored.
 
 ### Deploying the API Worker (one time, on the Mac)
 

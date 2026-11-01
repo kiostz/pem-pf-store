@@ -33,5 +33,5 @@
     "noFallthroughCasesInSwitch": true
   },
   // Files this project covers: tool configs and scripts.
-  "include": ["vite.config.ts", "vitest.config.ts", "scripts"]
+  "include": ["vite.config.ts", "vite.admin.config.ts", "vitest.config.ts", "scripts"]
 }
