@@ -15,8 +15,8 @@
   "preview_urls": false,
   // Turn Workers Logs on (never log the body, the email or the identity).
   "observability": { "enabled": true },
-  // Placeholder AUD: refuses everything until the real Access AUD tag is pasted in.
-  "vars": { "ACCESS_AUD": "set-after-access" },
+  // The Access application's AUD tag: the gate refuses any sign-in made for another application.
+  "vars": { "ACCESS_AUD": "9398d4905b1e79ae9569cdf101caaf867f06ab370cd881d4761e60bee80016d2" },
   // Local simulation of Access; wrangler leaves it out of an upload.
   "access": { "dev": { "aud": "local-dev", "identity": { "email": "admin@example.test" } } },
   // The admin page files are built into ui-dist and imported as text.
