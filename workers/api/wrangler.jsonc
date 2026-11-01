@@ -3,6 +3,8 @@
   "$schema": "../node_modules/wrangler/config-schema.json",
   // Worker name; the public address is pem-pathfinder-store-api.<account>.workers.dev.
   "name": "pem-pathfinder-store-api",
+  // The Cloudflare account that holds the Worker and D1; an id, not a secret.
+  "account_id": "ba2ef6d4564416a1b85b1c868def978a",
   // Entry file of the Worker.
   "main": "src/index.ts",
   // Date of the installed workerd, so runtime behaviour is pinned.
