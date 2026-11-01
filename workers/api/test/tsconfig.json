@@ -1,0 +1,10 @@
+// TypeScript config for the Worker tests: adds the test-pool types on top of the Worker config.
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    // Types of the Vitest pool module (cloudflare:test) are added here.
+    "types": ["@cloudflare/vitest-plugin/types"]
+  },
+  // Tests, the source they import and the generated runtime types.
+  "include": ["./**/*.ts", "../src", "../worker-configuration.d.ts"]
+}

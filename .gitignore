@@ -4,3 +4,9 @@ node_modules
 dist
 # TypeScript incremental build info caches.
 *.tsbuildinfo
+# Wrangler local state, never committed.
+.wrangler
+# Local Worker secrets, never committed.
+.dev.vars*
+# Generated import SQL, never committed.
+workers/import/out

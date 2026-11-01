@@ -1,0 +1,24 @@
+{
+  "name": "pem-pf-store-workers",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "wrangler dev --config api/wrangler.jsonc",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p api/test/tsconfig.json --noEmit",
+    "types": "wrangler types --config api/wrangler.jsonc api/worker-configuration.d.ts",
+    "db:migrate:local": "wrangler d1 migrations apply pem-pathfinder-store --local --config api/wrangler.jsonc",
+    "db:migrate:remote": "wrangler d1 migrations apply pem-pathfinder-store --remote --config api/wrangler.jsonc",
+    "deploy": "wrangler deploy --config api/wrangler.jsonc"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.4",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5",
+    "wrangler": "4.151.1"
+  }
+}

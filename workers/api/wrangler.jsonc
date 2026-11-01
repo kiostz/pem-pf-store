@@ -1,0 +1,27 @@
+// API Worker config: name, D1 binding and the one allowed browser origin.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  // Worker name; the public address is pem-pathfinder-store-api.<account>.workers.dev.
+  "name": "pem-pathfinder-store-api",
+  // Entry file of the Worker.
+  "main": "src/index.ts",
+  // Date of the installed workerd, so runtime behaviour is pinned.
+  "compatibility_date": "2026-10-12",
+  // Serve on the workers.dev subdomain.
+  "workers_dev": true,
+  // Turn Workers Logs on (never log buyer data).
+  "observability": { "enabled": true },
+  // The only origin that gets a CORS header.
+  "vars": { "SHOP_ORIGIN": "https://kiostz.github.io" },
+  "d1_databases": [
+    {
+      // Name of the binding in code: env.DB.
+      "binding": "DB",
+      "database_name": "pem-pathfinder-store",
+      // All-zero placeholder until the owner runs `d1 create` and pastes the real id.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Shared migrations folder, owned by this Worker's config.
+      "migrations_dir": "../migrations",
+    },
+  ],
+}

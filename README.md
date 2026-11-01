@@ -43,3 +43,20 @@ To try the whole order flow without a real send, run `npm run dev -- --mode fake
 Deploy by pushing to `main`. The workflow `.github/workflows/deploy.yml` runs lint, typecheck and tests, then builds, in a build job; a separate deploy job publishes to Pages. If any step fails, nothing is published and the old site stays up. A deploy already running is never cancelled; a newer push waits for it. It can also be started by hand from the Actions tab.
 
 One-time setup, done by the repository owner: in GitHub open Settings, then Pages, and set Source to GitHub Actions.
+
+## Workers (API and database)
+
+The shop's backend lives in `workers/`, its own npm project (Node 24). Root `npm ci`, typecheck and tests never install or run it; root lint does lint its TypeScript, so run root `npm run lint` after a Worker change. Nothing reaches Cloudflare from these commands: they use a local D1 database kept in `workers/api/.wrangler/`. Never run `wrangler login`, `d1 create`, `--remote` or `deploy` for a local check.
+
+    cd workers
+    npm ci
+    export WRANGLER_SEND_METRICS=false
+    npm run db:migrate:local
+    npm run dev
+
+`npm run dev` serves the API Worker at http://localhost:8787. `api/wrangler.jsonc` holds an all-zero `database_id` until the owner creates the real database; local runs ignore it. Migrations are in `workers/migrations/`; an applied migration is never edited, a change is a new file.
+
+    npm test
+    npm run typecheck
+
+Tests run inside workerd with the migrations applied. After changing `api/wrangler.jsonc`, run `npm run types` and commit `api/worker-configuration.d.ts`.

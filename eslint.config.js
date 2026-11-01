@@ -15,8 +15,8 @@ import tseslint from 'typescript-eslint'
 
 // Exported flat-config array.
 export default defineConfig([
-  // Never lint build output.
-  globalIgnores(['dist']),
+  // Never lint build output, local Wrangler state or generated Worker types.
+  globalIgnores(['dist', '**/.wrangler', '**/worker-configuration.d.ts']),
   {
     // All TypeScript and TSX source files.
     files: ['**/*.{ts,tsx}'],
@@ -31,8 +31,13 @@ export default defineConfig([
     languageOptions: { globals: globals.browser },
   },
   {
+    // The Workers run in workerd, which has service-worker globals.
+    files: ['workers/**/*.ts'],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
     // Config files and seed scripts run in Node, not the browser.
-    files: ['*.config.{ts,js}', 'scripts/**/*.ts'],
+    files: ['*.config.{ts,js}', 'workers/*.config.ts', 'scripts/**/*.ts'],
     languageOptions: { globals: globals.node },
   },
 ])
