@@ -206,6 +206,38 @@ describe('editing and saving', () => {
     expect(postBodies(spy)[1]).toEqual({ changes: [{ id: 'knot-tying', stock: { from: 5, to: 7 } }] })
   })
 
+  it('keeps the edit when the network drops mid-save, and the next Save sends the same change and succeeds', async () => {
+    // Catches a dropped connection that clears the edit, leaves the pill dead on "Saving…", or loses the `from` on the retry.
+    let attempts = 0 // POSTs so far
+    const spy = stubApi(() => {
+      attempts += 1 // one more try
+      if (attempts === 1) throw new TypeError('Failed to fetch') // the connection drops
+      return Response.json({ honors: [{ ...rows[2], stock: 5 }] }) // then it works
+    })
+    await openScreen()
+    typeKnotStock('5')
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' }))
+    expect(await screen.findByText("We couldn't save. Your changes are kept. Try again.")).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })).toHaveValue('5')
+    fireEvent.click(await screen.findByRole('button', { name: 'Save (1 change)' }))
+    expect(await screen.findByText('Saved 1 change.')).toBeInTheDocument()
+    expect(postBodies(spy)).toEqual([
+      { changes: [{ id: 'knot-tying', stock: { from: 12, to: 5 } }] },
+      { changes: [{ id: 'knot-tying', stock: { from: 12, to: 5 } }] },
+    ])
+  })
+
+  it('flags a stale status with the current status and keeps the admin\'s edit', async () => {
+    // Catches a status conflict shown as a stock one: the flag must name the status the other admin set.
+    stubApi(() => Response.json({ error: 'conflict', honors: [{ ...rows[2], status: 'hidden' }] }, { status: 409 }))
+    await openScreen()
+    typeKnotStock('5')
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' }))
+    expect(await screen.findByText('Changed since you opened this page: now Hidden, 12 in stock')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })).toHaveValue('5')
+    expect(screen.getByRole('switch', { name: 'Active: Knot Tying' })).toHaveAttribute('aria-checked', 'false') // the new base
+  })
+
   it('shows the signed-out note and keeps the edits when the save is refused for a missing session', async () => {
     // Catches an expired session shown as a plain failure the admin retries forever.
     stubApi(() => Response.json({ error: 'forbidden' }, { status: 403 }))
