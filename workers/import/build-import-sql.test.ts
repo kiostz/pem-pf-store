@@ -194,6 +194,64 @@ describe('buildImportSql text and money', () => {
     expect(await count('SELECT count(*) AS n FROM honors')).toBe(1) // the table still exists
   })
 
+  // Bug caught: escaping that works for one quote but breaks on Unicode, backslashes, comments or statement separators.
+  it.each([
+    ['accents and emoji', 'Café \u{1F31F} ñ'],
+    ['Malay and CJK', 'Kelab Anak Panah 中文'],
+    ['a backslash', "back\\slash \\' end"],
+    ['a LIKE wildcard and question mark', '100% sure? _x_'],
+    ['a line separator', 'a b c'],
+    ['a double-dash comment', 'name -- not a comment'],
+    ['a block comment', 'a /* b */ c'],
+    ['a second statement after a semicolon', "a'; DELETE FROM settings; SELECT '1"],
+    ['only quotes', "''''"],
+  ])('stores a name with %s exactly as written', async (_label, name) => {
+    await db.exec(build({ honors: [{ ...honor, name }], clubs: [{ ...club, name, churchName: name }] })) // import it as honor and club text
+    const honorRow = await db.prepare('SELECT name FROM honors').first<{ name: string }>() // stored honor name
+    const clubRow = await db.prepare('SELECT name, church_name FROM clubs').first<{ name: string; church_name: string }>() // stored club
+    expect(honorRow?.name).toBe(name) // unchanged
+    expect(clubRow).toEqual({ name, church_name: name }) // unchanged
+    expect(await count('SELECT count(*) AS n FROM settings')).toBe(1) // injected DELETE never ran
+  })
+
+  // Bug caught: a crafted category or issuedBy reaching SQL as code.
+  it('keeps crafted category and issuedBy as text', async () => {
+    const crafted = "x'); DROP TABLE clubs; --" // statement breaker
+    await db.exec(build({ honors: [{ ...honor, category: crafted, issuedBy: crafted }] })) // import it
+    const row = await db.prepare('SELECT category, issued_by FROM honors').first<{ category: string; issued_by: string }>() // stored
+    expect(row).toEqual({ category: crafted, issued_by: crafted }) // text
+    expect(await count('SELECT count(*) AS n FROM clubs')).toBe(1) // clubs table survived
+  })
+
+  // Bug caught: a crafted id that is not a slug slipping into the SQL.
+  it('refuses an id that carries SQL', () => {
+    expect(() => build({ honors: [{ ...honor, id: "a'); DROP TABLE honors; --" }] })).toThrow(/honors\.json entry 1/) // not a slug
+  })
+
+  // Bug caught: a club name the builder accepts but the table refuses, killing the import half way.
+  it.each([' Gilead', 'Gilead　'])('either refuses club name %j up front or lets the table take it', async (name) => {
+    let sql: string // set only when the builder accepts the name
+    try {
+      sql = build({ clubs: [{ ...club, name }] }) // builder accepted it
+    } catch (error) {
+      expect(error).toBeInstanceOf(ImportDataError) // refused up front: fine
+      return
+    }
+    await db.exec(sql) // accepted: the table must accept it too
+    expect(await count('SELECT count(*) AS n FROM clubs')).toBe(1) // stored
+  })
+
+  // Bug caught: a failure part-way leaving a state the README recovery steps cannot fix.
+  it('can be rerun in full after the three tables are emptied following a part-way failure', async () => {
+    const lines = buildImportSql(real).trimEnd().split('\n') // every statement
+    await db.exec(lines.slice(0, 50).join('\n')) // the run stops after 49 honors
+    await expect(db.exec(buildImportSql(real))).rejects.toThrow(/UNIQUE constraint failed: settings\.id/) // rerun refused
+    await db.batch([db.prepare('DELETE FROM honors'), db.prepare('DELETE FROM clubs'), db.prepare('DELETE FROM settings')]) // README recovery
+    await db.exec(buildImportSql(real)) // full rerun
+    expect(await count('SELECT count(*) AS n FROM honors')).toBe(422) // complete
+    expect(await count('SELECT count(*) AS n FROM clubs')).toBe(10) // complete
+  })
+
   // Bug caught: 4.1 * 100 = 410.00000000000006 stored, or refused by the STRICT table.
   it('rounds prices to whole cents', async () => {
     await db.exec(
