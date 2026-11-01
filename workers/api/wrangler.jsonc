@@ -22,8 +22,8 @@
       // Name of the binding in code: env.DB.
       "binding": "DB",
       "database_name": "pem-pathfinder-store",
-      // All-zero placeholder until the owner runs `d1 create` and pastes the real id.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // The D1 database created on Cloudflare 2026-11-01 (APAC); not a secret.
+      "database_id": "8f152bd0-fd5b-4b1e-93c4-0eb4098c4b19",
       // Shared migrations folder, owned by this Worker's config.
       "migrations_dir": "../migrations",
     },
