@@ -75,3 +75,25 @@ If a remote import stops part-way (for example the network drops), the settings 
 Never do this once an admin has set stock or an order has arrived: it wipes the stock. The `orders` and `order_lines` tables are not touched by it, and Task 11 or later may keep them.
 
 After the import, D1 is the source of truth. Do not edit the three JSON files in the meantime: a change there never reaches D1. The files stay until the shop reads from the Worker.
+
+### Endpoints
+
+The API Worker answers `GET` only, with JSON and `Cache-Control: no-store`:
+
+- `/items`: active honors by name, as `{ id, name, category, priceCents, stock, image }` (RM 4.00 is `400`). Hidden honors never appear.
+- `/clubs`: the clubs in their set order, as `{ name, area, language, location, churchName }`.
+- `/settings`: `{ currency }` only.
+
+Paths match exactly, so `/items/` is 404. Errors are a short code only: 404 `not-found`, 405 `method-not-allowed` (with `Allow: GET`), 429 `rate-limited` (with `Retry-After: 60`), 500 `server`. CORS: `Access-Control-Allow-Origin` is sent only when `Origin` is exactly `https://kiostz.github.io` (the `SHOP_ORIGIN` var); other callers still get the body. A rate limit of 60 requests per 60 seconds per client IP (the `RATE_LIMITER` binding in `api/wrangler.jsonc`) answers 429 past it; `wrangler dev` enforces it locally too. Cloudflare's docs imply the free plan includes this binding; confirm it at the first deploy.
+
+### Deploying the API Worker (owner, one time)
+
+On the Mac, from `workers/`, in this order:
+
+1. `npx wrangler login`.
+2. `npx wrangler d1 create pem-pathfinder-store --location apac`.
+3. Paste the printed `database_id` into `api/wrangler.jsonc` and commit it (it is not a secret).
+4. `npm run db:migrate:remote`, then `npm run db:import:remote`.
+5. Make a Cloudflare API token scoped to the one account (Workers Scripts and D1 edit) and save it as the repository secret `CLOUDFLARE_API_TOKEN`, with `CLOUDFLARE_ACCOUNT_ID` beside it.
+
+Later, a push to `main` that touches `workers/` is meant to run a Worker job in GitHub Actions (`npm ci`, typecheck and tests in `workers/`, then `cloudflare/wrangler-action` deploys; a failing test stops the deploy). That CI job does not exist yet: the workflow change waits for the deploy checklist. Remote migrations stay manual (step 4), never in CI. After the first deploy, open `https://pem-pathfinder-store-api.<account>.workers.dev/items`.
