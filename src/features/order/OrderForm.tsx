@@ -14,6 +14,7 @@ import { FIELD_BOX, FIELD_ERROR, FIELD_LABEL } from './field-box.ts' // the shar
 import { toSentOrder, type SentOrder } from './order-email.ts' // the stored order
 import { missingText, validateOrderForm, type OrderField } from './order-form.ts' // the form's rules
 import { OrderSendError, OrderStockError, sendOrder, toOrderRequest } from './send-order.ts' // the send and its failures
+import { clearPendingSend, writePendingSend } from './pending-send-storage.ts' // keeps the send for a reload
 import { writeSentOrder } from './sent-order-storage.ts' // keeps the order for the confirmation
 import { useOrderForm } from './use-order-form.ts' // the form's values
 
@@ -37,9 +38,20 @@ const FIELD_IDS: Record<OrderField, string> = {
  * @param lines the order lines to send
  * @param currency the ISO code from settings
  * @param clubs the clubs for the dropdown
+ * @param onStockRefused called with the Worker's short lines when it refuses the order, so the shop's data shows them
  * @return the fields, the captcha, Send order and the line saying what is missing
  */
-export function OrderForm({ lines, currency, clubs }: { lines: OrderLine[]; currency: string; clubs: ClubList }) {
+export function OrderForm({
+  lines,
+  currency,
+  clubs,
+  onStockRefused,
+}: {
+  lines: OrderLine[]
+  currency: string
+  clubs: ClubList
+  onStockRefused: (refused: OrderStockError['lines']) => void
+}) {
   const {
     values,
     touched,
@@ -52,6 +64,7 @@ export function OrderForm({ lines, currency, clubs }: { lines: OrderLine[]; curr
     setSending,
     failure,
     setFailure,
+    setRefused,
     requestRef,
   } = useOrderForm() // the form's state and the running send, kept above the routes
   const { removeOrderLines } = useCart() // a sent order leaves the cart
@@ -122,6 +135,7 @@ export function OrderForm({ lines, currency, clubs }: { lines: OrderLine[]; curr
     const signature = JSON.stringify([lines.map((line) => [line.honor.id, line.quantity]), values]) // what the order is: what the Worker would save
     if (requestRef.current?.signature !== signature) requestRef.current = { signature, requestId: crypto.randomUUID() } // a retry keeps its request id, so a lost reply never makes a second order; an edit gets a new one
     const requestId = requestRef.current.requestId // for the log and the send
+    writePendingSend({ requestId, lines: lines.map((line) => [line.honor.id, line.quantity]), values }) // a reload before the answer reuses this id
     let order: SentOrder // what the confirmation keeps, once the Worker has saved it
     try {
       const saved = await sendOrder(toOrderRequest(requestId, token, lines, values)) // the Worker checks, saves and numbers it
@@ -138,8 +152,20 @@ export function OrderForm({ lines, currency, clubs }: { lines: OrderLine[]; curr
           ? { name: error.name, stack: (error.stack ?? '').split(`${error.name}: ${error.message}`).join('') } // the stack without the message, which could hold typed text
           : {} // not an Error: nothing safe to add
       console.error('Order send failed', { kind, requestId, ...(kind === 'unexpected' ? detail : {}) }) // no buyer data
+      if (kind !== 'network' && kind !== 'timeout' && kind !== 'unexpected') clearPendingSend() // the Worker answered for good: the id is spent; an unknown outcome keeps it
       captchaRef.current?.reset() // the spent token cannot be used again
       setToken(null) // Send is incomplete until solved again
+      if (
+        error instanceof OrderStockError &&
+        error.lines.some((short) => {
+          const cartLine = lines.find((line) => line.honor.id === short.honorId) // the cart's line for it
+          return cartLine !== undefined && (short.stock === null || short.stock < cartLine.quantity) // gone, or short of the quantity
+        })
+      ) {
+        setRefused(true) // the cart shows why the buyer is back there
+        onStockRefused(error.lines) // the lines go red or drop out, and the details page sends the buyer to the cart; cart and form stay as they are
+        return // no failure note: the cart says what to fix
+      }
       setFailure({
         text: kind === 'rate-limited' ? RATE_LIMITED_TEXT : kind === 'captcha' ? CAPTCHA_TEXT : FAILED_TEXT,
       }) // cart and form stay as they are
@@ -150,6 +176,7 @@ export function OrderForm({ lines, currency, clubs }: { lines: OrderLine[]; curr
     // The order is sent: nothing below may say it was not.
     try {
       writeSentOrder(order) // for the confirmation page
+      clearPendingSend() // the answer is stored: the id is spent
       window.location.replace(ORDER_SENT_HASH) // the confirmation first, so no empty-cart frame paints; Back leads to the cart
       removeOrderLines(order.lines) // only after the Worker saved it, and only what it saved
       reset() // empty fields

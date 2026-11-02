@@ -1,6 +1,6 @@
 // Guard test: no buyer-visible text or accessible name on any buyer screen may name honors, because the shop's buyer word is "items".
 
-import { act, render, screen } from '@testing-library/react' // render and wait for the page
+import { act, fireEvent, render, screen } from '@testing-library/react' // render and wait for the page
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart's key
 import { writeSentOrder } from '@/features/order/sent-order-storage.ts' // fills the stored order
@@ -9,7 +9,11 @@ import { App } from './App.tsx' // code under test
 
 // The real captcha loads Turnstile's script, which a test must not do.
 vi.mock('@/features/order/Captcha.tsx', () => ({
-  Captcha: () => <div>Captcha</div>,
+  Captcha: ({ onToken }: { onToken: (token: string | null) => void }) => (
+    <button type="button" onClick={() => onToken('token-1')}>
+      Solve captcha
+    </button>
+  ),
 }))
 
 afterEach(() => {
@@ -117,5 +121,34 @@ describe('buyer copy', () => {
     render(<App />)
     await screen.findAllByText('The shop is busy right now. Try again in a minute.')
     expect(buyerPhrases()).not.toMatch(/honor/i)
+  })
+  it('never names honors or ticks in the refusal note, the failure note or the missing line', async () => {
+    // catches: "honor" or "tick" creeping into the refusal and failure copy
+    vi.spyOn(console, 'error').mockImplementation(() => {}) // the refused send is logged
+    window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":3}}') // above the stock once refused
+    vi.stubGlobal(
+      'fetch',
+      shopFetch([honor('knot-tying', 'Knot Tying')], [], (url) =>
+        url.endsWith('/orders')
+          ? new Response(JSON.stringify({ error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }), { status: 409 })
+          : undefined,
+      ),
+    ) // every send is refused
+    window.location.hash = '#/cart'
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Checkout' }))
+    await screen.findByRole('heading', { name: 'Your details' })
+    fireEvent.click(screen.getByRole('button', { name: /^Send order/ })) // empty form: the missing line shows
+    expect(buyerPhrases()).not.toMatch(/honor|\btick/i)
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Jo Tan' } })
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'jc@mail.com' } })
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '0312345678' } })
+    fireEvent.change(screen.getByLabelText('Club name'), { target: { value: 'Hilltop Club' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
+    })
+    await screen.findByText(/Some items changed while you were ordering/) // the refusal note on the cart
+    expect(buyerPhrases()).not.toMatch(/honor|\btick/i)
   })
 })

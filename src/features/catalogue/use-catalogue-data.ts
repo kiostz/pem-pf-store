@@ -18,12 +18,13 @@ export type CatalogueLoad = ReturnType<typeof useCatalogueData>
 
 /**
  * Loads honors, settings and clubs in one request; any failure is one error with a reason.
- * @return the load state, whether the skeleton may show, and retry to load again
+ * @return the load state, whether the skeleton may show, retry to load again, and applyStock to patch the loaded honors after a refused order
  */
 export function useCatalogueData(): {
   state: CatalogueData
   showSkeleton: boolean
   retry: () => void
+  applyStock: (refused: Array<{ honorId: string; stock: number | null }>) => void
 } {
   const [state, setState] = useState<CatalogueData>({ status: 'loading' }) // loading, error or the data
   const [attempt, setAttempt] = useState(0) // bumped by retry to run the load again
@@ -75,9 +76,26 @@ export function useCatalogueData(): {
     setAttempt((previous) => previous + 1) // trigger the load effect
   }, [])
 
+  /**
+   * Patches the loaded honors with what the Worker said was short: a number sets the stock, null removes the honor (not for sale). Does nothing unless the data is ready.
+   * @param refused the lines the Worker refused
+   */
+  const applyStock = useCallback((refused: Array<{ honorId: string; stock: number | null }>) => {
+    setState((current) => {
+      if (current.status !== 'ready') return current // nothing loaded to patch
+      const honors = current.honors.flatMap((honor) => {
+        const line = refused.find((other) => other.honorId === honor.id) // the Worker's word on this honor, if any
+        if (!line) return [honor] // untouched
+        return line.stock === null ? [] : [{ ...honor, stock: line.stock }] // gone from the shop, or the stock it has now
+      }) // the patched list
+      return { ...current, honors } // same settings and clubs
+    })
+  }, [])
+
   return {
     state, // loading, error or the data
     showSkeleton: state.status === 'loading' && loaderDelayPassed, // only while loading, after the delay
     retry, // for the Try again button
+    applyStock, // for the order form's refusal
   }
 }

@@ -184,4 +184,63 @@ describe('useCatalogueData', () => {
     expect(renders).toBe(drawnBeforeUnmount) // nothing drew after unmount
     expect(console.error).not.toHaveBeenCalled() // neither the abort nor the cap is logged as a failed load
   })
+  it('applyStock sets a listed honor\'s stock and drops an honor the Worker reported as not for sale', async () => {
+    // catches: a refusal that leaves the cart showing the old stock, or a Hidden honor that stays orderable
+    serve(ok([knot, honor('ants', 'Ants')]))
+    const { result } = renderHook(() => useCatalogueData())
+    await waitFor(() => expect(result.current.state.status).toBe('ready'))
+    act(() => result.current.applyStock([{ honorId: 'knot-tying', stock: 1 }, { honorId: 'ants', stock: null }]))
+    expect(result.current.state).toEqual({
+      status: 'ready',
+      honors: [{ ...knot, stock: 1 }],
+      settings: { currency: 'MYR' },
+      clubs: [eagles],
+    })
+  })
+
+  it('applyStock keeps every honor it did not name, in the same order, and ignores an id the shop does not list', async () => {
+    // catches: a patch that drops or reorders the honors the refusal never mentioned, or one that adds an unknown id
+    serve(ok([knot, honor('ants', 'Ants'), honor('birds', 'Birds')]))
+    const { result } = renderHook(() => useCatalogueData())
+    await waitFor(() => expect(result.current.state.status).toBe('ready'))
+    act(() => result.current.applyStock([{ honorId: 'ants', stock: 2 }, { honorId: 'no-such-honor', stock: 5 }]))
+    expect(result.current.state).toMatchObject({
+      status: 'ready',
+      honors: [knot, { ...honor('ants', 'Ants'), stock: 2 }, honor('birds', 'Birds')],
+    })
+  })
+
+  it('applyStock keeps an honor whose stock is now 0 in the list, as Sold out, and only a null drops it', async () => {
+    // catches: a falsy check that treats 0 like null, so the last item sold to another buyer vanishes instead of showing Sold out
+    serve(ok([knot, honor('ants', 'Ants')]))
+    const { result } = renderHook(() => useCatalogueData())
+    await waitFor(() => expect(result.current.state.status).toBe('ready'))
+    act(() => result.current.applyStock([{ honorId: 'knot-tying', stock: 0 }]))
+    expect(result.current.state).toMatchObject({ honors: [{ ...knot, stock: 0 }, honor('ants', 'Ants')] })
+  })
+
+  it('applyStock adds up over two refusals, and an empty one changes nothing', async () => {
+    // catches: the second refusal rebuilding from the first load and undoing the first patch, or an empty list wiping the data
+    serve(ok([knot, honor('ants', 'Ants')]))
+    const { result } = renderHook(() => useCatalogueData())
+    await waitFor(() => expect(result.current.state.status).toBe('ready'))
+    act(() => result.current.applyStock([{ honorId: 'knot-tying', stock: 1 }]))
+    act(() => result.current.applyStock([{ honorId: 'ants', stock: null }]))
+    act(() => result.current.applyStock([]))
+    expect(result.current.state).toMatchObject({ honors: [{ ...knot, stock: 1 }] })
+  })
+
+  it('applyStock leaves the data alone while loading and after an error', async () => {
+    // catches: a stock refusal turning a loading or failed screen into a half-built ready one
+    serve(hang)
+    const loading = renderHook(() => useCatalogueData())
+    act(() => loading.result.current.applyStock([{ honorId: 'knot-tying', stock: 0 }]))
+    expect(loading.result.current.state).toEqual({ status: 'loading' })
+    loading.unmount()
+    serve(async () => new Response('', { status: 500 }))
+    const failed = renderHook(() => useCatalogueData())
+    await waitFor(() => expect(failed.result.current.state.status).toBe('error'))
+    act(() => failed.result.current.applyStock([{ honorId: 'knot-tying', stock: 0 }]))
+    expect(failed.result.current.state).toEqual({ status: 'error', reason: 'failed' })
+  })
 })

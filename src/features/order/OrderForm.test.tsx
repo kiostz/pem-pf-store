@@ -1,6 +1,6 @@
 // Tests for the order form: errors once a field is left, Send order's looks and missing line, the Other field, the captcha, and sending with its failure, retry and success.
 
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react' // render and query
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react' // render and query
 import { useImperativeHandle, useState, type Ref } from 'react' // the stand-in captcha's reset handle
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart
@@ -10,8 +10,11 @@ import type { OrderLine } from '@/features/cart/cart.ts' // an order line
 import type { Club } from '@/shared/data/types.ts' // the club shape
 import { PILL_DOCK } from '@/shared/ui/floating-pill-box.ts' // the dock Send order floats in
 import { OrderForm } from './OrderForm.tsx' // code under test
+import type { OrderStockError } from './send-order.ts' // the refused lines' shape
 import { OrderFormProvider } from './OrderFormProvider.tsx' // the form state
 import { SENT_ORDER_STORAGE_KEY } from './sent-order-storage.ts' // where a sent order is kept
+
+type StockLine = OrderStockError['lines'][number] // one refused line
 
 const captcha = vi.hoisted(() => ({ reset: vi.fn() })) // counts resets, shared with the mock
 
@@ -79,13 +82,18 @@ function CartProbe() {
  * Renders the form inside its providers, over a stored cart of three Knot Tying.
  * @param clubList the clubs to offer
  */
-function renderForm(clubList: Club[] = clubs) {
-  window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":3}}') // the cart whose sent lines the form removes
+function renderForm(
+  clubList: Club[] = clubs,
+  onStockRefused: (refused: StockLine[]) => void = () => {},
+  cartQuantity = 3,
+  orderLines: OrderLine[] = lines,
+) {
+  window.localStorage.setItem(CART_STORAGE_KEY, `{"version":1,"quantities":{"knot-tying":${cartQuantity}}}`) // the cart whose sent lines the form removes
   render(
     <CartProvider honors={null}>
       <OrderFormProvider>
         <CartProbe />
-        <OrderForm lines={lines} currency="MYR" clubs={clubList} />
+        <OrderForm lines={orderLines} currency="MYR" clubs={clubList} onStockRefused={onStockRefused} />
       </OrderFormProvider>
     </CartProvider>,
   )
@@ -468,16 +476,35 @@ describe('OrderForm sending', () => {
     )
   })
 
-  it('shows a stock refusal as the general failure and leaves the cart as it was', async () => {
-    // catches: a refused order emptying the cart or showing a success
+  it('hands a stock refusal to the screen, shows no failure note, and leaves the cart as it was', async () => {
+    // catches: a refused order emptying the cart, a "check your connection" note for a stock problem, or the refused lines never reaching the shop's data
     vi.spyOn(console, 'error').mockImplementation(() => {})
     stubFetch(refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }))
-    renderForm()
+    const onStockRefused = vi.fn()
+    renderForm(clubs, onStockRefused)
+    fillTickAndSend()
+    await waitFor(() => expect(onStockRefused).toHaveBeenCalledWith([{ honorId: 'knot-tying', stock: 1 }]))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByTestId('cart')).toHaveTextContent('{"knot-tying":3}')
+    expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{"knot-tying":3}}')
+    expect(captcha.reset).toHaveBeenCalledTimes(1) // the spent token is dropped
+  })
+
+  it.each([
+    ['an empty list', []],
+    ['lines whose stock still covers the cart', [{ honorId: 'knot-tying', stock: 3 }]],
+    ['lines for items not in the cart', [{ honorId: 'ants', stock: 0 }]],
+  ])('shows the general failure note when a stock refusal names %s', async (_name, refusedLines) => {
+    // catches: a 409 that leaves nothing to fix doing nothing visible on the details page
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubFetch(refused(409, { error: 'stock', lines: refusedLines }))
+    const onStockRefused = vi.fn()
+    renderForm(clubs, onStockRefused)
     fillTickAndSend()
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Your order was not sent. Check your connection, complete the captcha again and press Send order.',
     )
-    expect(screen.getByTestId('cart')).toHaveTextContent('{"knot-tying":3}')
+    expect(onStockRefused).not.toHaveBeenCalled() // nothing to patch, nothing to send the buyer to the cart for
   })
 
   it('sends the captcha token, the ids and quantities and the typed club, with a UUID request id', async () => {
@@ -576,7 +603,7 @@ describe('OrderForm sending', () => {
       return (
         <>
           <button onClick={() => setShown(!shown)}>Leave or return</button>
-          {shown && <OrderForm lines={lines} currency="MYR" clubs={clubs} />}
+          {shown && <OrderForm lines={lines} currency="MYR" clubs={clubs} onStockRefused={() => {}} />}
         </>
       )
     }
@@ -712,10 +739,6 @@ describe('OrderForm sending', () => {
     ['a timeout', () => Promise.reject(new DOMException('timed out', 'TimeoutError'))],
     ['an HTTP 400', () => Promise.resolve(refused(400, { error: 'invalid' }))],
     ['a captcha refusal', () => Promise.resolve(refused(403, { error: 'captcha' }))],
-    [
-      'a stock refusal',
-      () => Promise.resolve(refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] })),
-    ],
     ['a 201 that is not an order', () => Promise.resolve(new Response('{"number":7}', { status: 201 }))],
     ['a rate limit', () => Promise.resolve(new Response('{}', { status: 429 }))],
     ['a page that is not JSON', () => Promise.resolve(new Response('<html>', { status: 502 }))],
@@ -1046,5 +1069,189 @@ describe('OrderForm send interruptions', () => {
     await waitFor(() => expect(window.location.hash).toBe('#/order-sent')) // confirmation
     expect((fetchFn.mock.calls[0] as unknown as [string])[0]).toBe('/api/orders') // no query
     expect(window.location.href).not.toMatch(/Jo|jc@|6789|Eagles/) // nothing in the address
+  })
+})
+
+const PENDING_KEY = 'pem-pf-store:pending-send' // where the send in flight is kept
+
+describe('OrderForm reload mid-send', () => {
+  /** Starts a send that never answers, then drops the page the way a reload does. */
+  async function sendThenReload() {
+    const held = stubFetch(() => new Promise<Response>(() => {})) // the answer never comes
+    renderForm()
+    fillTickAndSend()
+    await waitFor(() => expect(held).toHaveBeenCalledTimes(1)) // the order left
+    const firstId = requestOfCall(held, 0) // the id the Worker saved it under
+    cleanup() // the page goes: memory is lost, sessionStorage stays
+    return { firstId } // the id to compare with
+  }
+
+  it('refills the form and reuses the request id when Send is pressed again after a reload', async () => {
+    // catches: a reload mid-send that forgets the request id, so a second Send saves a second order
+    const { firstId } = await sendThenReload()
+    const fetchFn = stubFetch(sent()) // the Worker answers with the saved order
+    renderForm() // the reloaded page
+    expect(screen.getByLabelText('Name')).toHaveValue('Jo Tan') // refilled
+    expect(screen.getByLabelText('Email')).toHaveValue('jc@mail.com') // refilled
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // a fresh token
+    fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1))
+    expect(requestOfCall(fetchFn, 0)).toBe(firstId) // the same order
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+  })
+
+  it('needs a fresh captcha token after the reload before it sends', async () => {
+    // catches: a stored token or a send without the captcha after a reload
+    await sendThenReload()
+    const fetchFn = stubFetch(sent())
+    renderForm()
+    fireEvent.click(screen.getByRole('button', { name: /^Send order/ })) // no token yet
+    expect(fetchFn).not.toHaveBeenCalled() // nothing sent
+  })
+
+  it('makes a new request id when a form field is changed after the reload', async () => {
+    // catches: a changed order that reuses the old id and gets the old saved order back
+    const { firstId } = await sendThenReload()
+    const fetchFn = stubFetch(sent())
+    renderForm()
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Jo Tan Jr' } }) // an edit
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1))
+    expect(requestOfCall(fetchFn, 0)).not.toBe(firstId) // a new order
+  })
+
+  it('makes a new request id and an empty form when the cart changed before the reload came back', async () => {
+    // catches: a stored send refilled over a cart that is no longer the one sent
+    const { firstId } = await sendThenReload()
+    const fetchFn = stubFetch(sent())
+    renderForm(clubs, () => {}, 2) // the cart now holds two
+    expect(screen.getByLabelText('Name')).toHaveValue('') // not refilled
+    expect(window.sessionStorage.getItem(PENDING_KEY)).toBeNull() // dropped
+    fillValid()
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1))
+    expect(requestOfCall(fetchFn, 0)).not.toBe(firstId)
+  })
+
+  it('keeps the pending send while the answer is awaited and clears it once the order is stored', async () => {
+    // catches: a pending send that stays after success, so the next order reuses a spent id; or one never kept
+    let finish: (response: Response) => void = () => {}
+    stubFetch(() => new Promise<Response>((resolve) => (finish = resolve)))
+    renderForm()
+    fillTickAndSend()
+    await waitFor(() => expect(window.sessionStorage.getItem(PENDING_KEY)).not.toBeNull()) // kept while in flight
+    await act(async () => finish(sent()))
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY)).not.toBeNull() // the order is stored
+    expect(window.sessionStorage.getItem(PENDING_KEY)).toBeNull() // and the pending send is gone
+  })
+
+  it.each(['not json', '{"version":1,"requestId":5}', '{"version":2,"requestId":"x","lines":[],"values":{}}', 'null'])(
+    'ignores and removes a stored pending send that is malformed or foreign (%s)',
+    (stored) => {
+      // catches: a bad stored value that crashes the form, fills it with junk or stays forever
+      window.sessionStorage.setItem(PENDING_KEY, stored)
+      renderForm()
+      expect(screen.getByLabelText('Name')).toHaveValue('') // not refilled
+      expect(window.sessionStorage.getItem(PENDING_KEY)).toBeNull() // removed
+    },
+  )
+
+  const GOOD_VALUES = { name: 'Jo', email: 'j@x.co', phone: '1', club: 'Eagles', otherClub: '' } // a whole form part
+
+  it.each([
+    ['a wrapper that is not an object', '5'],
+    ['a bad request id', JSON.stringify({ version: 1, pending: { requestId: 5, lines: [['a', 1]], values: GOOD_VALUES } })],
+    ['an empty request id', JSON.stringify({ version: 1, pending: { requestId: '', lines: [['a', 1]], values: GOOD_VALUES } })],
+    ['a bad line', JSON.stringify({ version: 1, pending: { requestId: 'x', lines: [['a', 1.5]], values: GOOD_VALUES } })],
+    ['an empty list of lines', JSON.stringify({ version: 1, pending: { requestId: 'x', lines: [], values: GOOD_VALUES } })],
+    [
+      'a bad form field',
+      JSON.stringify({ version: 1, pending: { requestId: 'x', lines: [['a', 1]], values: { ...GOOD_VALUES, phone: 7 } } }),
+    ],
+    ['no form part', JSON.stringify({ version: 1, pending: { requestId: 'x', lines: [['a', 1]], values: null } })],
+  ])('removes a stored pending send with %s that passes the wrapper', (_name, stored) => {
+    // catches: a half-valid stored send that is read, refills the form with junk or stays forever
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    window.sessionStorage.setItem(PENDING_KEY, stored)
+    renderForm()
+    expect(screen.getByLabelText('Name')).toHaveValue('') // not refilled
+    expect(window.sessionStorage.getItem(PENDING_KEY)).toBeNull() // removed
+  })
+
+  it.each([
+    ['a captcha refusal', () => refused(403, { error: 'captcha' })],
+    ['a rate limit', () => new Response('{}', { status: 429 })],
+    ['a rejection', () => new Response('{}', { status: 500 })],
+    [
+      'a stock refusal that patches the cart',
+      () => refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }),
+    ],
+    ['a stock refusal with nothing to patch', () => refused(409, { error: 'stock', lines: [] })],
+  ])('clears the pending send after %s', async (_name, answer) => {
+    // catches: a definite answer that leaves the pending send behind, so a reload refills a refused order
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubFetch(answer())
+    renderForm()
+    fillTickAndSend()
+    await waitFor(() => expect(captcha.reset).toHaveBeenCalledTimes(1)) // the answer came
+    expect(window.sessionStorage.getItem(PENDING_KEY)).toBeNull() // spent
+  })
+
+  it.each([
+    ['a dropped connection', () => Promise.reject(new TypeError('Failed to fetch'))],
+    ['a timeout', () => Promise.reject(new DOMException('timed out', 'TimeoutError'))],
+  ])('keeps the pending send after %s', async (_name, answer) => {
+    // catches: a pending send cleared when the outcome is unknown, so a reload makes a second order
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubFetch(answer)
+    renderForm()
+    fillTickAndSend()
+    await waitFor(() => expect(captcha.reset).toHaveBeenCalledTimes(1)) // the failure came
+    expect(window.sessionStorage.getItem(PENDING_KEY)).not.toBeNull() // kept
+  })
+
+  it('renders and still sends when reading window.sessionStorage itself throws', async () => {
+    // catches: blocked site data that throws at App start because the storage object is read outside the try
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const realStorage = Object.getOwnPropertyDescriptor(window, 'sessionStorage') as PropertyDescriptor // to put back
+    Object.defineProperty(window, 'sessionStorage', {
+      configurable: true,
+      get: () => {
+        throw new DOMException('blocked', 'SecurityError') // what blocked site data does
+      },
+    })
+    try {
+      const fetchFn = stubFetch(sent())
+      renderForm()
+      fillTickAndSend()
+      await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1)) // sent regardless
+    } finally {
+      Object.defineProperty(window, 'sessionStorage', realStorage) // working storage again
+    }
+  })
+
+  it('still sends when sessionStorage throws', async () => {
+    // catches: blocked storage that stops an order from being sent
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const realGet = Storage.prototype.getItem // the working read, for the cart
+    const realSet = Storage.prototype.setItem // the working save, for the cart
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (this: Storage, key: string) {
+      if (this === window.sessionStorage) throw new Error('blocked')
+      return realGet.call(this, key)
+    })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+      if (this === window.sessionStorage) throw new Error('blocked')
+      realSet.call(this, key, value)
+    })
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(function (this: Storage) {
+      if (this === window.sessionStorage) throw new Error('blocked')
+    })
+    const fetchFn = stubFetch(sent())
+    renderForm()
+    fillTickAndSend()
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1)) // sent regardless
   })
 })

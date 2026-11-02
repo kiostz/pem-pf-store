@@ -90,6 +90,35 @@ describe('sendOrder', () => {
     ).rejects.toMatchObject({ kind: 'rejected' })
   })
 
+  it.each([
+    ['another error name', { error: 'conflict', lines: [{ honorId: 'knot-tying', stock: 1 }] }],
+    ['no lines list', { error: 'stock' }],
+    ['a line without an id', { error: 'stock', lines: [{ stock: 1 }] }],
+    ['a fractional stock', { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1.5 }] }],
+    ['a stock written as text', { error: 'stock', lines: [{ honorId: 'knot-tying', stock: '1' }] }],
+    ['a missing stock', { error: 'stock', lines: [{ honorId: 'knot-tying' }] }],
+  ])('rejects a 409 with %s', async (_label, body) => {
+    // catches: any 409 treated as a stock refusal, or a stock of text or undefined patched into the shop's data
+    await expect(sendOrder(request, fetchAnswering(409, body))).rejects.toMatchObject({ name: 'OrderSendError', kind: 'rejected' })
+  })
+
+  it('rejects a 409 that is not JSON', async () => {
+    // catches: a proxy's HTML 409 page crashing the parse instead of showing the failure note
+    await expect(sendOrder(request, fetchAnswering(409, '<html>'))).rejects.toMatchObject({ kind: 'rejected' })
+  })
+
+  it('names HTTP 429 as rate-limited even when its body is not JSON', async () => {
+    // catches: the body parsed before the status, so a 429 page from the edge reads as a rejected order and the wait advice is lost
+    await expect(sendOrder(request, fetchAnswering(429, '<html>'))).rejects.toMatchObject({ kind: 'rate-limited' })
+  })
+
+  it('names a 409 with an empty lines list as a stock refusal that names nothing', async () => {
+    // catches: an empty refusal turned into a send failure here, which would hide the form's own "nothing to fix" rule
+    const error = await sendOrder(request, fetchAnswering(409, { error: 'stock', lines: [] })).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(OrderStockError)
+    expect((error as OrderStockError).lines).toEqual([])
+  })
+
   it('names a 403 captcha answer as captcha', async () => {
     // catches: a failed captcha worded as a lost connection
     await expect(sendOrder(request, fetchAnswering(403, { error: 'captcha' }))).rejects.toMatchObject({ kind: 'captcha' })

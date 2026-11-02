@@ -19,7 +19,7 @@ const honors: Honor[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants'
 const ready: CatalogueLoad = {
   state: { status: 'ready', honors, settings: { currency: 'MYR' }, clubs: [] },
   showSkeleton: false,
-  retry: () => {},
+  retry: () => {}, applyStock: () => {},
 } // the load as the app hands it over
 
 afterEach(() => {
@@ -64,6 +64,12 @@ function storedCart(): Record<string, number> {
 function removeLine(name: string, keyboard = false) {
   const trash = screen.getByRole('button', { name: `Remove ${name}` }) // the trash
   fireEvent.click(trash, { detail: keyboard ? 0 : 1 }) // a keyboard click has detail 0
+}
+
+/** @return a button that marks the last send as refused, as the order form does after a 409 */
+function RefusalButton() {
+  const { setRefused } = useOrderForm() // the refusal flag
+  return <button onClick={() => setRefused(true)}>Refuse the order</button> // pressed by the tests
 }
 
 describe('CartScreen lines', () => {
@@ -494,7 +500,7 @@ describe('CartScreen empty, loading and error', () => {
 
   it('shows nothing under the heading for 300 ms, then 3 row-shaped skeleton lines and no total bar', () => {
     // catches: a skeleton flash on a fast load, the wrong shape, or a total bar over a loading screen
-    const loading: CatalogueLoad = { state: { status: 'loading' }, showSkeleton: false, retry: () => {} }
+    const loading: CatalogueLoad = { state: { status: 'loading' }, showSkeleton: false, retry: () => {}, applyStock: () => {} }
     const tree = (data: CatalogueLoad) => (
       <CartProvider honors={honors}>
         <OrderFormProvider>
@@ -521,7 +527,7 @@ describe('CartScreen empty, loading and error', () => {
 
   it('says the shop is busy, with Try again, when the load was refused', () => {
     // catches: the cart telling a rate-limited buyer to check their connection
-    renderScreen({ 'knot-tying': 1 }, { state: { status: 'error', reason: 'busy' }, showSkeleton: false, retry: () => {} })
+    renderScreen({ 'knot-tying': 1 }, { state: { status: 'error', reason: 'busy' }, showSkeleton: false, retry: () => {}, applyStock: () => {} })
     expect(screen.getByText('The shop is busy right now. Try again in a minute.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
@@ -529,7 +535,7 @@ describe('CartScreen empty, loading and error', () => {
   it('shows the catalogue error copy and Try again, and no bar, when the load failed', () => {
     // catches: no way to recover from a failed load, or a Checkout over an error
     const retry = vi.fn()
-    renderScreen({ 'knot-tying': 1 }, { state: { status: 'error', reason: 'failed' }, showSkeleton: false, retry })
+    renderScreen({ 'knot-tying': 1 }, { state: { status: 'error', reason: 'failed' }, showSkeleton: false, retry, applyStock: () => {} })
     expect(screen.getByText("We couldn't load the shop. Check your connection and try again.")).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(retry).toHaveBeenCalledTimes(1)
@@ -600,12 +606,13 @@ describe('CartScreen stock', () => {
     const data: CatalogueLoad = {
       state: { status: 'ready', honors: list, settings: { currency: 'MYR' }, clubs: [] },
       showSkeleton: false,
-      retry: () => {},
+      retry: () => {}, applyStock: () => {},
     } // the load as the app hands it over
     window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, quantities })) // the saved cart
     render(
       <CartProvider honors={list}>
         <OrderFormProvider>
+          <RefusalButton />
           <CartScreen data={data} onBack={() => {}} />
         </OrderFormProvider>
       </CartProvider>,
@@ -653,6 +660,66 @@ describe('CartScreen stock', () => {
     expect(screen.queryByText('Only 2 left')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Checkout' }))
     expect(window.location.hash).toBe('#/details')
+  })
+
+  const REFUSAL_NOTE =
+    'Your order was not sent. Some items changed while you were ordering. Lower or remove the marked items, then check out again.' // the settled text
+
+  it('puts a 2 px danger ring on an over-stock line and on a Sold out line, and none on a healthy one', () => {
+    // catches: the spec's red border missing, or drawn on lines that are fine
+    renderStocked({ 'knot-tying': 12, ants: 3, birds: 1 })
+    expect(screen.getByText('Knot Tying').closest('li')).toHaveClass('ring-2', 'ring-inset', 'ring-danger')
+    expect(screen.getByText('Ants').closest('li')).toHaveClass('ring-2', 'ring-inset', 'ring-danger')
+    expect(screen.getByText('Birds').closest('li')).not.toHaveClass('ring-2')
+  })
+
+  it('shows the refusal note in place of the Checkout note, and keeps the stored cart', () => {
+    // catches: the buyer sent back to the cart with no word why, or both notes stacked
+    renderStocked({ 'knot-tying': 3 })
+    fireEvent.click(screen.getByText('Refuse the order'))
+    expect(screen.getByRole('alert')).toHaveTextContent(REFUSAL_NOTE) // read out on arrival, as focus sits on the heading
+    expect(screen.queryByText('Lower or remove the items marked in red to check out.')).not.toBeInTheDocument()
+    expect(storedCart()).toEqual({ 'knot-tying': 3 })
+  })
+
+  it('shows the refusal note when the refused line is an item gone from the shop', () => {
+    // catches: a hidden item refusing the order with no note, because no line is above the stock
+    renderStocked({ 'africa-lore': 1, birds: 1 })
+    fireEvent.click(screen.getByText('Refuse the order'))
+    expect(screen.getByText(REFUSAL_NOTE)).toBeInTheDocument()
+    expect(screen.getByText('Item no longer in the shop')).toBeInTheDocument()
+  })
+
+  it('shows the refusal note above the Unavailable line and Browse more when the only line was dropped, and drops it when the cart changes', () => {
+    // catches: a buyer left on a cart with no Checkout and no word that the order was not sent
+    renderStocked({ 'africa-lore': 1 })
+    fireEvent.click(screen.getByText('Refuse the order'))
+    const note = screen.getByRole('alert')
+    expect(note).toHaveTextContent(REFUSAL_NOTE)
+    expect(note.compareDocumentPosition(screen.getByText('Item no longer in the shop')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy() // above the line
+    expect(screen.getByRole('button', { name: /Browse more/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Checkout' })).not.toBeInTheDocument()
+    removeLine('Item no longer in the shop (africa-lore)') // the cart changes
+    expect(screen.queryByText(REFUSAL_NOTE)).not.toBeInTheDocument()
+  })
+
+  it('drops the refusal note when the cart changes, then Checkout opens Details once the line fits', () => {
+    // catches: the note staying above a changed cart, or Checkout staying blocked after the fix
+    renderStocked({ 'knot-tying': 3 })
+    fireEvent.click(screen.getByText('Refuse the order'))
+    fireEvent.click(screen.getByRole('button', { name: 'One fewer Knot Tying' })) // 3 to 2, the stock
+    expect(screen.queryByText(REFUSAL_NOTE)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Checkout' }))
+    expect(window.location.hash).toBe('#/details')
+  })
+
+  it('goes back to the Checkout note when the cart changes but a line is still above the stock', () => {
+    // catches: a cart that is still over the stock with no note at all
+    renderStocked({ 'knot-tying': 12, ants: 3 })
+    fireEvent.click(screen.getByText('Refuse the order'))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Ants' })) // the cart changes
+    expect(screen.queryByText(REFUSAL_NOTE)).not.toBeInTheDocument()
+    expect(screen.getByText('Lower or remove the items marked in red to check out.')).toBeInTheDocument()
   })
 
   it('shows no note and no mark when every line is within the stock', () => {

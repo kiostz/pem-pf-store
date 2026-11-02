@@ -4,8 +4,22 @@ import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react' /
 import { useCart } from '@/features/cart/use-cart.ts' // a changed cart ends the last failure's alert
 import { EMPTY_ORDER_FORM, type OrderField, type OrderFormValues } from './order-form.ts' // the form's shapes
 import { OrderFormContext } from './use-order-form.ts' // the context this provider fills
+import { clearPendingSend, readPendingSend, type PendingSend } from './pending-send-storage.ts' // a send a reload cut off
 
 const ALL_FIELDS: OrderField[] = ['name', 'email', 'phone', 'club', 'otherClub'] // every field of the form
+
+/**
+ * Reads the send a reload cut off, when the cart still holds the lines it sent; otherwise removes it.
+ * @param quantities the cart now
+ * @return the pending send, or null
+ */
+function pendingForCart(quantities: Record<string, number>): PendingSend | null {
+  const pending = readPendingSend() // what a reload left
+  if (pending === null) return null // nothing pending
+  if (pending.lines.every(([honorId, quantity]) => quantities[honorId] === quantity)) return pending // the cart still has what was sent
+  clearPendingSend() // the cart changed: this is a new order
+  return null // the cart changed: a fresh form
+}
 
 /**
  * Holds the form for everything below it.
@@ -13,19 +27,24 @@ const ALL_FIELDS: OrderField[] = ['name', 'email', 'phone', 'club', 'otherClub']
  * @return the provider element
  */
 export function OrderFormProvider({ children }: { children: ReactNode }) {
-  const [values, setValues] = useState<OrderFormValues>(EMPTY_ORDER_FORM) // what the buyer has typed
+  const { quantities } = useCart() // the cart, watched for changes
+  const [pending] = useState(() => pendingForCart(quantities)) // a send a reload cut off, read once
+  const [values, setValues] = useState<OrderFormValues>(pending?.values ?? EMPTY_ORDER_FORM) // what the buyer has typed; refilled after a reload mid-send
   const [touched, setTouched] = useState<Partial<Record<OrderField, boolean>>>({}) // fields the buyer has left
   const [sending, setSendingState] = useState(false) // an order is on its way
   const [failure, setFailure] = useState<{ text: string } | null>(null) // the alert of the last failed send
+  const [refused, setRefused] = useState(false) // the Worker refused the last order for stock: the cart says so until it changes
   const sendingRef = useRef(false) // blocks a second press in the same tick, before state shows
-  const requestRef = useRef<{ signature: string; requestId: string } | null>(null) // the request id, kept for retries of the same order
-  const { quantities } = useCart() // the cart, watched for changes
+  const requestRef = useRef<{ signature: string; requestId: string } | null>(
+    pending && { signature: JSON.stringify([pending.lines, pending.values]), requestId: pending.requestId },
+  ) // the request id, kept for retries of the same order; after a reload the cut-off send's, same signature as OrderForm makes
   const [seenCart, setSeenCart] = useState(quantities) // the cart at the last render
 
   // A changed cart is a new order, so the last failure's alert goes; adjusted while rendering (React's way to derive state).
   if (seenCart !== quantities) {
     setSeenCart(quantities) // this change is handled
     setFailure(null) // never above a cart the buyer has not sent
+    setRefused(false) // nor the refusal note
   }
 
   /**
@@ -52,6 +71,7 @@ export function OrderFormProvider({ children }: { children: ReactNode }) {
     setValues(EMPTY_ORDER_FORM) // empty fields
     setTouched({}) // no errors showing
     setFailure(null) // a new order starts without the last one's alert
+    setRefused(false) // or the last one's refusal
   }, [])
 
   /**
@@ -76,9 +96,11 @@ export function OrderFormProvider({ children }: { children: ReactNode }) {
       setSending,
       failure,
       setFailure,
+      refused,
+      setRefused,
       requestRef,
     }), // what every reader gets
-    [values, touched, setField, touch, touchAll, reset, sending, setSending, failure], // the refs and setFailure never change
+    [values, touched, setField, touch, touchAll, reset, sending, setSending, failure, refused], // the refs and the setters never change
   ) // new only when one changes
   return <OrderFormContext.Provider value={value}>{children}</OrderFormContext.Provider> // everything below reads the form
 }

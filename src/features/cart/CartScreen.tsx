@@ -14,7 +14,7 @@ import { CartIcon, InfoIcon } from './cart-icons.tsx' // the empty cart's icon a
 import { CART_CARD_BOX, CART_LINE_BOX, CART_PICTURE_BOX } from './cart-line-box.ts' // the card and line boxes, shared with the loading lines
 import { cartCount, estimatedTotalCents, exceedsStock, GONE_NAME, lineLabel, resolveCart } from './cart.ts' // the cart maths, the stock rule and a line's label
 import { CartLine } from './CartLine.tsx' // one line
-import { CheckoutBar } from './CheckoutBar.tsx' // the bottom bar
+import { CheckoutBar, REFUSED_TEXT } from './CheckoutBar.tsx' // the bottom bar, and the refusal note's text for a cart with no line left to check out
 import { RemovedNote } from './RemovedNote.tsx' // the note with Undo
 import { useCart } from './use-cart.ts' // the cart
 
@@ -40,7 +40,7 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
   const { quantities, setQuantity, takeOutUnavailable } = useCart() // the cart and its take-out
   const headingRef = useRef<HTMLHeadingElement>(null) // focused on arrival
   const listRef = useRef<HTMLUListElement>(null) // where a line is found for focus
-  const { sending } = useOrderForm() // an order is being sent: the screen waits, even after leaving and coming back
+  const { sending, refused } = useOrderForm() // an order is being sent: the screen waits, even after leaving and coming back
   const [removal, setRemoval] = useState<Removal | null>(null) // the Removed note, one at a time
   const [focusRequest, setFocusRequest] = useState<FocusRequest>({ kind: 'none' }) // a focus move waiting for the next draw
 
@@ -63,6 +63,8 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
   ].sort((a, b) => byText(a.honor?.name ?? '￿', b.honor?.name ?? '￿') || byText(a.id, b.id)) // A to Z, gone honors last, equal names by id so Undo restores the old place
   const totalCents = estimatedTotalCents(lines) // orderable lines only
   const blocked = lines.some(exceedsStock) // a line above today's stock, or Sold out: Checkout waits for the buyer to fix it
+  const refusalShown = refused && (blocked || unavailable.length > 0) // the Worker's refusal note stands: there is a line to fix
+  const refusalAboveLines = refusalShown && lines.length === 0 // no Checkout is left, so the note stands under the heading, above the Unavailable line
 
   // Moves focus after the draw that follows a removal, an Undo or the note's end; a tick later, so a field committed by leaving it has handed focus on.
   useEffect(() => {
@@ -135,11 +137,17 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
   const unavailableCount = unavailable.length // lines, not quantities
   // The 768 px centred column keeps a line's picture, name and stepper together on desktop; the bottom padding clears the bar and the note.
   return (
-    <div inert={sending} aria-busy={sending} className={`mx-auto max-w-3xl ${blocked ? 'pb-40' : 'pb-24'}`}>
+    <div inert={sending} aria-busy={sending} className={`mx-auto max-w-3xl ${refusalShown && !refusalAboveLines ? 'pb-52' : blocked ? 'pb-40' : 'pb-24'}`}>
       {/* Where focus lands on arrival. */}
       <h2 ref={headingRef} tabIndex={-1} className="sm:text-title mt-2 text-xl font-bold outline-none">
         Your cart
       </h2>
+      {/* The refusal note when the cart's only line was dropped: the dark note of the dock, in the flow. */}
+      {state.status === 'ready' && refusalAboveLines && (
+        <p role="alert" className="bg-bg-inverse text-on-inverse rounded-card animate-note-in motion-reduce:animate-fade-in mt-3 px-4 py-3 text-sm">
+          {REFUSED_TEXT}
+        </p>
+      )}
       {/* A plain paragraph right after the heading, no live region: it is read with the page, not over the heading's focus. */}
       {state.status === 'ready' && unavailableCount > 0 && (
         <p className="bg-tag-warning text-on-tag-warning rounded-card mt-3 flex items-center gap-2 p-3 text-sm font-medium">
@@ -248,6 +256,7 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
             currency={currency}
             orderable={lines.length > 0}
             blocked={blocked} // a line above the stock
+            refused={refusalShown && !refusalAboveLines} // the Worker refused the last send, and there is a Checkout to explain
             onCheckout={checkout}
             onBrowse={onBack}
           />

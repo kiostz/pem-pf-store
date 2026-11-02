@@ -48,7 +48,7 @@ export function CartLine({
       onKeyDownCapture={() => (keyboard.current = true)} // a key press (Enter in the field, Enter or Space on the trash)
       onClickCapture={(event) => (keyboard.current = event.detail === 0)} // a keyboard-made click has detail 0
       onBlurCapture={() => (keyboard.current = false)} // a field committed by leaving it
-      className={CART_LINE_BOX}
+      className={`${CART_LINE_BOX} ${over ? 'ring-danger ring-2 ring-inset' : ''}`} // an over-stock line gets a 2 px danger ring inside its box, so the hairlines do not move
     >
       {/* Picture or category mark in its rounded box; greyed when unavailable. */}
       <div className={`${CART_PICTURE_BOX} ${unavailable ? 'opacity-50 grayscale' : ''}`}>

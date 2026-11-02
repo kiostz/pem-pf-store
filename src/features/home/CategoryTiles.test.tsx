@@ -26,7 +26,7 @@ function ready(honors: Honor[]): CatalogueLoad {
   return {
     state: { status: 'ready', honors, settings: { currency: 'MYR' }, clubs: [] },
     showSkeleton: false,
-    retry: () => {},
+    retry: () => {}, applyStock: () => {},
   } as CatalogueLoad
 }
 
@@ -69,7 +69,7 @@ describe('CategoryTiles', () => {
 
   it('shows nothing for a load that has not passed the delay, then 3 skeleton tiles, with no links', () => {
     // catches: a flash of skeleton on a fast load, or a wrong tile count
-    const loading = { state: { status: 'loading' }, showSkeleton: false, retry: () => {} } as CatalogueLoad
+    const loading = { state: { status: 'loading' }, showSkeleton: false, retry: () => {}, applyStock: () => {} } as CatalogueLoad
     const { rerender } = render(<CategoryTiles data={loading} />)
     expect(screen.queryByTestId('tile-skeleton')).not.toBeInTheDocument()
     const region = screen.getByRole('status') // already in the page before it speaks
@@ -84,7 +84,7 @@ describe('CategoryTiles', () => {
 
   it('says the shop is busy, with Try again, when the load was refused', () => {
     // catches: Home telling a rate-limited buyer to check their connection
-    render(<CategoryTiles data={{ state: { status: 'error', reason: 'busy' }, showSkeleton: false, retry: () => {} } as CatalogueLoad} />)
+    render(<CategoryTiles data={{ state: { status: 'error', reason: 'busy' }, showSkeleton: false, retry: () => {}, applyStock: () => {} } as CatalogueLoad} />)
     expect(screen.getByText('The shop is busy right now. Try again in a minute.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
@@ -92,7 +92,7 @@ describe('CategoryTiles', () => {
   it('shows the load error with Try again that calls retry', () => {
     // catches: a failed load with no way to retry
     const retry = vi.fn()
-    render(<CategoryTiles data={{ state: { status: 'error', reason: 'failed' }, showSkeleton: false, retry } as CatalogueLoad} />)
+    render(<CategoryTiles data={{ state: { status: 'error', reason: 'failed' }, showSkeleton: false, retry, applyStock: () => {} } as CatalogueLoad} />)
     expect(screen.getByText("We couldn't load the shop. Check your connection and try again.")).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(retry).toHaveBeenCalledTimes(1)

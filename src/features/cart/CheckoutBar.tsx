@@ -5,6 +5,9 @@ import { formatPrice } from '@/shared/format/price.ts' // "RM 20.00"
 import { PILL_ACTION, PILL_SURFACE } from '@/shared/ui/floating-pill-box.ts' // the pill look shared with the tab pill
 
 const BLOCKED_NOTE_ID = 'checkout-blocked-note' // the note's id, for the button's description
+const BLOCKED_TEXT = 'Lower or remove the items marked in red to check out.' // above Checkout while a line is above the stock
+export const REFUSED_TEXT =
+  'Your order was not sent. Some items changed while you were ordering. Lower or remove the marked items, then check out again.' // after the Worker refused an order, until the cart changes: above Checkout, or under the cart heading when no line is left to check out
 
 /**
  * Draws the pill; the cart screen places it in the dock.
@@ -13,6 +16,7 @@ const BLOCKED_NOTE_ID = 'checkout-blocked-note' // the note's id, for the button
  * @param currency the currency code from the settings
  * @param orderable false when no line can be ordered: the pill then holds Browse more alone
  * @param blocked true when a line is above today's stock: a note shows over the pill and Checkout only calls onCheckout, which moves focus, without the double-tap guard
+ * @param refused true when the Worker just refused the order: its note replaces the blocked one
  * @param onCheckout called once when Checkout is pressed (a second press is ignored)
  * @param onBrowse called when Browse more is pressed
  * @return the pill
@@ -23,6 +27,7 @@ export function CheckoutBar({
   currency,
   orderable,
   blocked = false,
+  refused = false,
   onCheckout,
   onBrowse,
 }: {
@@ -31,6 +36,7 @@ export function CheckoutBar({
   currency: string
   orderable: boolean
   blocked?: boolean
+  refused?: boolean
   onCheckout: () => void
   onBrowse: () => void
 }) {
@@ -38,12 +44,13 @@ export function CheckoutBar({
   return (
     <>
       {/* Why Checkout will not open the details page yet; stacked over the pill by the dock. */}
-      {orderable && blocked && (
+      {orderable && (blocked || refused) && (
         <p
           id={BLOCKED_NOTE_ID} // the button is described by it
+          role={refused ? 'alert' : undefined} // a refusal is read out as the buyer arrives; the plain blocked note is read with the button
           className="bg-bg-inverse text-on-inverse rounded-card animate-note-in motion-reduce:animate-fade-in w-full px-4 py-3 text-sm" // the Removed note's dark look and entrance, as wide as the pill
         >
-          Lower or remove the items marked in red to check out.
+          {refused ? REFUSED_TEXT : BLOCKED_TEXT}
         </p>
       )}
       {/* The white pill: the total on the left, the action on the right, or one action across. */}
@@ -61,7 +68,7 @@ export function CheckoutBar({
             </p>
             <button
               type="button" // not a form submit
-              aria-describedby={blocked ? BLOCKED_NOTE_ID : undefined} // read why with the button
+              aria-describedby={blocked || refused ? BLOCKED_NOTE_ID : undefined} // read why with the button
               onClick={() => {
                 if (blocked) return onCheckout() // nothing opens, so there is no double tap to guard; every press moves focus
                 if (pressed.current) return // a double tap goes once

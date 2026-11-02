@@ -230,4 +230,132 @@ describe('App checkout path', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Checkout' }))
     expect(await screen.findByRole('button', { name: 'Send order RM 8.00' })).toBeInTheDocument() // the same total
   })
+  it('lands on the cart after a stock refusal: the line marked, the note up, the cart and the form kept, and a lowered cart sends', async () => {
+    // catches: a refused buyer left on the details page with a vague note, a cart changed for them, or a form emptied by the trip
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    let call = 0 // order calls so far
+    serve(async (init) => {
+      call += 1 // this call
+      if (call === 1) return new Response(JSON.stringify({ error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }), { status: 409 }) // the admin lowered it meanwhile
+      return savedFor(init)
+    })
+    window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":3}}')
+    window.location.hash = '#/cart'
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Checkout' }))
+    await screen.findByRole('heading', { name: 'Your details' })
+    fillAndTick()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
+    })
+    expect(await screen.findByRole('heading', { name: 'Your cart' })).toBeInTheDocument() // back on the cart
+    expect(screen.getByText('Only 1 left')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Quantity of Knot Tying' }).closest('li')).toHaveClass('ring-danger')
+    expect(
+      screen.getByText(
+        'Your order was not sent. Some items changed while you were ordering. Lower or remove the marked items, then check out again.',
+      ),
+    ).toBeInTheDocument()
+    expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{"knot-tying":3}}') // untouched
+    expect(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY)).toBeNull() // nothing was sent
+    fireEvent.click(screen.getByRole('button', { name: 'One fewer Knot Tying' })) // 3 to 2
+    fireEvent.click(screen.getByRole('button', { name: 'One fewer Knot Tying' })) // 2 to 1, the stock
+    fireEvent.click(screen.getByRole('button', { name: 'Checkout' }))
+    await screen.findByRole('heading', { name: 'Your details' })
+    expect(screen.getByLabelText('Email')).toHaveValue('jc@mail.com') // the form is as the buyer left it
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // the spent token needs a new solve
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
+    })
+    expect(await screen.findByRole('heading', { name: 'Order sent' })).toBeInTheDocument()
+  })
+
+  it('lands on the cart with "Item no longer in the shop" when the Worker says an item is not for sale', async () => {
+    // catches: a hidden item refusing the order while the cart still lists it as orderable
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal(
+      'fetch',
+      shopFetch([honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')], [], (url) =>
+        url.endsWith('/orders')
+          ? new Response(JSON.stringify({ error: 'stock', lines: [{ honorId: 'knot-tying', stock: null }] }), { status: 409 })
+          : undefined,
+      ),
+    ) // Knot Tying was hidden meanwhile; Ants still sells
+    window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":2,"ants":1}}')
+    window.location.hash = '#/cart'
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Checkout' }))
+    await screen.findByRole('heading', { name: 'Your details' })
+    fillAndTick()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
+    })
+    expect(await screen.findByText('Item no longer in the shop')).toBeInTheDocument()
+    expect(screen.getByText(/Some items changed while you were ordering/)).toBeInTheDocument()
+    expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{"knot-tying":2,"ants":1}}') // nothing saved, nothing removed
+  })
+  it('after a refusal marks only the lines the Worker named, a short one and a gone one, and leaves the healthy one alone', async () => {
+    // catches: a refusal that marks every line, drops the wrong one, or blocks the healthy line's red ring and total
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal(
+      'fetch',
+      shopFetch([honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants'), honor('birds', 'Birds')], [], (url) =>
+        url.endsWith('/orders')
+          ? new Response(
+              JSON.stringify({
+                error: 'stock',
+                lines: [
+                  { honorId: 'knot-tying', stock: 1 },
+                  { honorId: 'ants', stock: null },
+                ],
+              }),
+              { status: 409 },
+            )
+          : undefined,
+      ),
+    ) // Knot Tying fell to 1, Ants was hidden, Birds is fine
+    window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":3,"ants":1,"birds":2}}')
+    window.location.hash = '#/cart'
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Checkout' }))
+    await screen.findByRole('heading', { name: 'Your details' })
+    fillAndTick()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
+    })
+    await screen.findByRole('heading', { name: 'Your cart' })
+    expect(screen.getByText('Only 1 left')).toBeInTheDocument() // the short line
+    expect(screen.getByText('Item no longer in the shop')).toBeInTheDocument() // the gone line
+    expect(screen.getByRole('textbox', { name: 'Quantity of Birds' }).closest('li')).not.toHaveClass('ring-danger') // the healthy line
+    expect(screen.getAllByText(/Only \d+ left/)).toHaveLength(1) // no other line says it is short
+    expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{"knot-tying":3,"ants":1,"birds":2}}') // the cart is as the buyer left it
+  })
+
+  it('shows Sold out, not a vanished line, when the last item went to another buyer, and the trash clears it', async () => {
+    // catches: a refused last item dropped from the cart without a word, or a Sold out line the buyer cannot remove
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal(
+      'fetch',
+      shopFetch([honor('knot-tying', 'Knot Tying', { stock: 1 })], [], (url) =>
+        url.endsWith('/orders')
+          ? new Response(JSON.stringify({ error: 'stock', lines: [{ honorId: 'knot-tying', stock: 0 }] }), { status: 409 })
+          : undefined,
+      ),
+    ) // another buyer took the one left
+    window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}')
+    window.location.hash = '#/cart'
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Checkout' }))
+    await screen.findByRole('heading', { name: 'Your details' })
+    fillAndTick()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
+    })
+    await screen.findByRole('heading', { name: 'Your cart' })
+    expect(within(screen.getByRole('button', { name: 'Remove Knot Tying' }).closest('li')!).getByText('Sold out')).toBeInTheDocument() // on the cart line, not only on the catalogue card behind it
+    expect(screen.getByText(/Some items changed while you were ordering/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Knot Tying' }))
+    expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{}}') // the buyer can leave
+    expect(screen.queryByText(/Some items changed while you were ordering/)).not.toBeInTheDocument() // the cart changed, so the note goes
+  })
 })

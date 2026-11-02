@@ -107,6 +107,7 @@ describe('OrderForm with a theme change', () => {
             lines={lines}
             currency="MYR"
             clubs={[{ name: 'Eagles', area: null, language: null, location: null, churchName: null }]}
+            onStockRefused={() => {}}
           />
         </OrderFormProvider>
       </CartProvider>,

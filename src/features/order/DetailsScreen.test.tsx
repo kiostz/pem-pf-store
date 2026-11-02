@@ -27,7 +27,7 @@ const honors: Honor[] = [honor('knot-tying', 'Knot Tying')] // Knot Tying listed
 const ready: CatalogueLoad = {
   state: { status: 'ready', honors, settings: { currency: 'MYR' }, clubs: [] },
   showSkeleton: false,
-  retry: () => {},
+  retry: () => {}, applyStock: () => {},
 } // the load as the app hands it over
 
 afterEach(() => {
@@ -115,7 +115,7 @@ describe('DetailsScreen', () => {
     render(
       <CartProvider honors={null}>
         <OrderFormProvider>
-          <DetailsScreen data={{ state: { status: 'loading' }, showSkeleton: false, retry: () => {} }} />
+          <DetailsScreen data={{ state: { status: 'loading' }, showSkeleton: false, retry: () => {}, applyStock: () => {} }} />
         </OrderFormProvider>
       </CartProvider>,
     )
@@ -125,7 +125,7 @@ describe('DetailsScreen', () => {
 
   it('shows nothing but the heading for 300 ms, then a status region with the four fields and the captcha as skeleton bars', () => {
     // catches: a heading over a blank page, a skeleton flash on a fast load, or fields that jump when the form arrives
-    const loading: CatalogueLoad = { state: { status: 'loading' }, showSkeleton: false, retry: () => {} }
+    const loading: CatalogueLoad = { state: { status: 'loading' }, showSkeleton: false, retry: () => {}, applyStock: () => {} }
     const tree = (data: CatalogueLoad) => (
       <CartProvider honors={null}>
         <OrderFormProvider>
@@ -155,7 +155,7 @@ describe('DetailsScreen', () => {
     render(
       <CartProvider honors={null}>
         <OrderFormProvider>
-          <DetailsScreen data={{ state: { status: 'error', reason: 'busy' }, showSkeleton: false, retry }} />
+          <DetailsScreen data={{ state: { status: 'error', reason: 'busy' }, showSkeleton: false, retry, applyStock: () => {} }} />
         </OrderFormProvider>
       </CartProvider>,
     )
@@ -194,7 +194,7 @@ describe('DetailsScreen', () => {
     render(
       <CartProvider honors={null}>
         <OrderFormProvider>
-          <DetailsScreen data={{ state: { status: 'error', reason: 'failed' }, showSkeleton: false, retry: () => {} }} />
+          <DetailsScreen data={{ state: { status: 'error', reason: 'failed' }, showSkeleton: false, retry: () => {}, applyStock: () => {} }} />
         </OrderFormProvider>
       </CartProvider>,
     )

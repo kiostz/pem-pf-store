@@ -76,7 +76,7 @@ export function DetailsScreen({ data }: { data: CatalogueLoad }) {
         </>
       )}
       {/* Only with orderable lines and nothing unavailable; otherwise the redirect above is under way. */}
-      {ready && !mustLeave && <OrderForm lines={lines} currency={state.settings.currency} clubs={state.clubs} />}
+      {ready && !mustLeave && <OrderForm lines={lines} currency={state.settings.currency} clubs={state.clubs} onStockRefused={data.applyStock} />}
     </div>
   )
 }

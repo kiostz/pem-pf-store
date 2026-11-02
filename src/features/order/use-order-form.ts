@@ -16,6 +16,8 @@ export type OrderFormValue = {
   setSending: (sending: boolean) => void // starts or ends a send
   failure: { text: string } | null // the alert of the last failed send, a new object per failure
   setFailure: (failure: { text: string } | null) => void // shows or clears the alert
+  refused: boolean // the Worker refused the last order for stock or availability, until the cart changes
+  setRefused: (refused: boolean) => void // sets or clears it
   requestRef: RefObject<{ signature: string; requestId: string } | null> // the request id kept for retries of the same order
 }
 
