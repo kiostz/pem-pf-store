@@ -239,6 +239,19 @@ function fillTickAndSend() {
   fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
 }
 
+/** Sends into a 500 and waits until the failure itself has put focus back on Send order, so a test acts only after that setup ran. */
+async function failSend() {
+  let answer: (response: Response) => void = () => {} // releases the held send
+  const fetchFn = stubFetch(() => new Promise<Response>((resolve) => (answer = resolve))) // the send waits for the test
+  const send = screen.getByRole('button', { name: /^Send order/ }) // found before it reads "Sending…"
+  fillTickAndSend()
+  await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1)) // the order is sending
+  send.blur() // focus leaves Send order, so only the failure's own setup can bring it back
+  answer(new Response('{}', { status: 500 })) // the send fails
+  await screen.findByRole('alert') // the failure note is on screen
+  await waitFor(() => expect(send).toHaveFocus()) // the failure's setup has run: focus back and the take-back armed
+}
+
 describe('OrderForm look', () => {
   it('draws the fields as 44 px pills with 16 px text and Send order as a full-width 52 px pill', () => {
     // catches: square fields and a rounded-rectangle Send order beside the pill search box and bars
@@ -266,10 +279,9 @@ describe('OrderForm sending', () => {
   it('on a failure keeps the cart and form, shows the alert, resets the captcha and keeps focus on Send', async () => {
     // catches: a failed send that empties the cart, loses the typing, reuses a spent captcha token or leaves focus nowhere
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    stubFetch(new Response('{}', { status: 500 }))
     renderForm()
-    fillTickAndSend()
-    const alert = await screen.findByRole('alert')
+    await failSend() // focus back on Send order comes from the failure itself
+    const alert = screen.getByRole('alert') // the failure note
     expect(alert).toHaveTextContent(
       'Your order was not sent. Check your connection, tick the captcha again and press Send order.',
     )
@@ -284,10 +296,8 @@ describe('OrderForm sending', () => {
   it('takes focus back to Send order when the captcha widget grabs it just after a failure', async () => {
     // catches: hCaptcha's reset moving focus into its frame a moment after the failure, so a keyboard buyer lands in the widget
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    stubFetch(new Response('{}', { status: 500 }))
     renderForm()
-    fillTickAndSend()
-    await screen.findByRole('alert')
+    await failSend() // a failed send, its focus setup done
     screen.getByRole('button', { name: 'Tick captcha' }).focus() // the widget takes focus
     await waitFor(() => expect(screen.getByRole('button', { name: /^Send order/ })).toHaveFocus())
   })
@@ -295,10 +305,8 @@ describe('OrderForm sending', () => {
   it('takes focus back to Send order when the captcha widget grabs it long after a failure', async () => {
     // catches: a refocus on a fixed timer, so a slow device's late grab leaves a keyboard buyer inside the widget
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    stubFetch(new Response('{}', { status: 500 }))
     renderForm()
-    fillTickAndSend()
-    await screen.findByRole('alert')
+    await failSend() // a failed send, its focus setup done
     await new Promise((resolve) => setTimeout(resolve, 400)) // far past any fixed delay
     screen.getByRole('button', { name: 'Tick captcha' }).focus() // the widget takes focus late
     await waitFor(() => expect(screen.getByRole('button', { name: /^Send order/ })).toHaveFocus())
@@ -307,23 +315,30 @@ describe('OrderForm sending', () => {
   it('leaves focus in the captcha when the buyer moves there on purpose after a failure', async () => {
     // catches: a refocus that fights a keyboard buyer tabbing into the widget to tick it again
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    stubFetch(new Response('{}', { status: 500 }))
     renderForm()
-    fillTickAndSend()
-    await screen.findByRole('alert')
+    await failSend() // a failed send, its focus setup done
     fireEvent.keyDown(screen.getByRole('button', { name: /^Send order/ }), { key: 'Tab' }) // the buyer tabs on
     const tick = screen.getByRole('button', { name: 'Tick captcha' })
     tick.focus() // and arrives in the widget
     expect(tick).toHaveFocus()
   })
 
+  it('leaves focus in the captcha when the buyer taps it after a failure', async () => {
+    // catches: a refocus that ignores a touch buyer's tap, so tapping the captcha to tick it again jumps back to Send order
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    renderForm()
+    await failSend() // a failed send, its focus setup done
+    const tick = screen.getByRole('button', { name: 'Tick captcha' })
+    fireEvent.pointerDown(tick) // the buyer taps the widget
+    tick.focus() // and focus arrives in it
+    expect(tick).toHaveFocus() // not pulled to Send order
+  })
+
   it('stops taking focus back once a second has passed, as a tap inside the captcha frame cannot be seen', async () => {
     // catches: a screen-reader tap on the captcha tick long after a failure being pulled back to Send order
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    stubFetch(new Response('{}', { status: 500 }))
     renderForm()
-    fillTickAndSend()
-    await screen.findByRole('alert')
+    await failSend() // a failed send, its focus setup done
     await new Promise((resolve) => setTimeout(resolve, 1100)) // past the window for the widget's own grab
     const tick = screen.getByRole('button', { name: 'Tick captcha' })
     tick.focus() // the buyer's tap inside the frame
@@ -333,10 +348,8 @@ describe('OrderForm sending', () => {
   it('stops taking focus back once the captcha reports a token', async () => {
     // catches: a tick on the captcha followed by a stray focus event that jumps the buyer back to Send order
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    stubFetch(new Response('{}', { status: 500 }))
     renderForm()
-    fillTickAndSend()
-    await screen.findByRole('alert')
+    await failSend() // a failed send, its focus setup done
     const tick = screen.getByRole('button', { name: 'Tick captcha' })
     fireEvent.click(tick) // the widget reports a token
     tick.focus()
@@ -346,10 +359,8 @@ describe('OrderForm sending', () => {
   it('takes focus back to Send order when the widget frame takes focus with only a window blur and no focus event on the page', async () => {
     // catches: the real browser's hCaptcha reset, which moves focus into its frame without a focusin reaching the form, leaving a keyboard buyer inside the widget after a failed send
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    stubFetch(new Response('{}', { status: 500 }))
     renderForm()
-    fillTickAndSend()
-    await screen.findByRole('alert')
+    await failSend() // a failed send, its focus setup done
     screen.getByLabelText('Name').focus() // focus is away from Send order, as it is the instant the frame takes it
     const frame = screen.getByTitle('Captcha frame')
     const active = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(frame) // the page now reports the frame as focused
@@ -361,14 +372,27 @@ describe('OrderForm sending', () => {
   it('leaves focus alone on a window blur that is not the captcha frame', async () => {
     // catches: a refocus on every window blur, so switching tabs right after a failure pulls the buyer to Send order
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    stubFetch(new Response('{}', { status: 500 }))
     renderForm()
-    fillTickAndSend()
-    await screen.findByRole('alert')
+    await failSend() // a failed send, its focus setup done
     const name = screen.getByLabelText('Name')
     name.focus() // the buyer is in a field
     act(() => void fireEvent.blur(window)) // the window loses focus to another tab
     expect(name).toHaveFocus()
+  })
+
+  it('leaves focus where the buyer moved it when the widget frame takes focus after the buyer pressed a key', async () => {
+    // catches: a window-blur hand-back that ignores the buyer's own key press, so tabbing into hCaptcha to tick it again jumps back to Send order
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    renderForm()
+    await failSend() // a failed send, its focus setup done
+    fireEvent.keyDown(screen.getByRole('button', { name: /^Send order/ }), { key: 'Tab' }) // the buyer tabs on
+    const name = screen.getByLabelText('Name')
+    name.focus() // focus is away from Send order, where the buyer put it
+    const frame = screen.getByTitle('Captcha frame')
+    const active = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(frame) // the page now reports the frame as focused
+    act(() => void fireEvent.blur(window)) // the only event the page gets
+    active.mockRestore() // the page's own focus tracking again
+    expect(name).toHaveFocus() // not pulled to Send order
   })
 
   it('logs an unexpected error by name and stack, never its message', async () => {
