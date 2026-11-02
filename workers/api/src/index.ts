@@ -1,12 +1,13 @@
 // API Worker entry: rate limit, router, CORS and short error codes for the public read endpoints.
 
-import { readClubs, readHonors, readSettings } from './read'
+import { readClubs, readHonors, readSettings, readShop } from './read'
 
 // Maps each exact path to its reader.
 const routes = new Map<string, (db: D1Database) => Promise<unknown>>([
   ['/items', readHonors], // The public path says items; code says honors.
   ['/clubs', readClubs], // Clubs in order.
   ['/settings', readSettings], // Currency only.
+  ['/shop', readShop], // Items, clubs and settings in one request.
 ])
 
 /**

@@ -23,3 +23,10 @@ export interface ShopClub {
 export interface ShopSettings {
   currency: string // Three capital letters.
 }
+
+// Everything the shop needs in one answer.
+export interface ShopLoad {
+  items: ShopHonor[] // Active honors, name order.
+  clubs: ShopClub[] // Clubs in their shown order.
+  settings: ShopSettings // Public settings.
+}

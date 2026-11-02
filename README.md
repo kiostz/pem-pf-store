@@ -80,9 +80,10 @@ After the import, D1 is the source of truth. Do not edit the three JSON files in
 
 The API Worker answers `GET` only, with JSON and `Cache-Control: no-store`:
 
-- `/items`: active honors by name, as `{ id, name, category, priceCents, stock, image }` (RM 4.00 is `400`). Hidden honors never appear.
+- `/items`: active honors by name (ignoring case, equal names by id), as `{ id, name, category, priceCents, stock, image }` (RM 4.00 is `400`). Hidden honors never appear.
 - `/clubs`: the clubs in their set order, as `{ name, area, language, location, churchName }`.
 - `/settings`: `{ currency }` only.
+- `/shop`: `{ items, clubs, settings }` in one D1 batch, the same three lists as above, so a shop load is one request; a missing settings row answers 500 `server`.
 
 Paths match exactly, so `/items/` is 404. Errors are a short code only: 404 `not-found`, 405 `method-not-allowed` (with `Allow: GET`), 429 `rate-limited` (with `Retry-After: 60`), 500 `server`. CORS: `Access-Control-Allow-Origin` is sent only when `Origin` is exactly `https://kiostz.github.io` (the `SHOP_ORIGIN` var); other callers still get the body. A rate limit of 60 requests per 60 seconds per client IP (the `RATE_LIMITER` binding in `api/wrangler.jsonc`) answers 429 past it; `wrangler dev` enforces it locally too. Cloudflare's docs imply the free plan includes this binding; confirm it at the first deploy.
 
