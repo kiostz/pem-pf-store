@@ -70,8 +70,8 @@ export function DetailsScreen({ data }: { data: CatalogueLoad }) {
                 <div className="bg-border-subtle rounded-pill h-11 w-full" /> {/* the field, 44 px */}
               </div>
             ))}
-            {/* The captcha's box, 78 px tall. */}
-            <div data-testid="details-skeleton-captcha" className="bg-border-subtle h-19.5 w-76 max-w-full rounded-sm" />
+            {/* The Turnstile widget's box, 300 by 65 px. */}
+            <div data-testid="details-skeleton-captcha" className="bg-border-subtle h-16.25 w-75 max-w-full rounded-sm" />
           </div>
         </>
       )}

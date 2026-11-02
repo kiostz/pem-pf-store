@@ -7,7 +7,7 @@ import { writeSentOrder } from '@/features/order/sent-order-storage.ts' // fills
 import { honor, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
 import { App } from './App.tsx' // code under test
 
-// The real captcha loads hCaptcha's script, which a test must not do.
+// The real captcha loads Turnstile's script, which a test must not do.
 vi.mock('@/features/order/Captcha.tsx', () => ({
   Captcha: () => <div>Captcha</div>,
 }))
@@ -69,7 +69,7 @@ describe('buyer copy', () => {
     render(<App />)
     await screen.findAllByText(ready) // the screen has loaded
     if (hash === '#/' || hash === '#/shop') await screen.findByRole('link', { name: 'Cart, 1 item, estimated total RM 4.00' }) // the grown Cart tab is in the page too
-    expect(buyerPhrases()).not.toMatch(/honor/i)
+    expect(buyerPhrases()).not.toMatch(/honor|\btick/i)
   })
 
   it('never names honors in the load error on Home', async () => {

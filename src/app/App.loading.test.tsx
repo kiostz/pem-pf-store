@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart's key
 import { App } from './App.tsx' // code under test
 
-// The real captcha loads hCaptcha's script, which a test must not do.
+// The real captcha loads Turnstile's script, which a test must not do.
 vi.mock('@/features/order/Captcha.tsx', () => ({
   Captcha: () => <div>Captcha</div>,
 }))

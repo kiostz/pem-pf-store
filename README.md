@@ -13,7 +13,7 @@ Open the address Vite prints. For the production build: `npm run build && npm ru
 
 ## Where the shop gets its data
 
-The shop reads its items, clubs and settings from the API Worker's `/shop`, one request per load, with a 30 second limit. `VITE_API_URL` holds the Worker's address: the live Worker in `.env`, and `/api` in `.env.development` and `.env.fake-send`. `npm run dev` proxies `/api` to the local API Worker on http://localhost:8787, so start that first (`npm run dev` in `workers/`, see "Workers"); with it stopped the shop shows "We couldn't load the shop." `npm run preview` serves the production build, which asks the live Worker, and the Worker allows only the live site's address, so the shop can't load from `localhost` there. The files in `public/data/` stay for the seed and the import but the shop no longer reads them.
+The shop reads its items, clubs and settings from the API Worker's `/shop`, one request per load, with a 30 second limit. `VITE_API_URL` holds the Worker's address: the live Worker in `.env`, and `/api` in `.env.development`. `npm run dev` proxies `/api` to the local API Worker on http://localhost:8787, so start that first (`npm run dev` in `workers/`, see "Workers"); with it stopped the shop shows "We couldn't load the shop." `npm run preview` serves the production build, which asks the live Worker, and the Worker allows only the live site's address, so the shop can't load from `localhost` there. The files in `public/data/` stay for the seed and the import but the shop no longer reads them.
 
 ### Stock on screen, and the order of the first pushes
 
@@ -25,16 +25,16 @@ Before the first push of this work, as the owner:
 2. Push the Worker change and wait for "Deploy API Worker" to finish, so `/shop` is live.
 3. Then push the site. Pushing both at once can put Pages live before `/shop`, and the shop shows "We couldn't load the shop." for about a minute.
 
-Until orders go through the Worker, Web3Forms orders do not lower stock; lower it by hand in the admin.
+Orders now go through the API Worker (see "Endpoints"), so a sent order lowers stock by itself. Push order for the owner: create the Turnstile widget for `kiostz.github.io` in Cloudflare and paste its sitekey into `.env` (the production build fails while it is missing or still the placeholder, so a failed Pages build keeps the old site live); `wrangler secret put TURNSTILE_SECRET` and `ORDER_EMAIL_TO`; Email Routing on `stardew.win` with the club inbox verified; `npm run db:migrate:remote` in `workers/`; push the Worker change and wait for "Deploy API Worker"; then push the site. Until then the live shop still sends through Web3Forms.
 
 ## Order form settings
 
 The order form reads two keys from the committed `.env` files, which are public by design:
 
-- `VITE_WEB3FORMS_ACCESS_KEY` in `.env` (a placeholder until the order handler's Web3Forms key is pasted in; switching inbox later changes only this line).
-- `VITE_HCAPTCHA_SITEKEY`: `.env` holds Web3Forms' shared sitekey for the production build; `.env.development` holds hCaptcha's always-passing test key, because hCaptcha refuses `localhost` with a real key.
+- `VITE_TURNSTILE_SITEKEY`: `.env` holds the live widget's sitekey (a placeholder until the owner creates the widget); `.env.development` holds Cloudflare's published always-passing test sitekey, so the widget works on `localhost`.
+- `VITE_API_URL`: where `POST /orders` goes, the same address the shop reads from.
 
-To try the whole order flow without a real send, run `npm run dev -- --mode fake-send`: `.env.fake-send` (dev only, never part of the build) makes Send order wait 800 ms, log the email subject and text to the browser console and succeed, with hCaptcha's test key. The order text in that console log holds the buyer's details, so use made-up ones. A real send cannot pass hCaptcha on `localhost`; it is tried once on the live site.
+To try the whole order flow locally, start the API Worker (`npm run dev` in `workers/`, with `api/.dev.vars` copied from the example) and the shop (`npm run dev`). Send order then goes through the Vite proxy to the local Worker, which checks the captcha with Cloudflare's test secret, saves the order in the local D1, lowers stock and writes the order email to a file whose path it prints. Use made-up buyer details. For a failed-captcha check, put Cloudflare's always-fail test secret `2x0000000000000000000000000000000AA` in `api/.dev.vars` and restart the Worker.
 
 `public/data/clubs.json` (read by the import, not by the shop) is a list of clubs: `name` plus `area`, `language`, `location` and `churchName` (each text or `null`). The seed's `--force` still writes `[]`, which is valid.
 

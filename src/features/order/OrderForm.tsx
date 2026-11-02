@@ -8,19 +8,19 @@ import type { ClubList } from '@/shared/data/types.ts' // the clubs
 import { ORDER_SENT_HASH } from '@/shared/routes.ts' // the confirmation page's address
 import { formatPrice } from '@/shared/format/price.ts' // "RM 24.00"
 import { PILL_ACTION, PILL_DOCK, PILL_NOTE, PILL_SURFACE } from '@/shared/ui/floating-pill-box.ts' // the floating pill and the note above it
-import { Captcha, type CaptchaHandle } from './Captcha.tsx' // the hCaptcha widget
+import { Captcha, type CaptchaHandle } from './Captcha.tsx' // the Turnstile widget
 import { ClubSelect } from './ClubSelect.tsx' // the club field
 import { FIELD_BOX, FIELD_ERROR, FIELD_LABEL } from './field-box.ts' // the shared field look
-import { toSentOrder } from './order-email.ts' // freezes the order
+import { toSentOrder, type SentOrder } from './order-email.ts' // the stored order
 import { missingText, validateOrderForm, type OrderField } from './order-form.ts' // the form's rules
-import { makeOrderNumber } from './order-number.ts' // the order number
-import { OrderSendError, sendOrder } from './send-order.ts' // the send and its failures
+import { OrderSendError, OrderStockError, sendOrder, toOrderRequest } from './send-order.ts' // the send and its failures
 import { writeSentOrder } from './sent-order-storage.ts' // keeps the order for the confirmation
 import { useOrderForm } from './use-order-form.ts' // the form's values
 
-const FAILED_TEXT = 'Your order was not sent. Check your connection, tick the captcha again and press Send order.' // in the note above Send order after a failure
+const FAILED_TEXT = 'Your order was not sent. Check your connection, complete the captcha again and press Send order.' // in the note above Send order after a failure
 const RATE_LIMITED_TEXT =
-  'Too many orders were sent just now. Wait a minute, tick the captcha again and press Send order.' // in the note above Send order after a 429
+  'Too many orders were sent just now. Wait a minute, complete the captcha again and press Send order.' // in the note above Send order after a 429
+const CAPTCHA_TEXT = "The captcha check didn't pass. Complete it again and press Send order." // in the note above Send order when Cloudflare refused the token
 
 const TAKE_BACK_MS = 1000 // how long after a failure the widget's own focus grab is handed back to Send order
 
@@ -52,12 +52,12 @@ export function OrderForm({ lines, currency, clubs }: { lines: OrderLine[]; curr
     setSending,
     failure,
     setFailure,
-    numberRef,
+    requestRef,
   } = useOrderForm() // the form's state and the running send, kept above the routes
   const { removeOrderLines } = useCart() // a sent order leaves the cart
   const [token, setToken] = useState<string | null>(null) // the captcha token, until it expires
   const [sentNumber, setSentNumber] = useState<string | null>(null) // set when the order went out but the confirmation page could not open
-  const captchaRef = useRef<CaptchaHandle>(null) // reset after every failed send, because Web3Forms spends the token
+  const captchaRef = useRef<CaptchaHandle>(null) // reset after every failed send, because the Worker spends the token
   const sendRef = useRef<HTMLButtonElement>(null) // focused after a failure
   const missingRef = useRef<HTMLParagraphElement>(null) // focused when only the captcha is missing
   const captchaBoxRef = useRef<HTMLDivElement>(null) // holds the widget's frame, to tell its focus grab from any other window blur
@@ -73,11 +73,12 @@ export function OrderForm({ lines, currency, clubs }: { lines: OrderLine[]; curr
    */
   const shownError = (field: OrderField) => (touched[field] ? errors[field] : undefined)
 
-  // After a failed send the buyer is back at Send order, ready to tick again and retry.
+  // After a failed send the buyer is back at Send order, ready to solve the captcha again and retry.
   useEffect(() => {
     if (failure === null) return // nothing failed
     sendRef.current?.focus() // the screen is no longer inert by now
-    takeFocusBackRef.current = true // hCaptcha's reset may take focus for its frame soon; the captcha's focus event hands it back
+    missingRef.current?.scrollIntoView?.({ block: 'nearest' }) // the note stacks over the dock: bring the captcha line above it, as scroll-mb-64 below leaves room (jsdom has no scrollIntoView)
+    takeFocusBackRef.current = true // the widget's reset may take focus for its frame soon; the captcha's focus event hands it back
     const timer = window.setTimeout(() => (takeFocusBackRef.current = false), TAKE_BACK_MS) // a tap inside the frame cannot be seen, so the window closes
     /** Hands focus back when the widget's frame takes it: the page gets a window blur and no focus event of its own. */
     const onWindowBlur = () => {
@@ -118,25 +119,30 @@ export function OrderForm({ lines, currency, clubs }: { lines: OrderLine[]; curr
     sendRef.current?.focus() // focus stays on Send order, which sits outside the inert fields, so it is not lost to the page
     setSending(true) // no second press, "Sending…", and the screen freezes
     setFailure(null) // the last failure is old news
-    const signature = JSON.stringify([
-      lines.map((line) => [line.honor.id, line.quantity, line.honor.price]),
-      values,
-      currency,
-    ]) // what the order is
-    if (numberRef.current?.signature !== signature) numberRef.current = { signature, number: makeOrderNumber() } // a retry keeps its number, an edit gets a new one
-    const order = toSentOrder(numberRef.current.number, lines, values, currency, new Date()) // prices as shown now
+    const signature = JSON.stringify([lines.map((line) => [line.honor.id, line.quantity]), values]) // what the order is: what the Worker would save
+    if (requestRef.current?.signature !== signature) requestRef.current = { signature, requestId: crypto.randomUUID() } // a retry keeps its request id, so a lost reply never makes a second order; an edit gets a new one
+    const requestId = requestRef.current.requestId // for the log and the send
+    let order: SentOrder // what the confirmation keeps, once the Worker has saved it
     try {
-      await sendOrder(order, token) // Web3Forms, or the fake in dev
+      const saved = await sendOrder(toOrderRequest(requestId, token, lines, values)) // the Worker checks, saves and numbers it
+      order = toSentOrder(saved, values) // the Worker's names, prices and number
     } catch (error) {
-      const kind = error instanceof OrderSendError ? error.kind : 'unexpected' // a bug is logged too, never hidden
+      const kind = // what the log and the note go by
+        error instanceof OrderSendError
+          ? error.kind // a known failure
+          : error instanceof OrderStockError
+            ? 'stock' // lines short of stock
+            : 'unexpected' // a bug is logged too, never hidden
       const detail = // the safe part of an unexpected error
         error instanceof Error // only an Error has a name and a stack
           ? { name: error.name, stack: (error.stack ?? '').split(`${error.name}: ${error.message}`).join('') } // the stack without the message, which could hold typed text
           : {} // not an Error: nothing safe to add
-      console.error('Order send failed', { kind, orderNumber: order.number, ...(kind === 'unexpected' ? detail : {}) }) // no buyer data
+      console.error('Order send failed', { kind, requestId, ...(kind === 'unexpected' ? detail : {}) }) // no buyer data
       captchaRef.current?.reset() // the spent token cannot be used again
-      setToken(null) // Send is incomplete until ticked again
-      setFailure({ text: kind === 'rate-limited' ? RATE_LIMITED_TEXT : FAILED_TEXT }) // cart and form stay as they are
+      setToken(null) // Send is incomplete until solved again
+      setFailure({
+        text: kind === 'rate-limited' ? RATE_LIMITED_TEXT : kind === 'captcha' ? CAPTCHA_TEXT : FAILED_TEXT,
+      }) // cart and form stay as they are
       return // the finally below frees the screen
     } finally {
       setSending(false) // the next press may send, the button is itself again and the screen is free
@@ -145,9 +151,9 @@ export function OrderForm({ lines, currency, clubs }: { lines: OrderLine[]; curr
     try {
       writeSentOrder(order) // for the confirmation page
       window.location.replace(ORDER_SENT_HASH) // the confirmation first, so no empty-cart frame paints; Back leads to the cart
-      removeOrderLines(order.lines) // only after Web3Forms confirmed, and only what the email listed
+      removeOrderLines(order.lines) // only after the Worker saved it, and only what it saved
       reset() // empty fields
-      numberRef.current = null // the next order is a new one
+      requestRef.current = null // the next order is a new one
     } catch (error) {
       console.error('Order sent but the screen could not be updated', {
         orderNumber: order.number, // which order
@@ -276,7 +282,12 @@ export function OrderForm({ lines, currency, clubs }: { lines: OrderLine[]; curr
         )}
         {/* Why the button looks disabled. */}
         {missing && (
-          <p ref={missingRef} tabIndex={-1} id="order-missing" className="text-text-muted text-sm outline-none">
+          <p
+            ref={missingRef}
+            tabIndex={-1}
+            id="order-missing"
+            className="text-text-muted scroll-mb-64 text-sm outline-none"
+          >
             {missing}
           </p>
         )}

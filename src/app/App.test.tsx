@@ -7,12 +7,12 @@ import { writeSentOrder } from '@/features/order/sent-order-storage.ts' // fills
 import { honor, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
 import { App } from './App.tsx' // code under test
 
-// The real captcha loads hCaptcha's script, which a test must not do; this stand-in ticks and expires on demand.
+// The real captcha loads Turnstile's script, which a test must not do; this stand-in ticks and expires on demand.
 vi.mock('@/features/order/Captcha.tsx', () => ({
   Captcha: ({ onToken }: { onToken: (token: string | null) => void }) => (
     <div>
       <button type="button" onClick={() => onToken('token-1')}>
-        Tick captcha
+        Solve captcha
       </button>
       <button type="button" onClick={() => onToken(null)}>
         Expire captcha
@@ -394,8 +394,21 @@ describe('App', () => {
     // catches: pieces that work alone but do not join: the cart not cleared, no confirmation, or the number not shown
     vi.stubGlobal(
       'fetch',
-      shopFetch([honor('knot-tying', 'Knot Tying')], [], (url) => (url.includes('web3forms') ? new Response(JSON.stringify({ success: true })) : undefined)),
-    ) // the shop and Web3Forms answer
+      shopFetch([honor('knot-tying', 'Knot Tying')], [], (url) =>
+        url.endsWith('/orders')
+          ? new Response(
+              JSON.stringify({
+                number: 'PF-20261102-4K7Q',
+                createdAt: '2026-11-01T17:00:00.000Z',
+                currency: 'MYR',
+                totalCents: 400,
+                lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 1, priceCents: 400 }],
+              }),
+              { status: 201 },
+            )
+          : undefined,
+      ),
+    ) // the shop and the Worker answer
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
     fireEvent.click(screen.getByRole('link', { name: /^Cart, / }))
@@ -404,10 +417,10 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'jc@mail.com' } })
     fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '0312345678' } })
     fireEvent.change(screen.getByLabelText('Club name'), { target: { value: 'Hilltop Club' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
     expect(await screen.findByRole('heading', { name: 'Order sent' })).toHaveFocus()
-    expect(screen.getByText(/^PF-\d{8}-[2-9A-HJKMNP-Z]{4}$/)).toBeInTheDocument()
+    expect(screen.getByText('PF-20261102-4K7Q')).toBeInTheDocument() // the Worker's number
     expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{}}')
     expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument()
     act(() => window.history.back()) // the buyer presses Back on the confirmation

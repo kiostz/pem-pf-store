@@ -33,9 +33,9 @@ export function shopBody(honors: Honor[], clubs: Club[] = [], currency = 'MYR') 
  * Makes the fetch fake that answers every request with a /shop body.
  * @param honors the honors to list
  * @param clubs the clubs to list
- * @param other answers any request that is not the shop's (such as the order send), or returns undefined to let the shop answer
+ * @param other answers any request that is not the shop's (such as the order send; it also gets the request's init), or returns undefined to let the shop answer
  * @return the fake, to install with vi.stubGlobal and to count calls on
  */
-export function shopFetch(honors: Honor[], clubs: Club[] = [], other?: (url: string) => Response | Promise<Response> | undefined) {
-  return vi.fn(async (url: string) => (await other?.(url)) ?? new Response(JSON.stringify(shopBody(honors, clubs)))) // the other answer if there is one, else the canned shop body
+export function shopFetch(honors: Honor[], clubs: Club[] = [], other?: (url: string, init?: RequestInit) => Response | Promise<Response> | undefined) {
+  return vi.fn(async (url: string, init?: RequestInit) => (await other?.(url, init)) ?? new Response(JSON.stringify(shopBody(honors, clubs)))) // the other answer if there is one, else the canned shop body
 }

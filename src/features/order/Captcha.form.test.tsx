@@ -10,14 +10,14 @@ import { missingText } from './order-form.ts' // the form's line under Send orde
 const widget = vi.hoisted(() => ({ verify: null as ((token: string) => void) | null })) // the stand-in widget's verify callback, shared with the mock
 
 // The package's widget replaced by one that only keeps the verify callback, so a test can tick it.
-vi.mock('@hcaptcha/react-hcaptcha', () => ({
+vi.mock('@marsidev/react-turnstile', () => ({
   /**
    * The stand-in widget: keeps the verify callback so a test can tick it.
    * @param props the wrapper's callbacks
    * @return nothing to draw
    */
-  default: ({ onVerify }: { onVerify: (token: string) => void }) => {
-    widget.verify = onVerify // remember it for the test
+  Turnstile: ({ onSuccess }: { onSuccess: (token: string) => void }) => {
+    widget.verify = onSuccess // remember it for the test
     return null // nothing to draw
   },
 }))
@@ -58,9 +58,9 @@ describe('Captcha with a token-holding form', () => {
     // catches: a form that stays ready with a token the redrawn widget no longer holds
     render(<TokenHolder />)
     act(() => widget.verify?.('abc123')) // ticked
-    expect(screen.queryByText('Tick the captcha to send.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Complete the captcha to send.')).not.toBeInTheDocument()
     const { result } = renderHook(() => useTheme())
     act(() => result.current.setChoice('dark'))
-    expect(screen.getByText('Tick the captcha to send.')).toBeInTheDocument()
+    expect(screen.getByText('Complete the captcha to send.')).toBeInTheDocument()
   })
 })

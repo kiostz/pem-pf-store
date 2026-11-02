@@ -18,7 +18,7 @@ export function OrderFormProvider({ children }: { children: ReactNode }) {
   const [sending, setSendingState] = useState(false) // an order is on its way
   const [failure, setFailure] = useState<{ text: string } | null>(null) // the alert of the last failed send
   const sendingRef = useRef(false) // blocks a second press in the same tick, before state shows
-  const numberRef = useRef<{ signature: string; number: string } | null>(null) // the order number, kept for retries of the same order
+  const requestRef = useRef<{ signature: string; requestId: string } | null>(null) // the request id, kept for retries of the same order
   const { quantities } = useCart() // the cart, watched for changes
   const [seenCart, setSeenCart] = useState(quantities) // the cart at the last render
 
@@ -76,7 +76,7 @@ export function OrderFormProvider({ children }: { children: ReactNode }) {
       setSending,
       failure,
       setFailure,
-      numberRef,
+      requestRef,
     }), // what every reader gets
     [values, touched, setField, touch, touchAll, reset, sending, setSending, failure], // the refs and setFailure never change
   ) // new only when one changes

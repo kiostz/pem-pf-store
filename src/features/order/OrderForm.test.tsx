@@ -15,14 +15,14 @@ import { SENT_ORDER_STORAGE_KEY } from './sent-order-storage.ts' // where a sent
 
 const captcha = vi.hoisted(() => ({ reset: vi.fn() })) // counts resets, shared with the mock
 
-// The real captcha loads hCaptcha's script, which a test must not do; this stand-in ticks and expires on demand, and counts resets.
+// The real captcha loads Turnstile's script, which a test must not do; this stand-in ticks and expires on demand, and counts resets.
 vi.mock('./Captcha.tsx', () => ({
   Captcha: ({ onToken, ref }: { onToken: (token: string | null) => void; ref?: Ref<{ reset: () => void }> }) => {
     useImperativeHandle(ref, () => ({ reset: captcha.reset }), []) // the form's handle
     return (
       <div>
         <button type="button" onClick={() => onToken('token-1')}>
-          Tick captcha
+          Solve captcha
         </button>
         <button type="button" onClick={() => onToken(null)}>
           Expire captcha
@@ -40,7 +40,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals() // fetch back
-  vi.unstubAllEnvs() // the fake-send switch back
+  vi.unstubAllEnvs() // the API address back
   vi.useRealTimers() // a fake clock must not leak
   vi.restoreAllMocks() // spies removed
   window.sessionStorage.clear() // no sent order left
@@ -146,12 +146,12 @@ describe('OrderForm', () => {
     expect(send).toHaveAttribute('aria-disabled', 'true')
     expect(send).not.toBeDisabled()
     expect(
-      screen.getByText('Fill in your name, email, phone and club and tick the captcha to send.'),
+      screen.getByText('Fill in your name, email, phone and club and complete the captcha to send.'),
     ).toBeInTheDocument()
     fillValid()
     expect(send).toHaveAttribute('aria-disabled', 'true')
-    expect(screen.getByText('Tick the captcha to send.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+    expect(screen.getByText('Complete the captcha to send.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     expect(send).toHaveAttribute('aria-disabled', 'false')
     expect(screen.queryByText(/to send\./)).not.toBeInTheDocument()
   })
@@ -160,10 +160,10 @@ describe('OrderForm', () => {
     // catches: an expired token still counted, so Send would go with a dead token
     renderForm()
     fillValid()
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.click(screen.getByRole('button', { name: 'Expire captcha' }))
     expect(screen.getByRole('button', { name: /^Send order/ })).toHaveAttribute('aria-disabled', 'true')
-    expect(screen.getByText('Tick the captcha to send.')).toBeInTheDocument()
+    expect(screen.getByText('Complete the captcha to send.')).toBeInTheDocument()
   })
 
   it('shows and focuses Club name for Other, and hides it again for a club', async () => {
@@ -198,7 +198,7 @@ describe('OrderForm', () => {
     renderForm()
     fillValid()
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
-    expect(screen.getByText('Tick the captcha to send.')).toHaveFocus()
+    expect(screen.getByText('Complete the captcha to send.')).toHaveFocus()
   })
 })
 
@@ -216,26 +216,42 @@ function stubFetch(...answers: Array<Response | (() => Promise<Response>)>) {
   return fetchFn
 }
 
-/** @return a response of Web3Forms' success */
-const sent = () => new Response(JSON.stringify({ success: true }))
+const savedOrder = {
+  number: 'PF-20261102-4K7Q',
+  createdAt: '2026-11-01T17:00:00.000Z',
+  currency: 'MYR',
+  totalCents: 900,
+  lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }],
+} // what the Worker saved
+
+/** @return a response of the Worker's 201 for the saved order */
+const sent = () => new Response(JSON.stringify(savedOrder), { status: 201 })
 
 /**
- * Reads the order number out of a call's subject.
+ * Makes a refusal response from the Worker.
+ * @param status the HTTP status
+ * @param body the JSON body
+ * @return the response
+ */
+const refused = (status: number, body: unknown) => new Response(JSON.stringify(body), { status })
+
+/**
+ * Reads the request id out of a call's body.
  * @param fetchFn the fetch stub
  * @param call the call index
- * @return the order number
+ * @return the request id
  */
-function numberOfCall(fetchFn: ReturnType<typeof stubFetch>, call: number): string {
+function requestOfCall(fetchFn: ReturnType<typeof stubFetch>, call: number): string {
   const body = JSON.parse((fetchFn.mock.calls[call] as unknown as [string, RequestInit])[1].body as string) as {
-    subject: string
+    requestId: string
   }
-  return /PF-\d{8}-[A-Z0-9]{4}/.exec(body.subject)?.[0] ?? '' // the number inside "PEM Pathfinder Store order PF-… — club — name"
+  return body.requestId // the UUID the Worker keys a repeat on
 }
 
 /** Fills the form validly, ticks the captcha and presses Send order. */
 function fillTickAndSend() {
   fillValid()
-  fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
   fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
 }
 
@@ -283,7 +299,7 @@ describe('OrderForm sending', () => {
     await failSend() // focus back on Send order comes from the failure itself
     const alert = screen.getByRole('alert') // the failure note
     expect(alert).toHaveTextContent(
-      'Your order was not sent. Check your connection, tick the captcha again and press Send order.',
+      'Your order was not sent. Check your connection, complete the captcha again and press Send order.',
     )
     expect(screen.getByTestId('cart')).toHaveTextContent('{"knot-tying":3}')
     expect(screen.getByLabelText('Name')).toHaveValue('Jo Tan')
@@ -294,11 +310,11 @@ describe('OrderForm sending', () => {
   })
 
   it('takes focus back to Send order when the captcha widget grabs it just after a failure', async () => {
-    // catches: hCaptcha's reset moving focus into its frame a moment after the failure, so a keyboard buyer lands in the widget
+    // catches: the widget's reset moving focus into its frame a moment after the failure, so a keyboard buyer lands in the widget
     vi.spyOn(console, 'error').mockImplementation(() => {})
     renderForm()
     await failSend() // a failed send, its focus setup done
-    screen.getByRole('button', { name: 'Tick captcha' }).focus() // the widget takes focus
+    screen.getByRole('button', { name: 'Solve captcha' }).focus() // the widget takes focus
     await waitFor(() => expect(screen.getByRole('button', { name: /^Send order/ })).toHaveFocus())
   })
 
@@ -308,7 +324,7 @@ describe('OrderForm sending', () => {
     renderForm()
     await failSend() // a failed send, its focus setup done
     await new Promise((resolve) => setTimeout(resolve, 400)) // far past any fixed delay
-    screen.getByRole('button', { name: 'Tick captcha' }).focus() // the widget takes focus late
+    screen.getByRole('button', { name: 'Solve captcha' }).focus() // the widget takes focus late
     await waitFor(() => expect(screen.getByRole('button', { name: /^Send order/ })).toHaveFocus())
   })
 
@@ -318,7 +334,7 @@ describe('OrderForm sending', () => {
     renderForm()
     await failSend() // a failed send, its focus setup done
     fireEvent.keyDown(screen.getByRole('button', { name: /^Send order/ }), { key: 'Tab' }) // the buyer tabs on
-    const tick = screen.getByRole('button', { name: 'Tick captcha' })
+    const tick = screen.getByRole('button', { name: 'Solve captcha' })
     tick.focus() // and arrives in the widget
     expect(tick).toHaveFocus()
   })
@@ -328,7 +344,7 @@ describe('OrderForm sending', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     renderForm()
     await failSend() // a failed send, its focus setup done
-    const tick = screen.getByRole('button', { name: 'Tick captcha' })
+    const tick = screen.getByRole('button', { name: 'Solve captcha' })
     fireEvent.pointerDown(tick) // the buyer taps the widget
     tick.focus() // and focus arrives in it
     expect(tick).toHaveFocus() // not pulled to Send order
@@ -340,7 +356,7 @@ describe('OrderForm sending', () => {
     renderForm()
     await failSend() // a failed send, its focus setup done
     await new Promise((resolve) => setTimeout(resolve, 1100)) // past the window for the widget's own grab
-    const tick = screen.getByRole('button', { name: 'Tick captcha' })
+    const tick = screen.getByRole('button', { name: 'Solve captcha' })
     tick.focus() // the buyer's tap inside the frame
     expect(tick).toHaveFocus()
   })
@@ -350,14 +366,14 @@ describe('OrderForm sending', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     renderForm()
     await failSend() // a failed send, its focus setup done
-    const tick = screen.getByRole('button', { name: 'Tick captcha' })
+    const tick = screen.getByRole('button', { name: 'Solve captcha' })
     fireEvent.click(tick) // the widget reports a token
     tick.focus()
     expect(tick).toHaveFocus()
   })
 
   it('takes focus back to Send order when the widget frame takes focus with only a window blur and no focus event on the page', async () => {
-    // catches: the real browser's hCaptcha reset, which moves focus into its frame without a focusin reaching the form, leaving a keyboard buyer inside the widget after a failed send
+    // catches: the real browser's widget reset, which moves focus into its frame without a focusin reaching the form, leaving a keyboard buyer inside the widget after a failed send
     vi.spyOn(console, 'error').mockImplementation(() => {})
     renderForm()
     await failSend() // a failed send, its focus setup done
@@ -381,7 +397,7 @@ describe('OrderForm sending', () => {
   })
 
   it('leaves focus where the buyer moved it when the widget frame takes focus after the buyer pressed a key', async () => {
-    // catches: a window-blur hand-back that ignores the buyer's own key press, so tabbing into hCaptcha to tick it again jumps back to Send order
+    // catches: a window-blur hand-back that ignores the buyer's own key press, so tabbing into the widget to solve it again jumps back to Send order
     vi.spyOn(console, 'error').mockImplementation(() => {})
     renderForm()
     await failSend() // a failed send, its focus setup done
@@ -397,9 +413,8 @@ describe('OrderForm sending', () => {
 
   it('logs an unexpected error by name and stack, never its message', async () => {
     // catches: a bug in the send that leaves only "unexpected" in the console, or a message that holds typed text
-    vi.stubEnv('VITE_ORDER_SEND', 'fake') // dev-only fake send, which logs through console.info
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(console, 'info').mockImplementation(() => {
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => {
       throw new RangeError('typed text Jo Tan') // a bug inside the send
     })
     renderForm()
@@ -432,17 +447,65 @@ describe('OrderForm sending', () => {
   })
 
   it('words a rate limit differently', async () => {
-    // catches: a buyer told to check their connection when Web3Forms asked them to wait
+    // catches: a buyer told to check their connection when the Worker asked them to wait
     vi.spyOn(console, 'error').mockImplementation(() => {})
     stubFetch(new Response('{}', { status: 429 }))
     renderForm()
     fillTickAndSend()
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Too many orders were sent just now. Wait a minute, tick the captcha again and press Send order.',
+      'Too many orders were sent just now. Wait a minute, complete the captcha again and press Send order.',
     )
   })
 
-  it('logs the failure kind and order number but never the buyer', async () => {
+  it('words a failed captcha check differently', async () => {
+    // catches: a buyer told to check their connection when Cloudflare refused the captcha
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubFetch(refused(403, { error: 'captcha' }))
+    renderForm()
+    fillTickAndSend()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "The captcha check didn't pass. Complete it again and press Send order.",
+    )
+  })
+
+  it('shows a stock refusal as the general failure and leaves the cart as it was', async () => {
+    // catches: a refused order emptying the cart or showing a success
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubFetch(refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }))
+    renderForm()
+    fillTickAndSend()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Your order was not sent. Check your connection, complete the captcha again and press Send order.',
+    )
+    expect(screen.getByTestId('cart')).toHaveTextContent('{"knot-tying":3}')
+  })
+
+  it('sends the captcha token, the ids and quantities and the typed club, with a UUID request id', async () => {
+    // catches: the token left out, prices sent from the browser, or a typed club sent as a listed one
+    const fetchFn = stubFetch(sent())
+    renderForm()
+    fillValid()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Club' }), { target: { value: 'other' } })
+    fireEvent.change(screen.getByLabelText('Club name'), { target: { value: 'Riverside' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1))
+    const body = JSON.parse((fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1].body as string) as Record<
+      string,
+      unknown
+    >
+    expect(body).toEqual({
+      requestId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+      turnstileToken: 'token-1',
+      name: 'Jo Tan',
+      email: 'jc@mail.com',
+      phone: '+60 12-345 6789',
+      club: { name: 'Riverside', typed: true },
+      lines: [{ honorId: 'knot-tying', quantity: 3 }],
+    })
+  })
+
+  it('logs the failure kind and request id but never the buyer', async () => {
     // catches: a name, email or phone in the console (rule: ids and counts only)
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const fetchFn = stubFetch(new Response('{}', { status: 500 }))
@@ -451,18 +514,17 @@ describe('OrderForm sending', () => {
     await screen.findByRole('alert')
     const logged = JSON.stringify(error.mock.calls)
     expect(logged).toContain('rejected')
-    expect(logged).toContain(numberOfCall(fetchFn, 0))
+    expect(logged).toContain(requestOfCall(fetchFn, 0)) // the request id says which send
     for (const secret of ['Jo Tan', 'jc@mail.com', '6789']) expect(logged).not.toContain(secret)
   })
 
-  it('keeps the order number for a retry and makes a new one after an edit', async () => {
-    // catches: a retry that gives the handler two numbers for one order, or an edited order reusing the old number
+  it('keeps the request id for a retry and makes a new one after an edit', async () => {
+    // catches: a retry that gives the Worker two request ids for one order, so a lost reply makes a double order, or an edited order reusing the old id
     vi.spyOn(console, 'error').mockImplementation(() => {})
     let next = 0 // a counter that stands in for randomness
-    vi.spyOn(crypto, 'getRandomValues').mockImplementation(((array: Uint8Array) => {
-      for (let index = 0; index < array.length; index++) array[index] = next++ % 200 // every call differs
-      return array
-    }) as never)
+    vi.spyOn(crypto, 'randomUUID').mockImplementation(
+      () => `00000000-0000-4000-8000-${String(next++).padStart(12, '0')}`,
+    ) // every call differs
     const fetchFn = stubFetch(
       new Response('{}', { status: 500 }),
       new Response('{}', { status: 500 }),
@@ -471,16 +533,16 @@ describe('OrderForm sending', () => {
     renderForm()
     fillTickAndSend()
     await screen.findByRole('alert')
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2))
-    expect(numberOfCall(fetchFn, 1)).toBe(numberOfCall(fetchFn, 0))
+    expect(requestOfCall(fetchFn, 1)).toBe(requestOfCall(fetchFn, 0))
     await screen.findByRole('alert')
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Jo Tan Jr' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(3))
-    expect(numberOfCall(fetchFn, 2)).not.toBe(numberOfCall(fetchFn, 0))
+    expect(requestOfCall(fetchFn, 2)).not.toBe(requestOfCall(fetchFn, 0))
   })
 
   it('sends once when Send order is pressed twice, and shows the sending state', async () => {
@@ -489,7 +551,7 @@ describe('OrderForm sending', () => {
     const fetchFn = stubFetch(() => new Promise<Response>((resolve) => (finish = resolve)))
     renderForm()
     fillValid()
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     const send = screen.getByRole('button', { name: /^Send order/ })
     fireEvent.click(send)
     fireEvent.click(send)
@@ -499,8 +561,8 @@ describe('OrderForm sending', () => {
     expect(window.location.hash).toBe('#/order-sent')
   })
 
-  it('keeps the send and its number when the form is left and opened again mid-send', async () => {
-    // catches: Back during "Sending…" unmounting the form, so a return shows a ready button and a second send goes out under a new number
+  it('keeps the send and its request id when the form is left and opened again mid-send', async () => {
+    // catches: Back during "Sending…" unmounting the form, so a return shows a ready button and a second send goes out under a new request id
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     let finish: (response: Response) => void = () => {}
     const fetchFn = stubFetch(
@@ -534,16 +596,15 @@ describe('OrderForm sending', () => {
     expect(fetchFn).toHaveBeenCalledTimes(1) // no second send
     await act(async () => finish(new Response('{}', { status: 500 }))) // the first one fails while the form is back
     expect(await screen.findByRole('alert')).toHaveTextContent('Your order was not sent.')
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2))
-    expect(numberOfCall(fetchFn, 1)).toBe(numberOfCall(fetchFn, 0)) // the retry reuses the number
+    expect(requestOfCall(fetchFn, 1)).toBe(requestOfCall(fetchFn, 0)) // the retry reuses the request id
     expect(error).toHaveBeenCalledTimes(2) // the failed send, then the failed retry
   })
 
   it('on success empties the cart and the form, keeps the order for the confirmation and replaces the address', async () => {
     // catches: a cart that survives a sent order, an order the confirmation cannot find, or a Back button that leads to an empty cart
-    vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 9, 28, 10, 0) })
     stubFetch(sent())
     const historyLength = window.history.length
     renderForm()
@@ -554,10 +615,29 @@ describe('OrderForm sending', () => {
     expect(screen.getByLabelText('Name')).toHaveValue('')
     expect(window.history.length).toBe(historyLength) // replaced, not pushed
     const stored = JSON.parse(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY) ?? '{}') as {
-      order: { number: string; totalCents: number }
+      order: { number: string; totalCents: number; sentAt: string; lines: Array<{ priceCents: number }> }
     }
-    expect(stored.order.number).toMatch(/^PF-20261028-[2-9A-HJKMNP-Z]{4}$/)
+    expect(stored.order.number).toBe('PF-20261102-4K7Q') // the Worker's number, not one made in the browser
     expect(stored.order.totalCents).toBe(900)
+    expect(stored.order.sentAt).toBe('2026-11-01T17:00:00.000Z')
+  })
+
+  it("on success stores the Worker's prices and total, not the ones the shop showed", async () => {
+    // catches: a confirmation that recomputes from the shop's catalogue after a price edit, showing a total the Worker did not save
+    stubFetch(
+      new Response(
+        JSON.stringify({ ...savedOrder, totalCents: 1350, lines: [{ ...savedOrder.lines[0], priceCents: 450 }] }),
+        { status: 201 },
+      ),
+    )
+    renderForm() // the shop shows RM 3.00 a line
+    fillTickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    const stored = JSON.parse(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY) ?? '{}') as {
+      order: { totalCents: number; lines: Array<{ priceCents: number }> }
+    }
+    expect(stored.order.totalCents).toBe(1350)
+    expect(stored.order.lines[0].priceCents).toBe(450)
   })
 
   it('on success with sessionStorage refusing the write still replaces the address and clears the cart', async () => {
@@ -630,8 +710,13 @@ describe('OrderForm sending', () => {
   it.each([
     ['a dropped connection', () => Promise.reject(new TypeError('Failed to fetch'))],
     ['a timeout', () => Promise.reject(new DOMException('timed out', 'TimeoutError'))],
-    ['a refusal with success false', () => Promise.resolve(new Response(JSON.stringify({ success: false })))],
-    ['an HTTP 400', () => Promise.resolve(new Response(JSON.stringify({ success: false }), { status: 400 }))],
+    ['an HTTP 400', () => Promise.resolve(refused(400, { error: 'invalid' }))],
+    ['a captcha refusal', () => Promise.resolve(refused(403, { error: 'captcha' }))],
+    [
+      'a stock refusal',
+      () => Promise.resolve(refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] })),
+    ],
+    ['a 201 that is not an order', () => Promise.resolve(new Response('{"number":7}', { status: 201 }))],
     ['a rate limit', () => Promise.resolve(new Response('{}', { status: 429 }))],
     ['a page that is not JSON', () => Promise.resolve(new Response('<html>', { status: 502 }))],
   ])(
@@ -655,45 +740,44 @@ describe('OrderForm sending', () => {
     },
   )
 
-  it('keeps the order number across a rate-limited retry and then sends successfully under it', async () => {
-    // catches: a retry after a 429 that renumbers the order, or a retry that cannot send once the captcha is ticked again
+  it('keeps the request id across a rate-limited retry and then sends successfully under it', async () => {
+    // catches: a retry after a 429 that gets a new request id, or a retry that cannot send once the captcha is solved again
     vi.spyOn(console, 'error').mockImplementation(() => {}) // the failure log
     const fetchFn = stubFetch(new Response('{}', { status: 429 }), sent()) // refused once, then accepted
     renderForm() // the cart
     fillTickAndSend() // first press
     await screen.findByRole('alert') // refused
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // tick again
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // tick again
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ })) // retry
     await waitFor(() => expect(window.location.hash).toBe('#/order-sent')) // accepted
-    expect(numberOfCall(fetchFn, 1)).toBe(numberOfCall(fetchFn, 0)) // one number
+    expect(requestOfCall(fetchFn, 1)).toBe(requestOfCall(fetchFn, 0)) // one request id
     const stored = JSON.parse(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY) ?? '{}') as {
       order: { number: string }
     } // the confirmation's order
-    expect(stored.order.number).toBe(numberOfCall(fetchFn, 0)) // the confirmation shows the number the handler got
+    expect(stored.order.number).toBe('PF-20261102-4K7Q') // the confirmation shows the Worker's number
   })
 
-  it('makes a new order number when the club changes after a failure', async () => {
-    // catches: a number signature that ignores the club, so a different order reuses the old number
+  it('makes a new request id when the club changes after a failure', async () => {
+    // catches: a signature that ignores the club, so a different order reuses the old request id
     vi.spyOn(console, 'error').mockImplementation(() => {}) // the failure log
     const two: Club[] = [...clubs, { name: 'Falcons', area: null, language: null, location: null, churchName: null }] // a second club
     let next = 0 // stands in for randomness
-    vi.spyOn(crypto, 'getRandomValues').mockImplementation(((array: Uint8Array) => {
-      for (let index = 0; index < array.length; index++) array[index] = next++ % 200 // every call differs
-      return array
-    }) as never)
+    vi.spyOn(crypto, 'randomUUID').mockImplementation(
+      () => `00000000-0000-4000-8000-${String(next++).padStart(12, '0')}`,
+    ) // every call differs
     const fetchFn = stubFetch(new Response('{}', { status: 500 }), new Response('{}', { status: 500 })) // two failures
     renderForm(two) // two clubs
     fillTickAndSend() // first press
     await screen.findByRole('alert') // failed
     fireEvent.change(screen.getByRole('combobox', { name: 'Club' }), { target: { value: 'Falcons' } }) // another club
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // tick
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // tick
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ })) // press again
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2)) // sent again
-    expect(numberOfCall(fetchFn, 1)).not.toBe(numberOfCall(fetchFn, 0)) // a new number
+    expect(requestOfCall(fetchFn, 1)).not.toBe(requestOfCall(fetchFn, 0)) // a new request id
   })
 
   it('keeps club detail fields out of the whole request body', async () => {
-    // catches: area, language, location or church name leaking into the order email through the form
+    // catches: area, language, location or church name leaking into the order request through the form
     const gilead: Club = {
       name: 'Gilead Pathfinder Club',
       area: 'Klang',
@@ -705,7 +789,7 @@ describe('OrderForm sending', () => {
     renderForm([gilead]) // that club
     fillValid() // fills the Eagles value, so pick Gilead below
     fireEvent.change(screen.getByRole('combobox', { name: 'Club' }), { target: { value: 'Gilead Pathfinder Club' } }) // choose it
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // tick
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // tick
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ })) // send
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1)) // posted
     const body = (fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1].body as string // the JSON
@@ -720,13 +804,13 @@ describe('OrderForm sending', () => {
     const fetchFn = stubFetch(() => new Promise<Response>((resolve) => (fail = resolve)), sent()) // slow failure, then success
     renderForm() // the cart
     fillValid() // the fields
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // tick
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // tick
     const send = screen.getByRole('button', { name: /^Send order/ }) // the button
     fireEvent.click(send) // first press
     fireEvent.click(send) // second press, ignored
     await act(async () => fail(new Response('{}', { status: 500 }))) // the first send fails
     await screen.findByRole('alert') // alert shown
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // tick again
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // tick again
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ })) // retry
     await waitFor(() => expect(window.location.hash).toBe('#/order-sent')) // sent
     expect(fetchFn).toHaveBeenCalledTimes(2) // one failed send and one retry, no extras
@@ -775,7 +859,7 @@ describe('OrderForm floating pill', () => {
     const fetchFn = stubFetch(sent())
     renderForm()
     fillValid()
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     const form = screen.getByRole('button', { name: /^Send order/ }).closest('form') as HTMLFormElement
     act(() => form.requestSubmit()) // the path Enter takes
     act(() => form.requestSubmit()) // a double Enter
@@ -806,8 +890,24 @@ describe('OrderForm floating pill', () => {
     expect(alert.compareDocumentPosition(screen.getByText(LINE)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy() // note, then line, then pill
     expect(within(alert.parentElement as HTMLElement).getByRole('button', { name: 'Dismiss' })).toBeInTheDocument() // the red x beside the text
     expect(send).toHaveFocus() // focus stays on Send
-    const missing = screen.getByText('Tick the captcha to send.')
+    const missing = screen.getByText('Complete the captcha to send.')
     expect(dock?.contains(missing)).toBe(false) // the missing line stays in the form
+  })
+
+  it('scrolls the captcha line clear of the failure note after a 429', async () => {
+    // catches: the "Complete the captcha to send." line hidden under the failure note at 375 px
+    const scrollIntoView = vi.fn() // jsdom has none
+    Element.prototype.scrollIntoView = scrollIntoView // stands in for the scroll
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      stubFetch(new Response('{}', { status: 429 }))
+      renderForm()
+      fillTickAndSend()
+      await screen.findByRole('alert')
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView // jsdom's prototype as it was, even when the test fails
+    }
+    expect(scrollIntoView.mock.contexts).toContain(screen.getByText('Complete the captcha to send.')) // that very line was scrolled to
   })
 
   it('keeps the failure note with no timer until Dismiss, and gives focus back to Send', async () => {
@@ -833,7 +933,7 @@ describe('OrderForm floating pill', () => {
     renderForm()
     fillTickAndSend()
     await screen.findByRole('alert')
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     await act(async () => finish(sent()))
@@ -865,13 +965,13 @@ describe('OrderForm send interruptions', () => {
     renderForm()
     fillTickAndSend() // first failure
     await screen.findByRole('alert') // shown
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // a fresh token
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // a fresh token
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ })) // second failure
     await waitFor(() => expect(captcha.reset).toHaveBeenCalledTimes(2)) // the second send finished
     expect(screen.getAllByRole('alert')).toHaveLength(1) // one note, not two
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' })) // closed
     expect(screen.queryByRole('alert')).not.toBeInTheDocument() // gone
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // a fresh token
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // a fresh token
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ })) // third failure
     expect(await screen.findByRole('alert')).toBeInTheDocument() // shown again
   })
@@ -884,7 +984,7 @@ describe('OrderForm send interruptions', () => {
     fillTickAndSend()
     await screen.findByRole('alert') // shown
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Jo Tan Jr' } }) // an edit
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // a new token
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // a new token
     expect(screen.getByRole('alert')).toBeInTheDocument() // still there
   })
 
@@ -910,7 +1010,7 @@ describe('OrderForm send interruptions', () => {
     const form = screen.getByRole('button', { name: /^Send order/ }).closest('form') as HTMLFormElement // the form
     act(() => form.requestSubmit()) // Enter with the captcha unticked
     expect(fetchFn).not.toHaveBeenCalled() // nothing sent
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // ticked
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // ticked
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ })) // the click
     act(() => form.requestSubmit()) // an Enter while it sends
     expect(fetchFn).toHaveBeenCalledTimes(1) // one request
@@ -937,13 +1037,14 @@ describe('OrderForm send interruptions', () => {
     for (const secret of ['Jo Tan', 'jc@mail.com', '6789']) expect(note).not.toContain(secret) // none in the note
   })
 
-  it('posts to the bare Web3Forms address, with no query string, and leaves the buyer out of the address after success', async () => {
+  it('posts to the bare orders address, with no query string, and leaves the buyer out of the address after success', async () => {
     // catches: buyer data moved into the request URL or the confirmation address
+    vi.stubEnv('VITE_API_URL', '/api') // the dev proxy's address
     const fetchFn = stubFetch(sent()) // accepted
     renderForm()
     fillTickAndSend()
     await waitFor(() => expect(window.location.hash).toBe('#/order-sent')) // confirmation
-    expect((fetchFn.mock.calls[0] as unknown as [string])[0]).toBe('https://api.web3forms.com/submit') // no query
+    expect((fetchFn.mock.calls[0] as unknown as [string])[0]).toBe('/api/orders') // no query
     expect(window.location.href).not.toMatch(/Jo|jc@|6789|Eagles/) // nothing in the address
   })
 })

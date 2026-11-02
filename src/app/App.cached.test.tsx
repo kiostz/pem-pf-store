@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart's key
 import { App } from './App.tsx' // code under test
 
-// The real captcha loads hCaptcha's script, which a test must not do; this stand-in ticks and expires on demand.
+// The real captcha loads Turnstile's script, which a test must not do; this stand-in ticks and expires on demand.
 vi.mock('@/features/order/Captcha.tsx', () => ({
   Captcha: ({ onToken }: { onToken: (token: string | null) => void }) => (
     <div>
       <button type="button" onClick={() => onToken('token-1')}>
-        Tick captcha
+        Solve captcha
       </button>
       <button type="button" onClick={() => onToken(null)}>
         Expire captcha

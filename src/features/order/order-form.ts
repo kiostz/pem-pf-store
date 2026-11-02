@@ -66,7 +66,7 @@ export function validateOrderForm(
 /**
  * Words what keeps Send order from being ready, for the line under the button.
  * @param errors the result of validateOrderForm
- * @param hasToken whether the captcha is ticked
+ * @param hasToken whether the captcha is solved
  * @return the line, or null when nothing is missing
  */
 export function missingText(
@@ -84,8 +84,8 @@ export function missingText(
     labels.length > 1 // two or more need an "and"
       ? `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}` // "a, b and c"
       : labels.join('') // one label, or none
-  if (labels.length === 0) return hasToken ? null : 'Tick the captcha to send.' // only the captcha, or nothing
-  return `Fill in your ${joined}${hasToken ? '' : ' and tick the captcha'} to send.` // fields, then the captcha
+  if (labels.length === 0) return hasToken ? null : 'Complete the captcha to send.' // only the captcha, or nothing
+  return `Fill in your ${joined}${hasToken ? '' : ' and complete the captcha'} to send.` // fields, then the captcha
 }
 
 /**
@@ -116,4 +116,13 @@ export function clubDetails(club: Club): string | null {
     club.churchName, // last
   ].filter((part): part is string => part !== null) // in the fixed order
   return parts.length === 0 ? null : parts.join(' · ') // no line for a club with no details
+}
+
+/**
+ * Collapses line breaks, control characters and the Unicode line and paragraph separators in typed text to spaces, so a field cannot add lines to an order.
+ * @param text what the buyer typed
+ * @return the text with each run of control characters as one space, trimmed
+ */
+export function oneLine(text: string): string {
+  return text.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ').trim() // controls include \r and \n; Zl and Zp are U+2028 and U+2029
 }

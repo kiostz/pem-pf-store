@@ -16,7 +16,7 @@ export type OrderFormValue = {
   setSending: (sending: boolean) => void // starts or ends a send
   failure: { text: string } | null // the alert of the last failed send, a new object per failure
   setFailure: (failure: { text: string } | null) => void // shows or clears the alert
-  numberRef: RefObject<{ signature: string; number: string } | null> // the order number kept for retries of the same order
+  requestRef: RefObject<{ signature: string; requestId: string } | null> // the request id kept for retries of the same order
 }
 
 export const OrderFormContext = createContext<OrderFormValue | null>(null) // null outside an OrderFormProvider

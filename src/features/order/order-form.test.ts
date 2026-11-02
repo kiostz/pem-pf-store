@@ -174,13 +174,13 @@ describe('missingText', () => {
   it('names the fields and the captcha', () => {
     // catches: a line that does not say why Send order looks disabled
     expect(missingText({ phone: 'x' }, false)).toBe(
-      'Fill in your phone and tick the captcha to send.',
+      'Fill in your phone and complete the captcha to send.',
     )
   })
 
   it('names only the captcha when the fields are fine', () => {
     // catches: "Fill in" with nothing to fill in
-    expect(missingText({}, false)).toBe('Tick the captcha to send.')
+    expect(missingText({}, false)).toBe('Complete the captcha to send.')
   })
 
   it('joins several fields and calls the Other field the club name', () => {

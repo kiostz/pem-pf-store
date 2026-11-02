@@ -1,4 +1,4 @@
-// Test for the order form with the real Captcha (only hCaptcha's package stood in): a theme change must unready Send order, and a failed send after it must keep the cart and the typing.
+// Test for the order form with the real Captcha (only the Turnstile package stood in): a theme change must unready Send order, and a failed send after it must keep the cart and the typing.
 
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react' // render, query and flush updates
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
@@ -10,18 +10,26 @@ import { useTheme } from '@/shared/theme/use-theme.ts' // the hook the Theme con
 import { OrderForm } from './OrderForm.tsx' // code under test
 import { OrderFormProvider } from './OrderFormProvider.tsx' // the form state
 
+const saved = {
+  number: 'PF-20261102-4K7Q',
+  createdAt: '2026-11-01T17:00:00.000Z',
+  currency: 'MYR',
+  totalCents: 900,
+  lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }],
+} // what the Worker saved
+
 const tickCount = vi.hoisted(() => ({ n: 0 })) // how many times the widget was ticked, so each token is distinct
 
 // The package's widget replaced by a button that ticks it, so the real Captcha wrapper and the form run unchanged.
-vi.mock('@hcaptcha/react-hcaptcha', () => ({
+vi.mock('@marsidev/react-turnstile', () => ({
   /**
    * The stand-in widget.
    * @param props the wrapper's callbacks
    * @return a button that reports a token
    */
-  default: ({ onVerify }: { onVerify: (token: string) => void }) => (
-    <button type="button" onClick={() => onVerify(`token-${++tickCount.n}`)}>
-      Tick captcha
+  Turnstile: ({ onSuccess }: { onSuccess: (token: string) => void }) => (
+    <button type="button" onClick={() => onSuccess(`token-${++tickCount.n}`)}>
+      Solve captcha
     </button>
   ),
 }))
@@ -74,8 +82,8 @@ describe('OrderForm with a theme change', () => {
     const { result } = renderHook(() => useTheme())
     act(() => result.current.setChoice('dark')) // the buyer picks Dark in the Theme control
     expect(send).toHaveAttribute('aria-disabled', 'true') // the redrawn widget is unticked
-    expect(screen.getByText('Tick the captcha to send.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // ticked again in the new theme
+    expect(screen.getByText('Complete the captcha to send.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // ticked again in the new theme
     fireEvent.click(send)
     await screen.findByRole('alert')
     expect(screen.getByTestId('cart')).toHaveTextContent('{"knot-tying":3}')
@@ -88,7 +96,7 @@ describe('OrderForm with a theme change', () => {
    * @return the fetch stand-in
    */
   function readyForm(status: number) {
-    const fetchMock = vi.fn(async () => new Response('{"success":true}', { status })) // the send
+    const fetchMock = vi.fn(async () => new Response(status < 300 ? JSON.stringify(saved) : '{}', { status })) // the send
     vi.stubGlobal('fetch', fetchMock)
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":3}}') // the cart
     render(
@@ -107,7 +115,7 @@ describe('OrderForm with a theme change', () => {
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'jc@mail.com' } })
     fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '+60 12-345 6789' } })
     fireEvent.change(screen.getByRole('combobox', { name: 'Club' }), { target: { value: 'Eagles' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // token-1
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // token-1
     return fetchMock
   }
 
@@ -123,16 +131,15 @@ describe('OrderForm with a theme change', () => {
   })
 
   it('sends the token ticked after the theme change, not the one held before it', async () => {
-    // catches: the old token kept in the form and posted to Web3Forms
+    // catches: the old token kept in the form and posted to the Worker
     const fetchMock = readyForm(200)
     const { result } = renderHook(() => useTheme())
     act(() => result.current.setChoice('dark'))
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' })) // token-2
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // token-2
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body)
-    expect(body['h-captcha-response']).toBe('token-2')
-    expect(body.from_name).toBe('PEM Pathfinder Store') // the sender name still goes with it
+    expect(body.turnstileToken).toBe('token-2')
   })
 
   it('sends once when Send order is double-clicked after a theme change and a new tick', async () => {
@@ -140,7 +147,7 @@ describe('OrderForm with a theme change', () => {
     const fetchMock = readyForm(200)
     const { result } = renderHook(() => useTheme())
     act(() => result.current.setChoice('dark'))
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     const send = screen.getByRole('button', { name: /^Send order/ })
     fireEvent.click(send)
     fireEvent.click(send)
@@ -158,7 +165,7 @@ describe('OrderForm with a theme change', () => {
     const fetchMock = readyForm(500)
     const { result } = renderHook(() => useTheme())
     act(() => result.current.setChoice('dark'))
-    fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
     const alert = await screen.findByRole('alert')
     const seen =

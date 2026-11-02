@@ -20,7 +20,7 @@
     "patches": "node scripts/patches/import-patches.ts"
   },
   "dependencies": {
-    "@hcaptcha/react-hcaptcha": "2.2.0",
+    "@marsidev/react-turnstile": "1.6.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

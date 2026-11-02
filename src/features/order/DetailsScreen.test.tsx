@@ -13,11 +13,11 @@ import { PILL_DOCK } from '@/shared/ui/floating-pill-box.ts' // the dock Send or
 import { DetailsScreen } from './DetailsScreen.tsx' // code under test
 import { OrderFormProvider } from './OrderFormProvider.tsx' // the form state
 
-// The real captcha loads hCaptcha's script, which a test must not do; this stand-in ticks on demand.
+// The real captcha loads Turnstile's script, which a test must not do; this stand-in ticks on demand.
 vi.mock('@/features/order/Captcha.tsx', () => ({
   Captcha: ({ onToken }: { onToken: (token: string | null) => void }) => (
     <button type="button" onClick={() => onToken('token-1')}>
-      Tick captcha
+      Solve captcha
     </button>
   ),
 }))
@@ -57,7 +57,7 @@ function fillForm() {
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'jc@mail.com' } })
   fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '0312345678' } })
   fireEvent.change(screen.getByLabelText('Club name'), { target: { value: 'Hilltop Club' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Tick captcha' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
 }
 
 describe('DetailsScreen', () => {
@@ -144,7 +144,7 @@ describe('DetailsScreen', () => {
     expect(skeleton).toHaveClass('animate-skeleton')
     expect(screen.getAllByTestId('details-skeleton-field')).toHaveLength(4) // name, email, phone, club
     expect(screen.getAllByTestId('details-skeleton-field')[0].querySelector('.h-11')).not.toBeNull() // the real input's 44 px
-    expect(screen.getByTestId('details-skeleton-captcha')).toBeInTheDocument()
+    expect(screen.getByTestId('details-skeleton-captcha')).toHaveClass('h-16.25', 'w-75') // Turnstile's 300 by 65 px, so the form does not jump when the widget loads
     rerender(tree({ ...loading, state: { status: 'error', reason: 'failed' } }))
     expect(screen.queryByTestId('details-skeleton')).not.toBeInTheDocument() // gone on error
   })
@@ -205,7 +205,17 @@ describe('DetailsScreen', () => {
 
   it('sends only the orderable lines after Checkout with an unlisted honor in the cart', async () => {
     // catches: a wrong order that lists an unlisted honor
-    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ success: true }))) // Web3Forms
+    const fetchFn = vi.fn(async () => new Response(
+        JSON.stringify({
+          number: 'PF-20261102-4K7Q',
+          createdAt: '2026-11-01T17:00:00.000Z',
+          currency: 'MYR',
+          totalCents: 800,
+          lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 2, priceCents: 400 }],
+        }),
+        { status: 201 },
+      ),
+    ) // the Worker saves it
     vi.stubGlobal('fetch', fetchFn)
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":2,"africa-lore":3}}')
     window.location.hash = '#/cart'
@@ -229,11 +239,9 @@ describe('DetailsScreen', () => {
     })
     expect(fetchFn).toHaveBeenCalledTimes(1)
     const body = JSON.parse((fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1].body as string) as {
-      message: string
+      lines: Array<{ honorId: string; quantity: number }>
     }
-    expect(body.message).toContain('Knot Tying')
-    expect(body.message).not.toContain('Africa Lore')
-    expect(body.message).not.toContain('no-such-honor')
+    expect(body.lines).toEqual([{ honorId: 'knot-tying', quantity: 2 }]) // the unlisted item is not in the request
   })
 
   it('is inert and busy while an order is sending, then free', async () => {
