@@ -1,0 +1,8 @@
+# Copy to api/.dev.vars (git-ignored) for local runs; never put a real secret in this example.
+# Cloudflare's published Turnstile test secret that always passes: it accepts any token.
+# For a captcha-failure check use Cloudflare's always-fail test secret instead: 2x0000000000000000000000000000000AA
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA
+# A made-up club inbox; local runs write the email to a file instead of sending it.
+ORDER_EMAIL_TO=club-inbox@example.test
+# The shop's address while running locally (the Vite dev server).
+SHOP_ORIGIN=http://localhost:5173

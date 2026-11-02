@@ -20,6 +20,27 @@ describe('http edges', () => {
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(SHOP) // The shop can still read the refusal.
   })
 
+  it('answers the /orders preflight with 204 and CORS headers for the shop only', async () => {
+    // Catches a missing preflight (the browser would block every send) or a grant to another origin.
+    const shop = await call('/orders', { method: 'OPTIONS', headers: { Origin: SHOP } }) // From the shop.
+    expect(shop.status).toBe(204) // No content.
+    expect(shop.headers.get('Access-Control-Allow-Origin')).toBe(SHOP) // Granted.
+    expect(shop.headers.get('Access-Control-Allow-Methods')).toBe('POST') // Only POST.
+    expect(shop.headers.get('Access-Control-Allow-Headers')).toBe('Content-Type') // Only Content-Type.
+    expect(shop.headers.get('Access-Control-Max-Age')).toBe('86400') // A day.
+    const evil = await call('/orders', { method: 'OPTIONS', headers: { Origin: 'https://evil.test' } }) // From elsewhere.
+    expect(evil.status).toBe(204) // Still answered.
+    expect(evil.headers.get('Access-Control-Allow-Origin')).toBeNull() // No grant.
+    expect(evil.headers.get('Access-Control-Allow-Methods')).toBeNull() // No grant.
+  })
+
+  it('answers GET /orders with 405 and Allow: POST, OPTIONS', async () => {
+    // Catches a read route on the order path.
+    const res = await call('/orders') // A GET.
+    expect(res.status).toBe(405) // Refused.
+    expect(res.headers.get('Allow')).toBe('POST, OPTIONS') // What is allowed.
+  })
+
   it('answers OPTIONS on an unknown path with 404, not 405', async () => {
     // Catches a method check that runs before the path lookup.
     const res = await call('/nope', { method: 'OPTIONS' }) // Unknown path.

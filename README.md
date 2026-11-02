@@ -70,7 +70,7 @@ The shop's backend lives in `workers/`, its own npm project (Node 24). Root `npm
     npm run db:migrate:local
     npm run dev
 
-`npm run dev` serves the API Worker at http://localhost:8787. `api/wrangler.jsonc` holds an all-zero `database_id` until the owner creates the real database; local runs ignore it. Migrations are in `workers/migrations/`; an applied migration is never edited, a change is a new file.
+Before `npm run dev`, copy `api/.dev.vars.example` to `api/.dev.vars` (git-ignored): it holds Cloudflare's published Turnstile test secret, a made-up club inbox and `SHOP_ORIGIN=http://localhost:5173`, so the local Worker accepts orders from the dev server. Run `npm run db:migrate:local` again after pulling: migration `0002` adds `orders.request_id`. `npm run dev` serves the API Worker at http://localhost:8787. `api/wrangler.jsonc` holds an all-zero `database_id` until the owner creates the real database; local runs ignore it. Migrations are in `workers/migrations/`; an applied migration is never edited, a change is a new file.
 
     npm test
     npm run typecheck
@@ -94,14 +94,16 @@ After the import, D1 is the source of truth. Do not edit the three JSON files in
 
 ### Endpoints
 
-The API Worker answers `GET` only, with JSON and `Cache-Control: no-store`:
+The API Worker answers JSON with `Cache-Control: no-store`. The four `GET` reads:
 
 - `/items`: active honors by name (ignoring case, equal names by id), as `{ id, name, category, priceCents, stock, image }` (RM 4.00 is `400`). Hidden honors never appear.
 - `/clubs`: the clubs in their set order, as `{ name, area, language, location, churchName }`.
 - `/settings`: `{ currency }` only.
 - `/shop`: `{ items, clubs, settings }` in one D1 batch, the same three lists as above, so a shop load is one request; a missing settings row answers 500 `server`.
 
-Paths match exactly, so `/items/` is 404. Errors are a short code only: 404 `not-found`, 405 `method-not-allowed` (with `Allow: GET`), 429 `rate-limited` (with `Retry-After: 60`), 500 `server`. CORS: `Access-Control-Allow-Origin` is sent only when `Origin` is exactly `https://kiostz.github.io` (the `SHOP_ORIGIN` var); other callers still get the body. A rate limit of 60 requests per 60 seconds per client IP (the `RATE_LIMITER` binding in `api/wrangler.jsonc`) answers 429 past it; `wrangler dev` enforces it locally too. Cloudflare's docs imply the free plan includes this binding; confirm it at the first deploy.
+- `POST /orders` (and `OPTIONS /orders`, the browser's preflight, 204): takes an order and answers 201 with the saved order (`number`, `createdAt`, `currency`, `totalCents`, `lines` with the saved names and prices, no buyer fields). Body: `requestId` (a UUID the shop keeps for a retry), `turnstileToken`, `name`, `email`, `phone`, `club` (`{ name, typed }`) and `lines` (`{ honorId, quantity }`, 1 to 500, quantity 1 to 99); the body is at most 64 KB. Order of checks: `Origin` must be exactly `SHOP_ORIGIN` (403 `forbidden-origin`), body (400 `invalid`, no field named), Turnstile (403 `captcha`, 503 `captcha-unavailable`), a repeated `requestId` (200 with the same saved order, no second order, stock drop or email), stock (409 `{ error: 'stock', lines: [{ honorId, stock }] }` listing every line that cannot be filled, `stock: null` for a Hidden or unknown item, nothing written). The save is one guarded D1 batch: the order, its lines (names and prices read from D1, not the request) and the lowered stock commit together or not at all. The order number is `PF-YYYYMMDD-XXXX` with the Malaysia date. After the save, when Settings has the order email On, the Worker sends the order email through the `ORDER_EMAIL` binding from `orders@stardew.win` to the secret `ORDER_EMAIL_TO`, reply-to the buyer; a failed send is logged (order number and error name only) and the order stays saved. Locally `wrangler dev` writes the email to a file and prints its path. Secrets (never in the repo): `TURNSTILE_SECRET` and `ORDER_EMAIL_TO`, set by the owner with `wrangler secret put`; vars `ORDER_EMAIL_FROM` and `ADMIN_URL` are in `api/wrangler.jsonc`. Logs never hold a buyer's name, email, phone or club.
+
+Paths match exactly, so `/items/` is 404. Errors are a short code only: 404 `not-found`, 405 `method-not-allowed` (with `Allow: GET`, or `Allow: POST, OPTIONS` on `/orders`), 429 `rate-limited` (with `Retry-After: 60`), 500 `server`. CORS: `Access-Control-Allow-Origin` is sent only when `Origin` is exactly `https://kiostz.github.io` (the `SHOP_ORIGIN` var); other callers still get the body. A rate limit of 60 requests per 60 seconds per client IP (the `RATE_LIMITER` binding in `api/wrangler.jsonc`) answers 429 past it; `wrangler dev` enforces it locally too. Cloudflare's docs imply the free plan includes this binding; confirm it at the first deploy.
 
 ### Admin Worker (local)
 

@@ -30,3 +30,29 @@ export interface ShopLoad {
   clubs: ShopClub[] // Clubs in their shown order.
   settings: ShopSettings // Public settings.
 }
+
+// The body of POST /orders, after validation.
+export interface OrderRequest {
+  requestId: string // UUID the shop keeps for a retry of the same cart and form.
+  turnstileToken: string // The captcha token, single use.
+  name: string // Buyer name, one line.
+  email: string // Buyer email, one line.
+  phone: string // Buyer phone, one line.
+  club: { name: string; typed: boolean } // Club name, and whether the buyer typed it by hand.
+  lines: Array<{ honorId: string; quantity: number }> // Ids and quantities only; D1 sets names and prices.
+}
+
+// An order as saved; no buyer fields, so it can go back to the browser.
+export interface SavedOrder {
+  number: string // PF-YYYYMMDD-XXXX.
+  createdAt: string // ISO UTC time with milliseconds.
+  currency: string // Three capital letters.
+  totalCents: number // Whole cents, from the saved lines.
+  lines: Array<{ honorId: string; name: string; quantity: number; priceCents: number }> // Saved names and prices.
+}
+
+// One line the Worker cannot fill: stock left, or null for a Hidden or missing item.
+export interface StockRefusalLine {
+  honorId: string // Which item.
+  stock: number | null // Units left, or null when it is not for sale.
+}

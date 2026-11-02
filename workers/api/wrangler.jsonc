@@ -13,8 +13,14 @@
   "workers_dev": true,
   // Turn Workers Logs on (never log buyer data).
   "observability": { "enabled": true },
-  // The only origin that gets a CORS header.
-  "vars": { "SHOP_ORIGIN": "https://kiostz.github.io" },
+  // SHOP_ORIGIN: the only origin that gets a CORS header and may POST orders. ORDER_EMAIL_FROM: the order email's sender (Email Routing on stardew.win). ADMIN_URL: the link on the order email's last line.
+  "vars": {
+    "SHOP_ORIGIN": "https://kiostz.github.io",
+    "ORDER_EMAIL_FROM": "orders@stardew.win",
+    "ADMIN_URL": "https://pem-pathfinder-store-admin.pempathfinder.workers.dev",
+  },
+  // Sends the order email; the club inbox is the secret ORDER_EMAIL_TO, so the binding is not limited to one address. Local runs write the email to a file.
+  "send_email": [{ "name": "ORDER_EMAIL" }],
   // Per-IP limit on public reads: 60 requests per 60 seconds, answered 429 past it.
   "ratelimits": [
     { "name": "RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },

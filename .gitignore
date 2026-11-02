@@ -8,6 +8,8 @@ dist
 .wrangler
 # Local Worker secrets, never committed.
 .dev.vars*
+# The example with test values is committed.
+!.dev.vars.example
 # Generated import SQL, never committed.
 workers/import/out
 # Built admin page, produced by the admin Vite build.

@@ -435,3 +435,13 @@ describe('order lines', () => {
     expect(await tryInsert('order_lines', line)).toContain(UNIQUE)
   })
 })
+
+describe('orders.request_id', () => {
+  it('refuses a second order with the same request id but allows many without one', async () => {
+    // Catches a missing UNIQUE index (a repeat send would order twice) or one that also blocks old orders with no request id.
+    expect(await tryInsert('orders', { ...validOrder, number: 'R1', request_id: '00000000-0000-4000-8000-000000000001' })).toBeNull() // First.
+    expect(await tryInsert('orders', { ...validOrder, number: 'R2', request_id: '00000000-0000-4000-8000-000000000001' })).toContain(UNIQUE) // Same id.
+    expect(await tryInsert('orders', { ...validOrder, number: 'R3' })).toBeNull() // No id.
+    expect(await tryInsert('orders', { ...validOrder, number: 'R4' })).toBeNull() // No id either.
+  })
+})

@@ -1,5 +1,9 @@
-// API Worker entry: rate limit, router, CORS and short error codes for the public read endpoints.
+// API Worker entry: rate limit, router, CORS and short error codes for the public read endpoints and the order endpoint.
 
+import { parseOrderRequest } from './order-request'
+import { sendOrderEmail } from './order-email'
+import { saveOrder } from './save-order'
+import { verifyTurnstile } from './turnstile'
 import { readClubs, readHonors, readSettings, readShop } from './read'
 
 // Maps each exact path to its reader.
@@ -36,13 +40,84 @@ function reply(
   return new Response(JSON.stringify(body), { status, headers }) // Body is always JSON.
 }
 
+const MAX_BODY_BYTES = 64 * 1024 // Largest order body accepted.
+
+/**
+ * Reads a request body, giving up as soon as it passes a byte cap.
+ * @param request The incoming request.
+ * @param maxBytes The most bytes to accept.
+ * @return The body bytes, or null when the body is over the cap.
+ */
+async function readCapped(request: Request, maxBytes: number): Promise<Uint8Array | null> {
+  if (request.body === null) return new Uint8Array(0) // No body.
+  const reader = request.body.getReader() // Chunk by chunk.
+  const chunks: Uint8Array[] = [] // Kept until the end.
+  let total = 0 // Bytes so far.
+  for (;;) {
+    const { done, value } = await reader.read() // Next chunk.
+    if (done) break // End of body.
+    total += value.byteLength // Count it.
+    if (total > maxBytes) {
+      await reader.cancel() // Stop the upload.
+      return null // Over the cap.
+    }
+    chunks.push(value) // Keep it.
+  }
+  const out = new Uint8Array(total) // The whole body.
+  let at = 0 // Write position.
+  for (const chunk of chunks) {
+    out.set(chunk, at) // Copy in order.
+    at += chunk.byteLength // Move on.
+  }
+  return out // Within the cap.
+}
+
+/**
+ * Handles POST /orders: origin, body, captcha, save, then the email in the background.
+ * @param request The incoming request.
+ * @param env The Worker bindings.
+ * @param ctx The execution context, for the background email.
+ * @param ip The caller's address, or 'unknown'.
+ * @param send Builds a response with this request's CORS context.
+ * @return The JSON response.
+ */
+async function handleOrder(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  ip: string,
+  send: (body: unknown, status: number, extra?: Record<string, string>) => Response,
+): Promise<Response> {
+  if (request.headers.get('Origin') !== env.SHOP_ORIGIN) return send({ error: 'forbidden-origin' }, 403) // Browsers send it; others are refused before the captcha is spent.
+  const declared = Number(request.headers.get('Content-Length')) // NaN or 0 when absent.
+  if (declared > MAX_BODY_BYTES) return send({ error: 'invalid' }, 400) // Refused before any of the body is read.
+  const raw = await readCapped(request, MAX_BODY_BYTES) // Stops reading at the cap, whatever the header says.
+  if (raw === null) return send({ error: 'invalid' }, 400) // Too big.
+  let json: unknown // The parsed body.
+  try {
+    json = JSON.parse(new TextDecoder().decode(raw)) // Throws on non-JSON.
+  } catch {
+    return send({ error: 'invalid' }, 400) // Not JSON.
+  }
+  const parsed = parseOrderRequest(json) // Validation where the data enters.
+  if (parsed === null) return send({ error: 'invalid' }, 400) // No field named.
+  const captcha = await verifyTurnstile(parsed.turnstileToken, env.TURNSTILE_SECRET, ip) // Solved?
+  if (captcha === 'failed') return send({ error: 'captcha' }, 403) // The buyer must solve it again.
+  if (captcha === 'unavailable') return send({ error: 'captcha-unavailable' }, 503) // Cloudflare did not answer.
+  const result = await saveOrder(env.DB, parsed, new Date()) // Stock check and guarded save.
+  if (result.kind === 'refused') return send({ error: 'stock', lines: result.lines }, 409) // Nothing written.
+  if (result.kind === 'saved' && result.emailOn) ctx.waitUntil(sendOrderEmail(env, result.order, parsed)) // After the save, not awaited.
+  return send(result.order, result.kind === 'saved' ? 201 : 200) // The saved order, no buyer fields.
+}
+
 /**
  * Handles one request.
  * @param request The incoming request.
  * @param env The Worker bindings.
+ * @param ctx The execution context.
  * @return The JSON response.
  */
-async function handle(request: Request, env: Env): Promise<Response> {
+async function handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const origin = request.headers.get('Origin') // Null when absent.
   /**
    * Answers with this request's CORS context.
@@ -62,6 +137,14 @@ async function handle(request: Request, env: Env): Promise<Response> {
     console.error('rate limiter failed', error instanceof Error ? error.name : 'unknown') // Fail open: error class only.
   }
   try {
+    if (path === '/orders') {
+      if (request.method === 'OPTIONS') {
+        const allowed = origin === env.SHOP_ORIGIN // Only the shop gets a preflight grant.
+        return new Response(null, { status: 204, headers: allowed ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400', Vary: 'Origin' } : { Vary: 'Origin' } }) // 204 for everyone.
+      }
+      if (request.method !== 'POST') return send({ error: 'method-not-allowed' }, 405, { Allow: 'POST, OPTIONS' }) // Writes only.
+      return await handleOrder(request, env, ctx, ip, send) // The order.
+    }
     const read = routes.get(path) // Exact path lookup.
     if (read === undefined) return send({ error: 'not-found' }, 404) // Unknown path.
     if (request.method !== 'GET') return send({ error: 'method-not-allowed' }, 405, { Allow: 'GET' }) // Reads only.
