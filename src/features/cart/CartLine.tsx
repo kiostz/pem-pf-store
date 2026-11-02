@@ -6,7 +6,7 @@ import { formatPrice } from '@/shared/format/price.ts' // "RM 4.00"
 import { PatchPicture } from '@/shared/ui/PatchPicture.tsx' // picture or category mark
 import { TrashIcon } from './cart-icons.tsx' // the trash on an Unavailable line
 import { CART_LINE_BOX, CART_PICTURE_BOX } from './cart-line-box.ts' // the line's boxes
-import { GONE_NAME, lineLabel, lineTotalCents } from './cart.ts' // the gone name, the label and the line's price
+import { exceedsStock, GONE_NAME, lineLabel, lineTotalCents, quantityCap } from './cart.ts' // the gone name, the label, the line's price and the stock rules
 import { QuantityStepper } from './QuantityStepper.tsx' // the quantity control
 
 /**
@@ -15,7 +15,7 @@ import { QuantityStepper } from './QuantityStepper.tsx' // the quantity control
  * @param honor the honor on this line, or null when it is gone from the data
  * @param quantity the quantity in the cart
  * @param currency the currency code from the settings
- * @param unavailable true when the honor is switched off or gone: greyed, no stepper, left out of the total
+ * @param unavailable true when the honor is gone from the shop: greyed, no stepper, left out of the total
  * @param onChange called with a new quantity from 1 to 99
  * @param onRemove called when the line is removed (trash, or a typed 0), with true when the keyboard did it
  * @return an `li` element
@@ -39,9 +39,11 @@ export function CartLine({
 }) {
   const keyboard = useRef(false) // set by the latest input in this line, read when a removal comes from the stepper
   const name = honor?.name ?? GONE_NAME // the line's name
+  const over = honor !== null && !unavailable && exceedsStock({ honor, quantity }) // asks for more than is left, or the honor is Sold out
   return (
     // The line; the capture handlers note which input is about to cause a removal, before the stepper reacts to it.
     <li
+      data-over-stock={over ? 'true' : undefined} // marks a line Checkout must send the buyer back to
       data-line-id={id} // from the saved id, so a gone honor has one too; lets the screen find the line to focus
       onKeyDownCapture={() => (keyboard.current = true)} // a key press (Enter in the field, Enter or Space on the trash)
       onClickCapture={(event) => (keyboard.current = event.detail === 0)} // a keyboard-made click has detail 0
@@ -91,11 +93,19 @@ export function CartLine({
             </>
           ) : (
             <>
-              <span className="text-text-muted text-[0.8125rem]">{`${formatPrice((honor as Honor).price, currency)} each`}</span>{' '}
-              {/* one's price, 13 px */}
+              {over ? (
+                // In words as well as red, in the place of one's price.
+                <span className="text-danger text-[0.8125rem] font-medium">
+                  {/* Sold out, or how many are left. */}
+                  {(honor as Honor).stock === 0 ? 'Sold out' : `Only ${(honor as Honor).stock} left`}
+                </span>
+              ) : (
+                <span className="text-text-muted text-[0.8125rem]">{`${formatPrice((honor as Honor).price, currency)} each`}</span> // one's price, 13 px
+              )}{' '}
               <QuantityStepper
                 honorName={name} // for the labels
                 quantity={quantity} // the cart's quantity
+                max={quantityCap(honor as Honor)} // + stops at the stock
                 trashAtOne // the cart's look: trash at 1
                 onChange={(next) => (next === 0 ? onRemove(keyboard.current) : onChange(next))} // 0 is a removal, like the trash
               />

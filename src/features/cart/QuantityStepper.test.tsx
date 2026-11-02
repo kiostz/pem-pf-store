@@ -143,3 +143,33 @@ describe('QuantityStepper', () => {
     expect(screen.queryByRole('button', { name: 'Remove Knot Tying' })).not.toBeInTheDocument()
   })
 })
+
+describe('QuantityStepper with a max below 99', () => {
+  it('kills + at the max with a label that says why, and keeps minus working above it', () => {
+    // catches: a + that lets a buyer pass the stock, or a minus that is dead on a line already above the stock
+    const onChange = vi.fn() // records every committed quantity
+    render(<QuantityStepper honorName="Knot Tying" quantity={12} max={2} onChange={onChange} />)
+    const more = screen.getByRole('button', { name: '2 is the most of Knot Tying' })
+    expect(more).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(more)
+    expect(onChange).not.toHaveBeenCalled() // dead
+    fireEvent.click(screen.getByRole('button', { name: 'One fewer Knot Tying' }))
+    expect(onChange).toHaveBeenCalledWith(11) // minus lowers it a step
+  })
+
+  it('says the honor is sold out on a dead + when the max is 0', () => {
+    // catches: a "0 is the most of" label on a line whose stock is gone
+    render(<QuantityStepper honorName="Knot Tying" quantity={3} max={0} onChange={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Knot Tying is sold out' })).toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('clamps a typed number to the max, not to 99', () => {
+    // catches: typing 50 into a stock-12 stepper committing 50
+    const onChange = vi.fn() // records every committed quantity
+    render(<QuantityStepper honorName="Knot Tying" quantity={1} max={12} onChange={onChange} />)
+    const field = screen.getByRole('textbox', { name: 'Quantity of Knot Tying' })
+    fireEvent.change(field, { target: { value: '50' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(onChange).toHaveBeenCalledWith(12)
+  })
+})

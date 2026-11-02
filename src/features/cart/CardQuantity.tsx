@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react' // handles on the control and the focus to give
 import { PILL_BOX } from '@/shared/ui/button-box.ts' // the pill shape
+import { MAX_QUANTITY } from './cart.ts' // the 99 default of the max
 import { QuantityStepper } from './QuantityStepper.tsx' // the stepper from 1
 
 const FADE_IN = 'animate-[fade-in_var(--duration-fast)_var(--ease-out-soft)_both] motion-reduce:animate-none' // the short crossfade-in of whichever control appears; none under reduced motion
@@ -11,16 +12,22 @@ const FADE_IN = 'animate-[fade-in_var(--duration-fast)_var(--ease-out-soft)_both
  * @param honorName the honor's name, used in the labels
  * @param quantity the quantity now, 0 to 99
  * @param onChange called with the new quantity
- * @return a 44 px tall box holding Add or the stepper
+ * @param max the most the stepper allows, 99 unless the stock is lower
+ * @param soldOut true when the stock is 0: a Sold out pill takes the place of Add and the stepper
+ * @return a 44 px tall box holding Add, the stepper or the Sold out pill
  */
 export function CardQuantity({
   honorName,
   quantity,
   onChange,
+  max = MAX_QUANTITY,
+  soldOut = false,
 }: {
   honorName: string
   quantity: number
   onChange: (quantity: number) => void
+  max?: number
+  soldOut?: boolean
 }) {
   const boxRef = useRef<HTMLDivElement>(null) // the box that holds whichever control shows
   const focusNext = useRef<'more' | 'add' | null>(null) // which control to focus after the swap, null when none was asked for
@@ -36,8 +43,8 @@ export function CardQuantity({
       const active = document.activeElement // where focus is now
       if (active !== null && active !== document.body && !boxRef.current?.contains(active)) return // the buyer chose another control: leave it
       boxRef.current
-        ?.querySelector<HTMLElement>(wanted === 'more' ? 'button[aria-label^="One more"]' : 'button')
-        ?.focus() // One more, or Add
+        ?.querySelector<HTMLElement>(wanted === 'more' ? '[role="group"] > button:last-of-type' : 'button')
+        ?.focus() // the + (its label changes at the max), or Add
     }, 0) // after the focus change
     return () => window.clearTimeout(timer) // leaving the screen cancels it
   }, [inCart])
@@ -54,10 +61,13 @@ export function CardQuantity({
   return (
     // Fixed 44 px so the card does not jump when the control swaps.
     <div ref={boxRef} className="flex h-11 w-full justify-center">
-      {inCart ? (
+      {soldOut ? (
+        // A pill, not a control: no focus, no tap, nothing to press.
+        <span className={`${PILL_BOX} bg-bg-soft text-text-muted w-full`}>Sold out</span>
+      ) : inCart ? (
         // key keeps the two controls as separate elements so each plays its entrance.
         <div key="stepper" className={FADE_IN}>
-          <QuantityStepper honorName={honorName} quantity={quantity} onChange={change} /> {/* − n + */}
+          <QuantityStepper honorName={honorName} quantity={quantity} onChange={change} max={max} /> {/* − n + */}
         </div>
       ) : (
         <button

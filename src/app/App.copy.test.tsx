@@ -1,6 +1,6 @@
 // Guard test: no buyer-visible text or accessible name on any buyer screen may name honors, because the shop's buyer word is "items".
 
-import { render, screen } from '@testing-library/react' // render and wait for the page
+import { act, render, screen } from '@testing-library/react' // render and wait for the page
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart's key
 import { writeSentOrder } from '@/features/order/sent-order-storage.ts' // fills the stored order
@@ -89,6 +89,33 @@ describe('buyer copy', () => {
     window.location.hash = '#/shop' // the shop
     render(<App />)
     await screen.findByText(/couldn't load/) // the error shows
+    expect(buyerPhrases()).not.toMatch(/honor/i)
+  })
+
+  it('never names honors on Sold out cards, over-stock cart lines, the loading skeletons or the busy message', async () => {
+    // catches: "Sold out", "Only 2 left", "Loading the shop" or the busy words drifting into "honor" wording
+    vi.spyOn(console, 'error').mockImplementation(() => {}) // a refused load is logged
+    window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":5,"ants":1}}') // above the stock, and Sold out
+    vi.stubGlobal('fetch', shopFetch([honor('knot-tying', 'Knot Tying', { stock: 2 }), honor('ants', 'Ants', { stock: 0 })])) // the shop answers
+    window.location.hash = '#/cart'
+    const ready = render(<App />)
+    await screen.findByText('Only 2 left') // the red mark
+    expect(screen.getAllByText('Sold out').length).toBeGreaterThan(0)
+    expect(buyerPhrases()).not.toMatch(/honor/i)
+    ready.unmount()
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {}))) // never answers
+    vi.useFakeTimers({ shouldAdvanceTime: true }) // the 300 ms delay
+    const loading = render(<App />)
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
+    expect(screen.getAllByText('Loading the shop').length).toBeGreaterThan(0)
+    expect(buyerPhrases()).not.toMatch(/honor/i)
+    loading.unmount()
+    vi.useRealTimers()
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 429 }))) // refused
+    render(<App />)
+    await screen.findAllByText('The shop is busy right now. Try again in a minute.')
     expect(buyerPhrases()).not.toMatch(/honor/i)
   })
 })

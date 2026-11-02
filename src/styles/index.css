@@ -55,6 +55,7 @@
   --duration-enter: 240ms;
   --duration-exit: 150ms;
   --duration-toggle: 250ms; /* the tab pill's width change: Cart growing, Home and Shop shrinking */
+  --duration-pulse: 1600ms; /* one slow breath of a loading skeleton: opacity only, never faster than a calm room */
   --duration-trace: 4800ms; /* the emblem trace's whole play: under 5 s, so it needs no pause control */
   --delay-loader: 300ms; /* a spinner or skeleton stays hidden this long, so quick waits flash nothing */
 
@@ -81,6 +82,18 @@
     }
     to {
       opacity: 1;
+    }
+  }
+
+  /* A loading skeleton: its bars dim to half and back, so the wait reads as alive. Opacity only; Reduce Motion turns it off with motion-reduce:animate-none. */
+  --animate-skeleton: skeleton-pulse var(--duration-pulse) var(--ease-in-out-soft) infinite;
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
     }
   }
 

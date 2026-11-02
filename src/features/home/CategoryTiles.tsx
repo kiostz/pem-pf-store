@@ -5,7 +5,9 @@ import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' 
 import { shopHash } from '@/shared/routes.ts' // the filtered shop's address
 import { PILL_BOX } from '@/shared/ui/button-box.ts' // the pill shape of the actions
 import { categoryMark } from '@/shared/ui/category-mark.ts' // the category's patch colour
-import { LOAD_ERROR_TEXT } from '@/shared/ui/load-error-text.ts' // the failed-load message
+import { loadErrorText } from '@/shared/ui/load-error-text.ts' // the failed-load message by reason
+import { LoadingStatus } from '@/shared/ui/LoadingStatus.tsx' // what a screen reader hears while loading
+import { SKELETON_PULSE } from '@/shared/ui/skeleton-box.ts' // the skeleton's pulse
 
 const TILE_BOX = 'h-22 w-26 shrink-0 rounded-card' // the 104 x 88 px tile, shared with its skeleton
 const PATCH_WHITE = '#ffffff' // the mark colour that means a white name
@@ -23,14 +25,15 @@ export function CategoryTiles({ data }: { data: CatalogueLoad }) {
     // Out to the screen edges so the row scrolls under the page's gutter; vertical room so a focus ring is not clipped.
     <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 py-1">
       {/* Nothing for the loader delay, then skeleton tiles of the same box. */}
+      <LoadingStatus loading={showSkeleton} /> {/* always mounted, so its text is announced when the tiles appear */}
       {showSkeleton &&
         Array.from({ length: SKELETON_TILES }, (_, index) => (
-          <div key={index} data-testid="tile-skeleton" aria-hidden="true" className={`${TILE_BOX} bg-border-subtle`} />
+          <div key={index} data-testid="tile-skeleton" aria-hidden="true" className={`${TILE_BOX} bg-border-subtle ${SKELETON_PULSE}`} />
         ))}
       {/* The error stays in the row, with the one way out. */}
       {state.status === 'error' && (
         <div className="px-1">
-          <p className="text-danger">{LOAD_ERROR_TEXT}</p>
+          <p className="text-danger">{loadErrorText(state.reason)}</p>
           <button
             type="button" // not a form submit
             onClick={retry} // run the load again

@@ -8,10 +8,11 @@ import { DETAILS_HASH } from '@/shared/routes.ts' // the details page's address
 import { ACTION_BOX } from '@/shared/ui/button-box.ts' // the retry button
 import { byText } from '@/shared/sort/sort-by-name.ts' // names A to Z
 import { PILL_DOCK } from '@/shared/ui/floating-pill-box.ts' // where the pill and the note sit
-import { LOAD_ERROR_TEXT } from '@/shared/ui/load-error-text.ts' // the failed-load message
+import { loadErrorText } from '@/shared/ui/load-error-text.ts' // the failed-load message by reason
+import { SKELETON_PULSE } from '@/shared/ui/skeleton-box.ts' // the skeleton's pulse
 import { CartIcon, InfoIcon } from './cart-icons.tsx' // the empty cart's icon and the banner's i
 import { CART_CARD_BOX, CART_LINE_BOX, CART_PICTURE_BOX } from './cart-line-box.ts' // the card and line boxes, shared with the loading lines
-import { cartCount, estimatedTotalCents, GONE_NAME, lineLabel, resolveCart } from './cart.ts' // the cart maths and a line's label
+import { cartCount, estimatedTotalCents, exceedsStock, GONE_NAME, lineLabel, resolveCart } from './cart.ts' // the cart maths, the stock rule and a line's label
 import { CartLine } from './CartLine.tsx' // one line
 import { CheckoutBar } from './CheckoutBar.tsx' // the bottom bar
 import { RemovedNote } from './RemovedNote.tsx' // the note with Undo
@@ -61,6 +62,7 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
     })), // not in the shop
   ].sort((a, b) => byText(a.honor?.name ?? '￿', b.honor?.name ?? '￿') || byText(a.id, b.id)) // A to Z, gone honors last, equal names by id so Undo restores the old place
   const totalCents = estimatedTotalCents(lines) // orderable lines only
+  const blocked = lines.some(exceedsStock) // a line above today's stock, or Sold out: Checkout waits for the buyer to fix it
 
   // Moves focus after the draw that follows a removal, an Undo or the note's end; a tick later, so a field committed by leaving it has handed focus on.
   useEffect(() => {
@@ -120,8 +122,12 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
     setRemoval(null) // the note goes; the removal stands
   }
 
-  /** Takes the unavailable lines out, then opens the details page. */
+  /** Moves focus to the first marked line when one is above the stock; otherwise takes the unavailable lines out and opens the details page. */
   const checkout = () => {
+    if (blocked) {
+      listRef.current?.querySelector<HTMLElement>('[data-over-stock="true"] input')?.focus() // A to Z, the first marked line's number field
+      return // the details page waits
+    }
     takeOutUnavailable() // one write, before the address changes
     window.location.hash = DETAILS_HASH // a new history entry, so Back returns here
   }
@@ -129,7 +135,7 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
   const unavailableCount = unavailable.length // lines, not quantities
   // The 768 px centred column keeps a line's picture, name and stepper together on desktop; the bottom padding clears the bar and the note.
   return (
-    <div inert={sending} aria-busy={sending} className="mx-auto max-w-3xl pb-24">
+    <div inert={sending} aria-busy={sending} className={`mx-auto max-w-3xl ${blocked ? 'pb-40' : 'pb-24'}`}>
       {/* Where focus lands on arrival. */}
       <h2 ref={headingRef} tabIndex={-1} className="sm:text-title mt-2 text-xl font-bold outline-none">
         Your cart
@@ -145,7 +151,7 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
       )}
       {/* Loading shows nothing for 300 ms, then lines of the same shape. */}
       {showSkeleton && (
-        <div aria-hidden="true" className={CART_CARD_BOX}>
+        <div aria-hidden="true" className={`${CART_CARD_BOX} ${SKELETON_PULSE}`}>
           {Array.from({ length: SKELETON_LINES }, (_, index) => (
             // A skeleton line has the box of a real line.
             <div key={index} data-testid="cart-skeleton-line" className={CART_LINE_BOX}>
@@ -156,7 +162,7 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
                   <div className="bg-border-subtle h-4 w-14 rounded-sm" /> {/* the line total */}
                 </div>
                 <div className="flex h-9 items-center justify-between gap-3">
-                  <div className="bg-border-subtle h-3 w-16 rounded-sm" /> {/* the price of one */}
+                  <div className="bg-border-subtle h-3 w-16 rounded-sm" /> {/* the price of one, where "Only 2 left" would stand */}
                   <div className="bg-border-subtle rounded-pill h-9 w-33" /> {/* the stepper pill, 132 px */}
                 </div>
               </div>
@@ -167,7 +173,7 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
       {/* The same copy as the catalogue, and the way to retry. */}
       {state.status === 'error' && (
         <>
-          <p className="text-danger mt-3 min-h-6">{LOAD_ERROR_TEXT}</p>
+          <p className="text-danger mt-3 min-h-6">{loadErrorText(state.reason)}</p>
           <button
             type="button" // not a form submit
             onClick={retry} // run the load again
@@ -219,9 +225,9 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
           )}
         </>
       )}
-      {/* The one status region, mounted with the screen and empty until a removal, so the first removal is announced. */}
+      {/* The one status region, mounted with the screen and empty until a removal or the skeleton, so the first announcement is heard. */}
       <p role="status" className="sr-only">
-        {removal !== null ? `${removal.name} removed` : ''}
+        {removal !== null ? `${removal.name} removed` : showSkeleton ? 'Loading the shop' : ''}
       </p>
       {/* The dock: the note floats 12 px above the pill, both as wide as the pill. */}
       {state.status === 'ready' && (
@@ -241,6 +247,7 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
             itemCount={cartCount(lines)}
             currency={currency}
             orderable={lines.length > 0}
+            blocked={blocked} // a line above the stock
             onCheckout={checkout}
             onBrowse={onBack}
           />

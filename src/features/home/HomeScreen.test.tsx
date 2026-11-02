@@ -27,6 +27,18 @@ describe('HomeScreen', () => {
     expect(links[0]).toHaveAttribute('href', '#/shop')
   })
 
+  it('ends with an Admin link to the live admin, after How ordering works, in the same tab and 44 px tall', () => {
+    // catches: a missing way in for the admin, a link that opens a new tab, a target under 44 px, or one placed above the steps
+    render(<HomeScreen data={loading} />)
+    const admin = screen.getByRole('link', { name: 'Admin' })
+    expect(admin).toHaveAttribute('href', 'https://pem-pathfinder-store-admin.pempathfinder.workers.dev/')
+    expect(admin).not.toHaveAttribute('target')
+    expect(admin).toHaveClass('min-h-11', 'text-text-muted', 'print:hidden')
+    const steps = screen.getByRole('heading', { name: 'How ordering works' })
+    expect(steps.compareDocumentPosition(admin) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy() // after the steps' heading
+    expect(screen.getByRole('list').compareDocumentPosition(admin) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy() // and after the steps themselves
+  })
+
   it('gives the steps card the same 1 px hairline as the shop cards', () => {
     // catches: S7, the white steps block melting into the stone page for want of its edge
     render(<HomeScreen data={loading} />)

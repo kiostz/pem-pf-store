@@ -15,6 +15,18 @@ Open the address Vite prints. For the production build: `npm run build && npm ru
 
 The shop reads its items, clubs and settings from the API Worker's `/shop`, one request per load, with a 30 second limit. `VITE_API_URL` holds the Worker's address: the live Worker in `.env`, and `/api` in `.env.development` and `.env.fake-send`. `npm run dev` proxies `/api` to the local API Worker on http://localhost:8787, so start that first (`npm run dev` in `workers/`, see "Workers"); with it stopped the shop shows "We couldn't load the shop." `npm run preview` serves the production build, which asks the live Worker, and the Worker allows only the live site's address, so the shop can't load from `localhost` there. The files in `public/data/` stay for the seed and the import but the shop no longer reads them.
 
+### Stock on screen, and the order of the first pushes
+
+Each card shows "Stock: N left"; at 0 it shows Sold out in place of Add, and the steppers stop at the stock. A cart line above today's stock, or Sold out, is marked in red and blocks Checkout until the buyer lowers or removes it (their saved cart is never changed for them). Home ends with an "Admin" link to the live Admin Worker. While the shop loads, Shop, Cart and Details show grey skeletons after 300 ms.
+
+Before the first push of this work, as the owner:
+
+1. Enter the real stock in the live admin (stock starts at 0, so every card would read Sold out until then).
+2. Push the Worker change and wait for "Deploy API Worker" to finish, so `/shop` is live.
+3. Then push the site. Pushing both at once can put Pages live before `/shop`, and the shop shows "We couldn't load the shop." for about a minute.
+
+Until orders go through the Worker, Web3Forms orders do not lower stock; lower it by hand in the admin.
+
 ## Order form settings
 
 The order form reads two keys from the committed `.env` files, which are public by design:

@@ -5,7 +5,9 @@ import { sortByName } from '@/shared/sort/sort-by-name.ts' // names A to Z
 import { CategoryFilter } from './CategoryFilter.tsx' // the category filter
 import { categoryNames, filterHonors } from './filter.ts' // search and category filter
 import { PILL_BOX } from '@/shared/ui/button-box.ts' // the pill shape of the actions
-import { LOAD_ERROR_TEXT } from '@/shared/ui/load-error-text.ts' // the failed-load message
+import { loadErrorText } from '@/shared/ui/load-error-text.ts' // the failed-load message by reason
+import { LoadingStatus } from '@/shared/ui/LoadingStatus.tsx' // what a screen reader hears while loading
+import { SKELETON_PULSE } from '@/shared/ui/skeleton-box.ts' // the skeleton's pulse
 import { HonorCard } from './HonorCard.tsx' // one card
 import { CARD_BOX, CARD_GRID_BOX } from './honor-card-box.ts' // the grid and card boxes, shared with the skeleton
 import { SearchBox } from './SearchBox.tsx' // the labelled search input
@@ -93,35 +95,43 @@ export function Catalogue({
           <div className={`${TOOLBAR_ROW} w-full`} />
         </div>
       )}
-      {/* Skeleton shaped like the final toolbar, count line and rows, shown only after the loader delay. */}
+      {/* Skeleton shaped like the final toolbar, count line and rows, shown only after the loader delay; the status line tells a screen reader, the pulsing bars are for the eye. */}
+      <LoadingStatus loading={showSkeleton} /> {/* always mounted, so its text is announced when the skeleton appears */}
       {showSkeleton && (
-        <div data-testid="catalogue-skeleton" aria-hidden="true">
-          {/* Stands where the toolbar will be: the same box, one 44 px row. */}
-          <div data-testid="catalogue-skeleton-toolbar" className={TOOLBAR_BOX}>
-            {/* Stands where the search box and the category filter will be. */}
-            <div className={`${TOOLBAR_ROW} w-full`} />
+        <>
+          <div data-testid="catalogue-skeleton" aria-hidden="true" className={SKELETON_PULSE}>
+            {/* Stands where the toolbar will be: the same box, one 44 px row. */}
+            <div data-testid="catalogue-skeleton-toolbar" className={TOOLBAR_BOX}>
+              {/* Stands where the search box and the category filter will be. */}
+              <div className={`${TOOLBAR_ROW} w-full`} />
+            </div>
+            {/* Stands where the count line will be. */}
+            <div data-testid="catalogue-skeleton-count" className={COUNT_BOX} />
+            {/* The cards sit where the grid will be. */}
+            <div data-testid="catalogue-skeleton-grid" className={`${LIST_BOX} ${CARD_GRID_BOX}`}>
+              {Array.from({ length: SKELETON_ROWS }, (_, index) => (
+                // A skeleton card has the same box as an honor card, so the grid does not jump when it loads.
+                <div key={index} data-testid="catalogue-skeleton-row" className={CARD_BOX}>
+                  {/* Stands where the picture will be: 112 px. */}
+                  <div data-skeleton-part="picture" className="bg-border-subtle size-28 shrink-0 rounded-md" />
+                  {/* The text bars stack 4 px apart, as the card's name, label, price and stock do. */}
+                  <div className="flex w-full flex-1 flex-col items-center gap-1">
+                    {/* Stands where the name will be. */}
+                    <div data-skeleton-part="name" className="bg-border-subtle h-6 w-4/5 rounded-sm" />
+                    {/* Stands where the Category label will be. */}
+                    <div data-skeleton-part="label" className="bg-border-subtle h-4 w-20 rounded-sm" />
+                    {/* Stands where the price will be. */}
+                    <div data-skeleton-part="price" className="bg-border-subtle h-6 w-14 rounded-sm" />
+                    {/* Stands where the stock line will be: 20 px, like the line. */}
+                    <div data-skeleton-part="stock" className="bg-border-subtle h-5 w-24 rounded-sm" />
+                  </div>
+                  {/* Stands where Add will be: a 44 px pill. */}
+                  <div data-skeleton-part="button" className="bg-border-subtle rounded-pill h-11 w-full" />
+                </div>
+              ))}
+            </div>
           </div>
-          {/* Stands where the count line will be. */}
-          <div data-testid="catalogue-skeleton-count" className={COUNT_BOX} />
-          {/* The cards sit where the grid will be. */}
-          <div data-testid="catalogue-skeleton-grid" className={`${LIST_BOX} ${CARD_GRID_BOX}`}>
-            {Array.from({ length: SKELETON_ROWS }, (_, index) => (
-              // A skeleton card has the same box as an honor card, so the grid does not jump when it loads.
-              <div key={index} data-testid="catalogue-skeleton-row" className={CARD_BOX}>
-                {/* Stands where the picture will be: 112 px. */}
-                <div data-skeleton-part="picture" className="bg-border-subtle size-28 shrink-0 rounded-md" />
-                {/* Stands where the name will be. */}
-                <div data-skeleton-part="name" className="bg-border-subtle h-6 w-4/5 rounded-sm" />
-                {/* Stands where the Category label will be. */}
-                <div data-skeleton-part="label" className="bg-border-subtle h-4 w-20 rounded-sm" />
-                {/* Stands where the price will be. */}
-                <div data-skeleton-part="price" className="bg-border-subtle h-6 w-14 rounded-sm" />
-                {/* Stands where Add will be: a 44 px pill. */}
-                <div data-skeleton-part="button" className="bg-border-subtle rounded-pill h-11 w-full" />
-              </div>
-            ))}
-          </div>
-        </div>
+        </>
       )}
       {/* Announced politely when loading gives way to the count, the empty message or the error. */}
       <div aria-live="polite">
@@ -137,7 +147,7 @@ export function Catalogue({
           </p>
         )}
         {/* The error copy; the Try again button follows below. */}
-        {state.status === 'error' && <p className={`${COUNT_BOX} text-danger`}>{LOAD_ERROR_TEXT}</p>}
+        {state.status === 'error' && <p className={`${COUNT_BOX} text-danger`}>{loadErrorText(state.reason)}</p>}
       </div>
       {/* The only action on the screen, shown only after a failed load. */}
       {state.status === 'error' && (

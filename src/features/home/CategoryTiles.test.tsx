@@ -72,9 +72,21 @@ describe('CategoryTiles', () => {
     const loading = { state: { status: 'loading' }, showSkeleton: false, retry: () => {} } as CatalogueLoad
     const { rerender } = render(<CategoryTiles data={loading} />)
     expect(screen.queryByTestId('tile-skeleton')).not.toBeInTheDocument()
+    const region = screen.getByRole('status') // already in the page before it speaks
+    expect(region).toBeEmptyDOMElement()
     rerender(<CategoryTiles data={{ ...loading, showSkeleton: true }} />)
+    expect(screen.getByRole('status')).toBe(region) // the same node gained its text
     expect(screen.getAllByTestId('tile-skeleton')).toHaveLength(3)
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.getByText('Loading the shop').closest('[role="status"]')).not.toBeNull() // heard by a screen reader
+    expect(screen.getAllByTestId('tile-skeleton')[0]).toHaveClass('animate-skeleton') // pulsing, and no emblem loader
+  })
+
+  it('says the shop is busy, with Try again, when the load was refused', () => {
+    // catches: Home telling a rate-limited buyer to check their connection
+    render(<CategoryTiles data={{ state: { status: 'error', reason: 'busy' }, showSkeleton: false, retry: () => {} } as CatalogueLoad} />)
+    expect(screen.getByText('The shop is busy right now. Try again in a minute.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 
   it('shows the load error with Try again that calls retry', () => {

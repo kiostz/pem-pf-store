@@ -6,7 +6,9 @@ import {
   cartCount,
   clampQuantity,
   estimatedTotalCents,
+  exceedsStock,
   lineTotalCents,
+  quantityCap,
   resolveCart,
   setQuantity,
 } from './cart.ts' // code under test
@@ -110,5 +112,40 @@ describe('resolveCart unavailable honors', () => {
     // catches: a stored price surviving a price change
     const { lines } = resolveCart({ ants: 2 }, [honor('ants', 'Ants', 5)])
     expect(estimatedTotalCents(lines)).toBe(1000)
+  })
+})
+
+describe('quantityCap', () => {
+  it.each([
+    [3, 3],
+    [150, 99],
+    [0, 0],
+    [99, 99],
+  ])('caps stock %s at %s, the lower of 99 and the stock', (stock, expected) => {
+    // catches: a stepper that lets a buyer pick more than is left, or more than 99
+    expect(quantityCap(makeHonor('a', 'A', { stock }))).toBe(expected)
+  })
+})
+
+describe('clampQuantity with a max', () => {
+  it.each([
+    [50, 12, 12],
+    [5, 12, 5],
+    [5, 0, 0],
+  ])('turns %s into %s under a max of %s', (value, max, expected) => {
+    // catches: a typed number above the stock being kept
+    expect(clampQuantity(value, max)).toBe(expected)
+  })
+})
+
+describe('exceedsStock', () => {
+  it.each([
+    [2, 3, false],
+    [3, 3, false],
+    [4, 3, true],
+    [1, 0, true],
+  ])('says a line of %s with stock %s is over: %s', (quantity, stock, expected) => {
+    // catches: an exact-stock line blocked, or a Sold out line let through
+    expect(exceedsStock({ honor: makeHonor('a', 'A', { stock }), quantity })).toBe(expected)
   })
 })

@@ -1,10 +1,11 @@
-// Every hash route of the site, so each screen's address lives in one file and no feature imports another's.
+// Every hash route of the site, and the admin's address, so each screen's address lives in one file and no feature imports another's.
 
 export const HOME_HASH = '#/' // Home's address
 export const CATALOGUE_HASH = '#/shop' // the shop's address
 export const CART_HASH = '#/cart' // the cart screen's address
 export const DETAILS_HASH = '#/details' // the details page's address
 export const ORDER_SENT_HASH = '#/order-sent' // the confirmation page's address
+export const ADMIN_URL = 'https://pem-pathfinder-store-admin.pempathfinder.workers.dev/' // the live Admin Worker, the same in dev: Home's Admin link goes there
 
 /**
  * Builds the shop's address, with a category when one is picked.

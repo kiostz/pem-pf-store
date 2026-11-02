@@ -88,6 +88,26 @@ describe('DetailsScreen', () => {
     expect(window.location.hash).toBe('#/cart')
   })
 
+  it('goes to the cart when a line is above today\'s stock or Sold out, and leaves the stored cart alone', () => {
+    // catches: a typed address or reload carrying an over-stock line into an order
+    const low: Honor[] = [honor('knot-tying', 'Knot Tying', { stock: 2 }), honor('ants', 'Ants', { stock: 0 })] // two short of the cart
+    for (const quantities of [{ 'knot-tying': 3 }, { 'knot-tying': 1, ants: 1 }]) {
+      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, quantities })) // the saved cart
+      window.location.hash = '#/details' // as a buyer arrives
+      const { unmount } = render(
+        <CartProvider honors={low}>
+          <OrderFormProvider>
+            <DetailsScreen data={{ ...ready, state: { ...ready.state, honors: low } as typeof ready.state }} />
+          </OrderFormProvider>
+        </CartProvider>,
+      )
+      expect(window.location.hash).toBe('#/cart')
+      expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
+      expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY)!).quantities).toEqual(quantities)
+      unmount()
+    }
+  })
+
   it('stays on #/details while honors are loading', () => {
     // catches: a redirect before the data is known, which would send every reload to the cart
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}')
@@ -101,6 +121,47 @@ describe('DetailsScreen', () => {
     )
     expect(window.location.hash).toBe('#/details')
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
+  })
+
+  it('shows nothing but the heading for 300 ms, then a status region with the four fields and the captcha as skeleton bars', () => {
+    // catches: a heading over a blank page, a skeleton flash on a fast load, or fields that jump when the form arrives
+    const loading: CatalogueLoad = { state: { status: 'loading' }, showSkeleton: false, retry: () => {} }
+    const tree = (data: CatalogueLoad) => (
+      <CartProvider honors={null}>
+        <OrderFormProvider>
+          <DetailsScreen data={data} />
+        </OrderFormProvider>
+      </CartProvider>
+    ) // the page over a load
+    const { rerender } = render(tree(loading))
+    expect(screen.queryByTestId('details-skeleton')).not.toBeInTheDocument()
+    const region = screen.getByRole('status') // already in the page, so a screen reader hears the text arrive
+    expect(region).toBeEmptyDOMElement()
+    rerender(tree({ ...loading, showSkeleton: true }))
+    expect(screen.getByRole('status')).toBe(region) // the same node, not a new one
+    const skeleton = screen.getByTestId('details-skeleton')
+    expect(screen.getByText('Loading the shop')).toHaveAttribute('role', 'status') // said to a screen reader
+    expect(skeleton).toHaveClass('animate-skeleton')
+    expect(screen.getAllByTestId('details-skeleton-field')).toHaveLength(4) // name, email, phone, club
+    expect(screen.getAllByTestId('details-skeleton-field')[0].querySelector('.h-11')).not.toBeNull() // the real input's 44 px
+    expect(screen.getByTestId('details-skeleton-captcha')).toBeInTheDocument()
+    rerender(tree({ ...loading, state: { status: 'error', reason: 'failed' } }))
+    expect(screen.queryByTestId('details-skeleton')).not.toBeInTheDocument() // gone on error
+  })
+
+  it('says the shop is busy, with Try again, when the load was refused', () => {
+    // catches: the details page telling a rate-limited buyer to check their connection
+    const retry = vi.fn() // counts the retry
+    render(
+      <CartProvider honors={null}>
+        <OrderFormProvider>
+          <DetailsScreen data={{ state: { status: 'error', reason: 'busy' }, showSkeleton: false, retry }} />
+        </OrderFormProvider>
+      </CartProvider>,
+    )
+    expect(screen.getByText('The shop is busy right now. Try again in a minute.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(retry).toHaveBeenCalledTimes(1)
   })
 
   it('leaves for the cart and drops the form when the last orderable honor leaves the shop while the page is open', () => {

@@ -3,6 +3,7 @@
 import { useState } from 'react' // the stand-in address
 import { act, fireEvent, render, screen, within } from '@testing-library/react' // render and query the screen
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
+import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // where the cart is kept
 import { CartProvider } from '@/features/cart/CartProvider.tsx' // the cart state the steppers edit
 import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
 import { honor as makeHonor, shopBody, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
@@ -188,8 +189,8 @@ describe('Catalogue', () => {
     expect(await screen.findByText('Nothing is in the shop yet. Check back soon.')).toBeInTheDocument()
   })
 
-  it('shows nothing for 300 ms, then the toolbar box, the count line box and 6 card shapes with picture, name, label, price and button bars', () => {
-    // catches: a skeleton flash on fast loads, or a skeleton missing the count line or label bar so rows jump when data arrives
+  it('shows nothing for 300 ms, then the toolbar box, the count line box and 6 card shapes with picture, name, label, price, stock and button bars', () => {
+    // catches: a skeleton flash on fast loads, or a skeleton missing the count line, label or stock bar so rows jump when data arrives
     vi.stubGlobal(
       'fetch',
       vi.fn(() => new Promise(() => {})),
@@ -208,8 +209,33 @@ describe('Catalogue', () => {
     for (const row of rows) {
       expect(
         Array.from(row.querySelectorAll('[data-skeleton-part]')).map((part) => part.getAttribute('data-skeleton-part')),
-      ).toEqual(['picture', 'name', 'label', 'price', 'button']) // the card's five parts, top to bottom
+      ).toEqual(['picture', 'name', 'label', 'price', 'stock', 'button']) // the card's six parts, top to bottom, with the stock line's bar so nothing shifts when stock arrives
     }
+  })
+
+  it('puts the skeleton in a status region that says "Loading the shop", pulsing, and removes it when the shop is ready', async () => {
+    // catches: a skeleton a screen reader never hears about, a static grey block, or a skeleton left over after the data arrives
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    ) // requests that never answer
+    const first = render(<CatalogueWithCart />)
+    const status = screen.getByRole('status') // in the page from the first paint, empty
+    expect(status).toBeEmptyDOMElement()
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
+    expect(screen.getByRole('status')).toBe(status) // the same node, so the text is announced
+    expect(status).toHaveTextContent('Loading the shop')
+    expect(screen.getByTestId('catalogue-skeleton')).toHaveAttribute('aria-hidden', 'true') // the bars are for the eye
+    expect(screen.getByTestId('catalogue-skeleton')).toHaveClass('animate-skeleton')
+    first.unmount()
+    vi.unstubAllGlobals() // drop the never-answering fetch
+    serve([honor('Knot Tying', 'Recreation')])
+    render(<CatalogueWithCart />)
+    await screen.findByText('Knot Tying')
+    expect(screen.queryByText('Loading the shop')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('catalogue-skeleton')).not.toBeInTheDocument()
   })
 
   it('gives the skeleton count box and the real count line the same box classes', async () => {
@@ -471,5 +497,91 @@ describe('Catalogue', () => {
       expect(onSelect).toHaveBeenLastCalledWith(null)
       expect(screen.getByRole('searchbox', { name: 'Search items' })).toHaveValue('')
     })
+  })
+})
+
+describe('Catalogue stock', () => {
+  /**
+   * Builds an honor with a stock.
+   * @param name display name
+   * @param stock how many are left
+   * @return the honor
+   */
+  const stocked = (name: string, stock: number) => makeHonor(name.toLowerCase().replace(/\W+/g, '-'), name, { stock })
+
+  it('shows "Stock: N left" under the price, with a thousands separator, on every card', async () => {
+    // catches: a missing stock line, or 1200 written without its separator
+    serve([stocked('Knot Tying', 12), stocked('Ants', 1200), stocked('Birds', 0)])
+    render(<CatalogueWithCart />)
+    expect(await screen.findByText('Stock: 12 left')).toBeInTheDocument()
+    expect(screen.getByText('Stock: 1,200 left')).toBeInTheDocument()
+    expect(screen.getByText('Stock: 0 left')).toBeInTheDocument() // a Sold out card keeps its stock line
+  })
+
+  it('shows a stock-0 card Sold out with no Add, greyed, and no new tab stop', async () => {
+    // catches: an Add on a Sold out card, a card not greyed, or a focusable Sold out pill
+    serve([stocked('Ants', 0), stocked('Knot Tying', 12)])
+    render(<CatalogueWithCart />)
+    await screen.findByText('Knot Tying')
+    expect(screen.queryByRole('button', { name: 'Add Ants' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add Knot Tying' })).toBeInTheDocument()
+    const card = screen.getByText('Ants').closest('li')! // the Sold out card
+    const pill = within(card).getByText('Sold out')
+    expect(pill.tagName).toBe('SPAN') // not a control
+    expect(within(card).queryAllByRole('button')).toHaveLength(0)
+    expect(card.querySelector('.grayscale.opacity-50')).not.toBeNull() // the picture, greyed
+    expect(screen.getAllByRole('button').filter((button) => card.contains(button))).toHaveLength(0)
+    expect(within(card).getByText('Ants')).not.toHaveClass('opacity-50') // the text keeps full strength for contrast
+  })
+
+  it('stops + at the stock with its reason and commits a typed number as the stock', async () => {
+    // catches: a card that orders more than is left
+    serve([stocked('Knot Tying', 3)])
+    render(<CatalogueWithCart />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
+    fireEvent.click(screen.getByRole('button', { name: 'One more Knot Tying' }))
+    fireEvent.click(screen.getByRole('button', { name: 'One more Knot Tying' }))
+    expect(screen.getByRole('button', { name: '3 is the most of Knot Tying' })).toHaveAttribute('aria-disabled', 'true')
+    const field = screen.getByRole('textbox', { name: 'Quantity of Knot Tying' })
+    fireEvent.change(field, { target: { value: '50' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(field).toHaveValue('3')
+  })
+
+  it('caps at 99 when the stock is 150', async () => {
+    // catches: the stock replacing the 99 limit
+    serve([stocked('Knot Tying', 150)])
+    render(<CatalogueWithCart />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
+    const field = screen.getByRole('textbox', { name: 'Quantity of Knot Tying' })
+    fireEvent.change(field, { target: { value: '120' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(field).toHaveValue('99')
+  })
+
+  it('shows Sold out on the card of an item in the cart whose stock is now 0, and leaves the stored cart alone', async () => {
+    // catches: a stepper on a Sold out card, or the shop quietly rewriting the buyer's cart
+    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, quantities: { 'knot-tying': 4 } })) // the saved cart
+    serve([stocked('Knot Tying', 0)])
+    render(<CatalogueWithCart />)
+    expect(await screen.findByText('Sold out')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(window.localStorage.getItem(CART_STORAGE_KEY)).toContain('"knot-tying":4')
+  })
+
+  it('shows no skeleton once the shop is ready', async () => {
+    // catches: a skeleton left under the grid
+    serve([stocked('Knot Tying', 12)])
+    render(<CatalogueWithCart />)
+    await screen.findByText('Knot Tying')
+    expect(screen.queryByTestId('catalogue-skeleton')).not.toBeInTheDocument()
+  })
+
+  it('says the shop is busy, with Try again, after a refused (429) load', async () => {
+    // catches: a rate-limited buyer told the connection is bad
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":"rate-limited"}', { status: 429 })))
+    render(<CatalogueWithCart />)
+    expect(await screen.findByText('The shop is busy right now. Try again in a minute.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 })

@@ -23,13 +23,32 @@ export type CartQuantities = Record<string, number>
 export type OrderLine = { honor: Honor; quantity: number }
 
 /**
- * Forces a quantity into the whole numbers 0 to 99.
+ * Forces a quantity into the whole numbers 0 to a maximum.
  * @param value any number
- * @return the whole part, never below 0 or above 99; NaN gives 0
+ * @param max the most allowed, 99 unless a stock is lower
+ * @return the whole part, never below 0 or above the maximum; NaN gives 0
  */
-export function clampQuantity(value: number): number {
+export function clampQuantity(value: number, max: number = MAX_QUANTITY): number {
   if (Number.isNaN(value)) return 0 // nothing usable typed
-  return Math.min(MAX_QUANTITY, Math.max(0, Math.floor(value))) // whole numbers inside the limits
+  return Math.min(max, Math.max(0, Math.floor(value))) // whole numbers inside the limits
+}
+
+/**
+ * Gives the most of one honor a buyer may pick.
+ * @param honor the honor
+ * @return the lower of 99 and its stock
+ */
+export function quantityCap(honor: Honor): number {
+  return Math.min(MAX_QUANTITY, honor.stock) // never more than is left, never more than 99
+}
+
+/**
+ * Tells whether an order line asks for more than is left, which includes any quantity of a Sold out honor.
+ * @param line the order line
+ * @return true when the quantity is above the stock
+ */
+export function exceedsStock(line: OrderLine): boolean {
+  return line.quantity > line.honor.stock // equal to the stock is still fine
 }
 
 /**

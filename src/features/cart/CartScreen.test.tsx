@@ -506,12 +506,24 @@ describe('CartScreen empty, loading and error', () => {
     expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument()
     expect(screen.queryAllByTestId('cart-skeleton-line')).toHaveLength(0)
     expect(screen.queryByText('Your cart is empty')).not.toBeInTheDocument() // not empty, only unknown
+    const region = screen.getByRole('status') // the cart's one status region, already in the page
+    expect(region).toBeEmptyDOMElement()
     rerender(tree({ ...loading, showSkeleton: true }))
+    expect(screen.getByRole('status')).toBe(region) // it gains its text, so a screen reader announces it
     const lines = screen.getAllByTestId('cart-skeleton-line')
     expect(lines).toHaveLength(3)
     expect(lines[0].className).toContain('min-h-20') // the real row's 80 px
     expect(screen.queryByText(/^Estimated total/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Checkout' })).not.toBeInTheDocument()
+    expect(screen.getByText('Loading the shop')).toHaveAttribute('role', 'status') // said to a screen reader, seen by no one
+    expect(lines[0].closest('.animate-skeleton')).not.toBeNull() // pulsing
+  })
+
+  it('says the shop is busy, with Try again, when the load was refused', () => {
+    // catches: the cart telling a rate-limited buyer to check their connection
+    renderScreen({ 'knot-tying': 1 }, { state: { status: 'error', reason: 'busy' }, showSkeleton: false, retry: () => {} })
+    expect(screen.getByText('The shop is busy right now. Try again in a minute.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 
   it('shows the catalogue error copy and Try again, and no bar, when the load failed', () => {
@@ -568,5 +580,110 @@ describe('CartScreen floating pill', () => {
     // catches: the last line hidden behind the floating pill
     renderScreen({ ants: 1 })
     expect(screen.getByRole('heading', { name: 'Your cart' }).parentElement).toHaveClass('pb-24')
+  })
+})
+
+describe('CartScreen stock', () => {
+  const stocked: Honor[] = [
+    honor('knot-tying', 'Knot Tying', { stock: 2 }), // below what the cart holds
+    honor('ants', 'Ants', { stock: 0 }), // Sold out
+    honor('birds', 'Birds', { stock: 12 }), // plenty
+  ] // today's shop
+
+  /**
+   * Renders the screen over a stored cart and these honors, in the Details-redirect-free way the cart tests use.
+   * @param quantities honor id to quantity, written to storage first
+   * @param list the honors the shop lists
+   * @return the load it was given
+   */
+  function renderStocked(quantities: Record<string, number>, list: Honor[] = stocked) {
+    const data: CatalogueLoad = {
+      state: { status: 'ready', honors: list, settings: { currency: 'MYR' }, clubs: [] },
+      showSkeleton: false,
+      retry: () => {},
+    } // the load as the app hands it over
+    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, quantities })) // the saved cart
+    render(
+      <CartProvider honors={list}>
+        <OrderFormProvider>
+          <CartScreen data={data} onBack={() => {}} />
+        </OrderFormProvider>
+      </CartProvider>,
+    )
+    return data
+  }
+
+  it('kills + at the stock on a line at the stock', () => {
+    // catches: a cart line that lets the buyer pass today's stock
+    renderStocked({ birds: 12 })
+    expect(screen.getByRole('button', { name: '12 is the most of Birds' })).toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('marks a line above the stock "Only 2 left" and a Sold out line "Sold out", in danger text, keeping the stored cart', () => {
+    // catches: the shop quietly lowering a buyer's cart, or a stale line with no word saying why
+    renderStocked({ 'knot-tying': 12, ants: 3 })
+    const knot = screen.getByText('Knot Tying').closest('li')!
+    const ants = screen.getByText('Ants').closest('li')!
+    expect(within(knot).getByText('Only 2 left')).toHaveClass('text-danger')
+    expect(within(ants).getByText('Sold out')).toHaveClass('text-danger')
+    expect(within(knot).getByRole('button', { name: '2 is the most of Knot Tying' })).toHaveAttribute('aria-disabled', 'true')
+    expect(within(knot).getByRole('textbox', { name: 'Quantity of Knot Tying' })).toHaveValue('12') // the quantity is kept
+    expect(storedCart()).toEqual({ 'knot-tying': 12, ants: 3 })
+  })
+
+  it('shows the Checkout note for a marked line, and Checkout moves focus to the first marked line without opening Details', () => {
+    // catches: an over-stock order getting through, a dead grey button, or Checkout doing nothing visible
+    renderStocked({ 'knot-tying': 12, ants: 3, birds: 1 })
+    expect(screen.getByText('Lower or remove the items marked in red to check out.')).toBeInTheDocument()
+    const checkout = screen.getByRole('button', { name: 'Checkout' })
+    expect(checkout).not.toHaveAttribute('aria-disabled') // not a dead button
+    fireEvent.click(checkout)
+    fireEvent.click(checkout) // a second press must still work: the guard is for a real checkout only
+    expect(window.location.hash).not.toBe('#/details')
+    const first = screen.getByText('Ants').closest('li')! // A to Z: Ants is the first marked line
+    expect(first.contains(document.activeElement)).toBe(true)
+    expect(storedCart()).toEqual({ 'knot-tying': 12, ants: 3, birds: 1 })
+  })
+
+  it('clears the note once the line is lowered to the stock, and Checkout then opens Details', () => {
+    // catches: a note that stays after the fix, or a Checkout that stays blocked
+    renderStocked({ 'knot-tying': 3 })
+    fireEvent.click(screen.getByRole('button', { name: 'One fewer Knot Tying' })) // 3 to 2, the stock
+    expect(screen.queryByText('Lower or remove the items marked in red to check out.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Only 2 left')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Checkout' }))
+    expect(window.location.hash).toBe('#/details')
+  })
+
+  it('shows no note and no mark when every line is within the stock', () => {
+    // catches: the warning showing on a healthy cart
+    renderStocked({ 'knot-tying': 2, birds: 12 })
+    expect(screen.queryByText(/marked in red/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Only \d+ left/)).not.toBeInTheDocument()
+  })
+
+  it('still lets the trash remove a marked line', () => {
+    // catches: a buyer who cannot get a Sold out line out of the cart
+    renderStocked({ ants: 1 })
+    removeLine('Ants')
+    expect(storedCart()).toEqual({})
+  })
+
+  it('shows the trash on a Sold out line at any quantity, so one tap removes it', () => {
+    // catches: a Sold out line at 3 that needs three minus taps, or a trash that the buyer cannot find
+    renderStocked({ ants: 3, 'knot-tying': 12 })
+    const ants = screen.getByText('Ants').closest('li')!
+    expect(within(ants).queryByRole('button', { name: 'One fewer Ants' })).not.toBeInTheDocument() // the trash takes the minus's place
+    fireEvent.click(within(ants).getByRole('button', { name: 'Remove Ants' }))
+    expect(storedCart()).toEqual({ 'knot-tying': 12 })
+    const knot = screen.getByText('Knot Tying').closest('li')!
+    expect(within(knot).queryByRole('button', { name: 'Remove Knot Tying' })).not.toBeInTheDocument() // an over-stock line that is not Sold out keeps its minus
+    expect(within(knot).getByRole('button', { name: 'One fewer Knot Tying' })).toBeInTheDocument()
+  })
+
+  it('shows "Item no longer in the shop" for a gone line', () => {
+    // catches: a Hidden item (absent from the shop) showing a blank or a stock mark
+    renderStocked({ 'africa-lore': 1, birds: 1 })
+    expect(screen.getByText('Item no longer in the shop')).toBeInTheDocument()
   })
 })

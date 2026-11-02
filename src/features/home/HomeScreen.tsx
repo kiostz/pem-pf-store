@@ -1,6 +1,6 @@
 // Home, the landing page: the welcome band with its way into the shop, the category tiles and the three ordering steps, so a buyer arriving from a club link knows what to do first.
 
-import { CATALOGUE_HASH } from '@/shared/routes.ts' // the shop's address
+import { ADMIN_URL, CATALOGUE_HASH } from '@/shared/routes.ts' // the shop's address and the live admin's
 import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' // the load, made by the app
 import { CategoryTiles } from './CategoryTiles.tsx' // the tile row
 import { EmblemTrace } from './EmblemTrace.tsx' // the drawing behind the band's text
@@ -86,6 +86,13 @@ export function HomeScreen({ data }: { data: CatalogueLoad }) {
             ))}
           </ol>
         </section>
+        {/* The admin's way in: quiet, last on the page, 44 px tall, in this tab. */}
+        <a
+          href={ADMIN_URL} // the live Admin Worker, in dev too
+          className="text-text-muted focus-visible:outline-focus-ring rounded-pill -ms-2 flex min-h-11 items-center self-start px-2 text-sm font-medium underline focus-visible:outline-2 focus-visible:outline-offset-2 print:hidden" // muted text link, focus ring, off the paper
+        >
+          Admin
+        </a>
       </div>
     </>
   )
