@@ -4,6 +4,8 @@ import { useState } from 'react' // the stand-in address
 import { act, fireEvent, render, screen, within } from '@testing-library/react' // render and query the screen
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CartProvider } from '@/features/cart/CartProvider.tsx' // the cart state the steppers edit
+import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import { honor as makeHonor, shopBody, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
 import { Catalogue } from './Catalogue.tsx' // code under test
 import { useCatalogueData } from './use-catalogue-data.ts' // the load the catalogue now receives
 
@@ -29,41 +31,22 @@ function CatalogueWithCart({ initialCategory = null, onSelect }: { initialCatego
 }
 
 /**
- * Builds one honor for the fake file.
+ * Builds one honor for the fake shop.
  * @param name display name
  * @param category its category
- * @param enabled whether it is switched on
  * @param image the picture path, or null for the category mark
- * @return an honor shaped like honors.json
+ * @return an honor as the shop lists it
  */
-function honor(name: string, category: string, enabled = true, image: string | null = null) {
-  return {
-    id: name.toLowerCase().replace(/\W+/g, '-'),
-    name,
-    category,
-    skillLevel: null,
-    issuedBy: 'General Conference',
-    enabled,
-    price: 4,
-    image,
-  } // image null by default: the row shows its category mark
+function honor(name: string, category: string, image: string | null = null) {
+  return makeHonor(name.toLowerCase().replace(/\W+/g, '-'), name, { category, image }) // image null by default: the row shows its category mark
 }
 
 /**
- * Makes the global fetch answer with honors and settings.
- * @param honors the body of honors.json
+ * Makes the global fetch answer with the /shop body for these honors.
+ * @param honors the honors the shop lists
  */
-function serve(honors: unknown) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) =>
-      url.endsWith('clubs.json')
-        ? new Response('[]')
-        : url.endsWith('settings.json')
-          ? new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))
-          : new Response(JSON.stringify(honors)),
-    ),
-  ) // 200 for both files
+function serve(honors: Honor[]) {
+  vi.stubGlobal('fetch', shopFetch(honors)) // one answer for the one request
 }
 
 const scrollIntoView = vi.fn() // stands in for the scroll jsdom cannot do
@@ -132,14 +115,6 @@ describe('Catalogue', () => {
     expect(label).not.toHaveClass('text-text-muted')
   })
 
-  it('leaves out switched-off honors', async () => {
-    // catches: hidden honors being orderable
-    serve([honor('Knot Tying', 'Recreation'), honor('Secret Honor', 'Recreation', false)])
-    render(<CatalogueWithCart />)
-    expect(await screen.findByText('Knot Tying')).toBeInTheDocument()
-    expect(screen.queryByText('Secret Honor')).not.toBeInTheDocument()
-  })
-
   it('shows each honor name and its price', async () => {
     // catches: a missing or unformatted price
     serve([honor('Knot Tying', 'Recreation')])
@@ -179,15 +154,15 @@ describe('Catalogue', () => {
   })
 
   it('counts the honors, singular for one', async () => {
-    // catches: "1 honors" and a count that includes switched-off honors
-    serve([honor('Knot Tying', 'Recreation'), honor('Off', 'Recreation', false)])
+    // catches: "1 honors" and a count that includes more than the loaded honors
+    serve([honor('Knot Tying', 'Recreation')])
     render(<CatalogueWithCart />)
     expect(await screen.findByText('1 item')).toBeInTheDocument()
   })
 
-  it('renders all 299 switched-on honors among 422 at once, with no Load more and lazy pictures', async () => {
+  it('renders all 299 honors at once, with no Load more and lazy pictures', async () => {
     // catches: pagination or a Load more button creeping back, rows dropped at full size, or pictures that load eagerly
-    serve(Array.from({ length: 422 }, (_, i) => honor(`Honor ${i}`, 'Nature', i < 299, `patches/${i}.png`)))
+    serve(Array.from({ length: 299 }, (_, i) => honor(`Honor ${i}`, 'Nature', `patches/${i}.png`)))
     render(<CatalogueWithCart />)
     expect(await screen.findByText('299 items')).toBeInTheDocument()
     expect(screen.getAllByRole('listitem')).toHaveLength(299)
@@ -206,9 +181,9 @@ describe('Catalogue', () => {
     expect(screen.getAllByTestId('category-mark')).toHaveLength(3)
   })
 
-  it('says so when no honor is switched on', async () => {
+  it('says so when the shop lists no honor', async () => {
     // catches: a blank page when the list is empty
-    serve([honor('Off', 'Nature', false)])
+    serve([])
     render(<CatalogueWithCart />)
     expect(await screen.findByText('Nothing is in the shop yet. Check back soon.')).toBeInTheDocument()
   })
@@ -263,15 +238,8 @@ describe('Catalogue', () => {
     // catches: a dead end after a failed load
     const fetchFn = vi
       .fn()
-      .mockRejectedValueOnce(new TypeError('Failed to fetch')) // honors fail first
-      .mockResolvedValueOnce(new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))) // settings of the first attempt
-      .mockImplementation(async (url: string) =>
-        url.endsWith('clubs.json')
-          ? new Response('[]')
-          : url.endsWith('settings.json')
-            ? new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))
-            : new Response(JSON.stringify([honor('Knot Tying', 'Recreation')])),
-      ) // the retry succeeds
+      .mockRejectedValueOnce(new TypeError('Failed to fetch')) // the first request fails
+      .mockImplementation(async () => new Response(JSON.stringify(shopBody([honor('Knot Tying', 'Recreation')])))) // the retry succeeds
     vi.stubGlobal('fetch', fetchFn)
     render(<CatalogueWithCart />)
     expect(
@@ -293,9 +261,9 @@ describe('Catalogue', () => {
     ) // the count line's box
   })
 
-  it('keeps the toolbar space when no honor is switched on', async () => {
+  it('keeps the toolbar space when the shop lists no honor', async () => {
     // catches: the empty message landing 61 px above where the skeleton stood
-    serve([honor('Off', 'Nature', false)])
+    serve([])
     render(<CatalogueWithCart />)
     await screen.findByText('Nothing is in the shop yet. Check back soon.')
     expect(screen.getByTestId('catalogue-toolbar-space')).toBeInTheDocument()
@@ -318,7 +286,6 @@ describe('Catalogue', () => {
         honor('Braiding - Advanced', 'Arts and Crafts'),
         honor('Leaves', 'Nature'),
         honor('Ants', 'Nature'),
-        honor('Hidden', 'Vocational', false),
       ])
       render(<CatalogueWithCart />)
       await screen.findByText('Ants')
@@ -366,7 +333,7 @@ describe('Catalogue', () => {
     })
 
     it('lists All categories and the categories A to Z, with All categories chosen at the start', async () => {
-      // catches: an option for a switched-off category, wrong order, or no starting selection
+      // catches: an option for a category the shop lacks, wrong order, or no starting selection
       await renderMixed()
       const control = screen.getByRole('combobox', { name: 'Category' })
       expect(

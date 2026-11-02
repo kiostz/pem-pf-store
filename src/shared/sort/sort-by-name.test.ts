@@ -15,9 +15,7 @@ function honor(name: string, category = 'Nature'): Honor {
     id: name.toLowerCase().replace(/\W+/g, '-'),
     name,
     category,
-    skillLevel: 1,
-    issuedBy: 'General Conference',
-    enabled: true,
+    stock: 10,
     price: 4,
     image: null,
   } // fixed values for the fields the sort ignores

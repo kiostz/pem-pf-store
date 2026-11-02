@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart's key
 import { SENT_ORDER_STORAGE_KEY } from '@/features/order/sent-order-storage.ts' // the stored sent order's key
+import { honor, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
 import { App } from './App.tsx' // code under test
 
 // The real captcha loads hCaptcha's script, which a test must not do; this stand-in ticks on demand.
@@ -23,44 +24,17 @@ afterEach(() => {
 })
 
 /**
- * Serves the data files (Knot Tying on, Africa Lore off) and answers Web3Forms with the given function.
+ * Serves the shop (Knot Tying listed, Africa Lore not) and answers Web3Forms with the given function.
  * @param web3forms what Web3Forms does on each call
  * @return the fetch stub, to read the Web3Forms calls
  */
 function serve(web3forms: () => Promise<Response>) {
-  /**
-   * Builds one honor at RM 4.
-   * @param id the honor id
-   * @param name the honor name
-   * @param enabled whether it is switched on
-   * @return the honor
-   */
-  const honor = (id: string, name: string, enabled: boolean) => ({
-    id,
-    name,
-    category: 'Recreation',
-    skillLevel: null,
-    issuedBy: 'General Conference',
-    enabled,
-    price: 4,
-    image: null,
-  }) // one honor
-  const fetchFn = vi.fn(async (url: string) =>
-    url.includes('web3forms')
-      ? web3forms()
-      : url.endsWith('clubs.json')
-        ? new Response('[]')
-        : url.endsWith('settings.json')
-          ? new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))
-          : new Response(
-              JSON.stringify([honor('knot-tying', 'Knot Tying', true), honor('africa-lore', 'Africa Lore', false)]),
-            ),
-  ) // data files and Web3Forms
+  const fetchFn = shopFetch([honor('knot-tying', 'Knot Tying')], [], (url) => (url.includes('web3forms') ? web3forms() : undefined)) // Web3Forms answers as told, the shop as the shop
   vi.stubGlobal('fetch', fetchFn)
   return fetchFn
 }
 
-/** Saves a cart holding an orderable line, a switched-off one and one the data lacks. */
+/** Saves a cart holding an orderable line and two the shop does not list. */
 function saveMixedCart() {
   window.localStorage.setItem(
     CART_STORAGE_KEY,

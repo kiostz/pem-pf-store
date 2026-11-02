@@ -17,6 +17,15 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   // Keep `/*! */` licence comments (Tabler's MIT notice) in the built JS.
   build: { rolldownOptions: { output: { comments: { legal: true } } } },
+  // Dev only: `/api/...` goes to the local API Worker (`npm run dev` in workers/, port 8787), so the shop is same-origin and the Worker's CORS stays untouched.
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8787', // the local API Worker
+        rewrite: (path) => path.replace(/^\/api/, ''), // the Worker has no /api prefix
+      },
+    },
+  },
   // `@` resolves to src, mirroring the tsconfig path.
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },

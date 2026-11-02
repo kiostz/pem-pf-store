@@ -1,22 +1,23 @@
-// Loads the honors, the settings and the clubs as one load for the catalogue, with the loader delay, retry and stale-attempt guard, so every screen that lists honors shares one pattern.
+// Loads the honors, the settings and the clubs from the API Worker's one /shop request for the catalogue, with the loader delay, the 30 second cap, retry and stale-attempt guard, so every screen that lists honors shares one pattern.
 
 import { useCallback, useEffect, useState } from 'react' // state and the load effect
-import { loadClubs, loadHonors, loadSettings } from '@/shared/data/load.ts' // read the three data files
-import type { ClubList, Honor, Settings } from '@/shared/data/types.ts' // the shapes of the three files
+import { loadShop, ShopLoadError, type ShopLoadFailure } from '@/shared/data/load.ts' // the one request and its error kinds
+import type { ClubList, Honor, ShopSettings } from '@/shared/data/types.ts' // the shapes of the shop's data
 
 const LOADER_DELAY_MS = 300 // how long a load runs before the skeleton may show
+const LOAD_TIMEOUT_MS = 30_000 // how long a load may run before it counts as failed
 
 // What the page knows about the load.
 export type CatalogueData =
   | { status: 'loading' } // the request is running
-  | { status: 'error' } // any file failed
-  | { status: 'ready'; honors: Honor[]; settings: Settings; clubs: ClubList } // all three files arrived
+  | { status: 'error'; reason: ShopLoadFailure } // busy (429) or failed (anything else, including the 30 s cap)
+  | { status: 'ready'; honors: Honor[]; settings: ShopSettings; clubs: ClubList } // the answer arrived
 
 // What useCatalogueData returns, passed to every screen that lists honors.
 export type CatalogueLoad = ReturnType<typeof useCatalogueData>
 
 /**
- * Loads honors, settings and clubs together; any failing is one error.
+ * Loads honors, settings and clubs in one request; any failure is one error with a reason.
  * @return the load state, whether the skeleton may show, and retry to load again
  */
 export function useCatalogueData(): {
@@ -28,22 +29,35 @@ export function useCatalogueData(): {
   const [attempt, setAttempt] = useState(0) // bumped by retry to run the load again
   const [loaderDelayPassed, setLoaderDelayPassed] = useState(false) // true once the loader delay has passed
 
-  // Load both files on mount and on every retry.
+  // Load the shop on mount and on every retry, giving up after the cap.
   useEffect(() => {
-    let cancelled = false // ignore an answer that arrives after unmount or a newer attempt
-    Promise.all([loadHonors(), loadSettings(), loadClubs()]) // all three files, one result
-      .then(([honors, settings, clubs]) => {
-        // all three files arrived
-        if (!cancelled) setState({ status: 'ready', honors, settings, clubs }) // show the data unless this attempt is stale
+    let finished = false // true once this attempt has an outcome, a cancel or the cap, so a later answer is ignored
+    const controller = new AbortController() // aborts the request on the cap, a retry or unmount
+    const timer = setTimeout(() => {
+      // the cap passed with no answer
+      if (finished) return // already answered
+      finished = true // nothing later may change the screen
+      controller.abort() // stop the request
+      console.error('Could not load the catalogue data: timed out') // visible in the console, no buyer data involved
+      setState({ status: 'error', reason: 'failed' }) // show the error
+    }, LOAD_TIMEOUT_MS)
+    loadShop(fetch, controller.signal) // the one request
+      .then(({ honors, settings, clubs }) => {
+        // the answer arrived
+        if (!finished) setState({ status: 'ready', honors, settings, clubs }) // show the data unless this attempt is over
       })
       .catch((error: unknown) => {
-        // any file failed
+        // the request failed
+        if (finished) return // the cap, a retry or unmount already ended this attempt
         console.error('Could not load the catalogue data', error) // visible in the console, no buyer data involved
-        if (!cancelled) setState({ status: 'error' }) // show the error unless this attempt is stale
+        setState({ status: 'error', reason: error instanceof ShopLoadError ? error.kind : 'failed' }) // busy or failed
       })
+      .finally(() => clearTimeout(timer)) // the cap is no longer needed
     return () => {
       // cleanup: runs on unmount and before the next attempt
-      cancelled = true // stop this attempt from touching state
+      finished = true // stop this attempt from touching state
+      clearTimeout(timer) // no cap for a dead attempt
+      controller.abort() // stop its request
     }
   }, [attempt]) // run again on every retry
 

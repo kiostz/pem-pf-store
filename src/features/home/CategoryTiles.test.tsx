@@ -1,8 +1,9 @@
-// Tests for CategoryTiles: one coloured link per switched-on category, and the row's loading, error and empty states.
+// Tests for CategoryTiles: one coloured link per category, and the row's loading, error and empty states.
 
 import { fireEvent, render, screen } from '@testing-library/react' // render and query
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
 import type { Honor } from '@/shared/data/types.ts' // the shape of an item
+import { honor as makeHonor } from '@/test/shop-fetch.ts' // the honor builder
 import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' // the load the tiles receive
 import { CategoryTiles } from './CategoryTiles.tsx' // code under test
 
@@ -10,20 +11,10 @@ import { CategoryTiles } from './CategoryTiles.tsx' // code under test
  * Builds one item.
  * @param name its name
  * @param category its category
- * @param enabled whether it is switched on
  * @return the item
  */
-function honor(name: string, category: string, enabled = true): Honor {
-  return {
-    id: name.toLowerCase(),
-    name,
-    category,
-    skillLevel: null,
-    issuedBy: 'General Conference',
-    enabled,
-    price: 4,
-    image: null,
-  } as Honor
+function honor(name: string, category: string): Honor {
+  return makeHonor(name.toLowerCase(), name, { category }) // the id from the name
 }
 
 /**
@@ -33,7 +24,7 @@ function honor(name: string, category: string, enabled = true): Honor {
  */
 function ready(honors: Honor[]): CatalogueLoad {
   return {
-    state: { status: 'ready', honors, settings: { currency: 'MYR', defaultPrice: 4 }, clubs: [] },
+    state: { status: 'ready', honors, settings: { currency: 'MYR' }, clubs: [] },
     showSkeleton: false,
     retry: () => {},
   } as CatalogueLoad
@@ -47,14 +38,13 @@ afterEach(() => {
 })
 
 describe('CategoryTiles', () => {
-  it('draws one link per switched-on category, A to Z, named by the category, with the address of the filtered shop', () => {
-    // catches: a tile for a switched-off category, wrong order, or a link that does not carry the category
+  it('draws one link per category, A to Z, named by the category, with the address of the filtered shop', () => {
+    // catches: a tile for a category the shop lacks, wrong order, or a link that does not carry the category
     render(
       <CategoryTiles
         data={ready([
           honor('Leaves', 'Nature'),
           honor('Ants', 'Arts and Crafts'),
-          honor('Old', 'Vocational', false),
           honor('Tie', 'Recreation'),
         ])}
       />,
@@ -90,15 +80,15 @@ describe('CategoryTiles', () => {
   it('shows the load error with Try again that calls retry', () => {
     // catches: a failed load with no way to retry
     const retry = vi.fn()
-    render(<CategoryTiles data={{ state: { status: 'error' }, showSkeleton: false, retry } as CatalogueLoad} />)
+    render(<CategoryTiles data={{ state: { status: 'error', reason: 'failed' }, showSkeleton: false, retry } as CatalogueLoad} />)
     expect(screen.getByText("We couldn't load the shop. Check your connection and try again.")).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(retry).toHaveBeenCalledTimes(1)
   })
 
-  it('says nothing is in the shop yet, with no links, when no item is switched on', () => {
+  it('says nothing is in the shop yet, with no links, when the shop lists no item', () => {
     // catches: an empty row with no explanation
-    render(<CategoryTiles data={ready([honor('Old', 'Nature', false)])} />)
+    render(<CategoryTiles data={ready([])} />)
     expect(screen.getByText('Nothing is in the shop yet. Check back soon.')).toBeInTheDocument()
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })

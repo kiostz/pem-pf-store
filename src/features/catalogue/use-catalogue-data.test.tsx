@@ -1,49 +1,37 @@
-// Tests for useCatalogueData: the honors and settings load, loader delay, retry and stale-attempt guard, with fetch mocked at the boundary.
+// Tests for useCatalogueData: the one /shop load, loader delay, 30 s cap, retry and stale-attempt guard, with fetch mocked at the boundary.
 
 import { StrictMode } from 'react' // StrictMode runs the load effect twice, leaving one stale attempt
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react' // run the hook
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
+import { honor, shopBody } from '@/test/shop-fetch.ts' // an honor and the /shop body
 import { useCatalogueData } from './use-catalogue-data.ts' // code under test
 
-const honorsBody = [
-  {
-    id: 'knot-tying',
-    name: 'Knot Tying',
-    category: 'Recreation',
-    skillLevel: null,
-    issuedBy: 'General Conference',
-    enabled: true,
-    price: 4,
-    image: null,
-  },
-] // one honor in a fake honors.json
-const settingsBody = { currency: 'MYR', defaultPrice: 4 } // a fake settings.json
+const knot = honor('knot-tying', 'Knot Tying') // the one honor of the fake shop
+const eagles = { name: 'Eagles', area: null, language: null, location: null, churchName: null } // a valid club
 
 /**
- * Makes the global fetch answer each data file separately.
- * @param honors response for honors.json
- * @param settings response for settings.json
- * @param clubs response for clubs.json, an empty club list by default
- * @return the fetch mock, to count calls
+ * Makes the global fetch answer with the given function.
+ * @param answer builds the response for each request; it gets the request's options
+ * @return the fetch mock, to count calls and read the signal
  */
-function serve(
-  honors: () => Promise<Response>,
-  settings: () => Promise<Response>,
-  clubs: () => Promise<Response> = async () => new Response('[]'),
-) {
-  const fetchFn = vi.fn((url: string) =>
-    url.endsWith('clubs.json') ? clubs() : url.endsWith('settings.json') ? settings() : honors(),
-  ) // route by file name
+function serve(answer: (init?: RequestInit) => Promise<Response>) {
+  const fetchFn = vi.fn((_url: string, init?: RequestInit) => answer(init)) // every request goes to the answer
   vi.stubGlobal('fetch', fetchFn) // install it
   return fetchFn
 }
 
 /**
- * Builds a response function that answers 200 with a JSON body.
- * @param body the value to send as JSON
+ * Builds an answer function that gives 200 with the shop body.
+ * @param honors the honors to list
  * @return a function that returns the response
  */
-const ok = (body: unknown) => async () => new Response(JSON.stringify(body)) // a 200 answer
+const ok = (honors = [knot]) => async () => new Response(JSON.stringify(shopBody(honors, [eagles]))) // a 200 answer
+
+/** An answer that never arrives, until the request is aborted. */
+const hang = (init?: RequestInit) =>
+  new Promise<Response>((_resolve, reject) =>
+    init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))),
+  ) // rejects like fetch when the signal fires
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true }) // control the 300 ms loader delay, keep promises moving
@@ -57,50 +45,32 @@ afterEach(() => {
 })
 
 describe('useCatalogueData', () => {
-  it('becomes ready with honors and settings', async () => {
-    // catches: settings dropped from the ready state, so prices have no currency
-    serve(ok(honorsBody), ok(settingsBody))
+  it('becomes ready with honors, settings and clubs from one request', async () => {
+    // catches: three requests again, or settings or clubs dropped from the ready state
+    const fetchFn = serve(ok())
     const { result } = renderHook(() => useCatalogueData())
     await waitFor(() => expect(result.current.state.status).toBe('ready'))
-    expect(result.current.state).toEqual({ status: 'ready', honors: honorsBody, settings: settingsBody, clubs: [] })
+    expect(result.current.state).toEqual({ status: 'ready', honors: [knot], settings: { currency: 'MYR' }, clubs: [eagles] })
+    expect(fetchFn).toHaveBeenCalledTimes(1)
   })
 
-  it('is an error when honors fail', async () => {
-    // catches: an honors outage showing an empty list instead of the error state
-    serve(async () => new Response('', { status: 500 }), ok(settingsBody))
+  it('is a failed error when the request fails', async () => {
+    // catches: an outage showing an empty list instead of the error state
+    serve(async () => new Response('', { status: 500 }))
     const { result } = renderHook(() => useCatalogueData())
-    await waitFor(() => expect(result.current.state.status).toBe('error'))
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'error', reason: 'failed' }))
   })
 
-  it('carries the clubs in the ready state', async () => {
-    // catches: clubs.json fetched but dropped, so the order form never gets its dropdown
-    const club = { name: 'Eagles', area: null, language: null, location: null, churchName: null }
-    serve(ok(honorsBody), ok(settingsBody), ok([club]))
+  it('passes busy through from a 429', async () => {
+    // catches: the rate limit reaching the screens as a plain failure
+    serve(async () => new Response('{"error":"rate-limited"}', { status: 429 }))
     const { result } = renderHook(() => useCatalogueData())
-    await waitFor(() => expect(result.current.state.status).toBe('ready'))
-    expect(result.current.state).toMatchObject({ clubs: [club] })
-  })
-
-  it('is the one error when clubs.json fails', async () => {
-    // catches: a broken club list leaving a half-loaded catalogue instead of the error screen
-    serve(ok(honorsBody), ok(settingsBody), async () => new Response('', { status: 500 }))
-    const { result } = renderHook(() => useCatalogueData())
-    await waitFor(() => expect(result.current.state.status).toBe('error'))
-  })
-
-  it('is an error when settings fail', async () => {
-    // catches: a settings outage showing the list with prices that have no currency
-    serve(ok(honorsBody), async () => new Response('', { status: 404 }))
-    const { result } = renderHook(() => useCatalogueData())
-    await waitFor(() => expect(result.current.state.status).toBe('error'))
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'error', reason: 'busy' }))
   })
 
   it('shows the skeleton only from 300 ms', () => {
     // catches: a skeleton flash on fast loads, or one that never appears
-    serve(
-      () => new Promise(() => {}),
-      () => new Promise(() => {}),
-    ) // requests that never answer
+    serve(hang)
     const { result } = renderHook(() => useCatalogueData())
     expect(result.current.showSkeleton).toBe(false)
     act(() => {
@@ -113,13 +83,38 @@ describe('useCatalogueData', () => {
     expect(result.current.showSkeleton).toBe(true)
   })
 
-  it('waits the loader delay again after retry, then loads', async () => {
-    // catches: retry flashing the skeleton at once, or not loading again
-    let calls = 0 // counts honors requests
-    serve(
-      () => (++calls === 1 ? Promise.resolve(new Response('', { status: 500 })) : new Promise(() => {})), // first fails, retry hangs
-      ok(settingsBody),
-    )
+  it('is loading at 29,999 ms and failed at 30,000 ms, with the request aborted', async () => {
+    // catches: no cap (a slow Worker loads forever), a cap that fires early, or one that leaves the request running
+    const fetchFn = serve(hang)
+    const { result } = renderHook(() => useCatalogueData())
+    act(() => {
+      vi.advanceTimersByTime(29_999)
+    })
+    expect(result.current.state.status).toBe('loading')
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'error', reason: 'failed' }))
+    expect(fetchFn.mock.calls[0][1]?.signal?.aborted).toBe(true)
+  })
+
+  it('ignores an answer that arrives after the cap', async () => {
+    // catches: a late answer flipping the error screen back to the shop
+    let answer: (response: Response) => void = () => {} // answers on demand
+    serve(() => new Promise<Response>((resolve) => (answer = resolve))) // ignores the signal, like a request already past the network
+    const { result } = renderHook(() => useCatalogueData())
+    act(() => {
+      vi.advanceTimersByTime(30_000)
+    })
+    await waitFor(() => expect(result.current.state.status).toBe('error'))
+    await act(async () => answer(new Response(JSON.stringify(shopBody([knot])))))
+    expect(result.current.state.status).toBe('error')
+  })
+
+  it('waits the loader delay and the 30 s again after retry, then loads', async () => {
+    // catches: retry flashing the skeleton at once, the old cap ending the new attempt, or not loading again
+    let calls = 0 // counts requests
+    serve((init) => (++calls === 1 ? Promise.resolve(new Response('', { status: 500 })) : hang(init))) // first fails, retry hangs
     const { result } = renderHook(() => useCatalogueData())
     await waitFor(() => expect(result.current.state.status).toBe('error'))
     act(() => result.current.retry()) // press Try again
@@ -133,19 +128,25 @@ describe('useCatalogueData', () => {
       vi.advanceTimersByTime(1)
     })
     expect(result.current.showSkeleton).toBe(true)
+    act(() => {
+      vi.advanceTimersByTime(29_699)
+    })
+    expect(result.current.state.status).toBe('loading') // 29,999 ms after the retry
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+    await waitFor(() => expect(result.current.state.status).toBe('error')) // 30,000 ms after the retry
     expect(calls).toBe(2)
   })
 
   it('ignores a late answer from a stale attempt', async () => {
     // catches: an older request overwriting the newer answer
     let answerFirst: (response: Response) => void = () => {} // answers the older attempt on demand
-    let calls = 0 // counts honors requests
-    serve(
-      () =>
-        ++calls === 1
-          ? new Promise<Response>((resolve) => (answerFirst = resolve)) // older attempt, slow
-          : Promise.resolve(new Response(JSON.stringify(honorsBody))), // newer attempt, fast
-      ok(settingsBody),
+    let calls = 0 // counts requests
+    serve(() =>
+      ++calls === 1
+        ? new Promise<Response>((resolve) => (answerFirst = resolve)) // older attempt, slow
+        : ok()(), // newer attempt, fast
     )
     /**
      * Shows the hook's status and honor count, so a plain render inside StrictMode can read them.
@@ -162,7 +163,25 @@ describe('useCatalogueData', () => {
     ) // StrictMode runs the load effect twice: the first attempt is stale
     expect(await screen.findByText('ready 1')).toBeInTheDocument()
     expect(calls).toBe(2) // StrictMode really made a stale first attempt
-    await act(async () => answerFirst(new Response(JSON.stringify([])))) // the stale answer arrives last
+    await act(async () => answerFirst(new Response(JSON.stringify(shopBody([])))) ) // the stale answer arrives last
     expect(screen.getByText('ready 1')).toBeInTheDocument()
+  })
+
+  it('updates nothing and aborts the request when it unmounts mid-load', async () => {
+    // catches: a state update or a logged failure after unmount, or a request left running
+    const fetchFn = serve(hang)
+    let renders = 0 // draws of the hook's owner
+    const { unmount } = renderHook(() => {
+      renders += 1 // one more draw
+      return useCatalogueData()
+    })
+    const drawnBeforeUnmount = renders // draws up to the unmount
+    unmount()
+    expect(fetchFn.mock.calls[0][1]?.signal?.aborted).toBe(true) // the request was stopped
+    await act(async () => {
+      vi.advanceTimersByTime(40_000) // past the 30 s cap
+    })
+    expect(renders).toBe(drawnBeforeUnmount) // nothing drew after unmount
+    expect(console.error).not.toHaveBeenCalled() // neither the abort nor the cap is logged as a failed load
   })
 })

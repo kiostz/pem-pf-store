@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs' // Node file reading
 import { describe, expect, it } from 'vitest' // test API
 import { patchImagePath } from './patch.ts' // the picture path rule
-import type { Club, Honor, Settings } from './types.ts' // data shapes
+import type { Club, HonorRecord, Settings } from './types.ts' // data shapes
 
 /** Reads and parses one file from public/data/. */
 function readData<T>(name: string): T {
@@ -11,7 +11,7 @@ function readData<T>(name: string): T {
 }
 
 describe('public/data/honors.json', () => {
-  const honors = readData<Honor[]>('honors.json')
+  const honors = readData<HonorRecord[]>('honors.json')
 
   it('has unique ids in slug form', () => {
     expect(new Set(honors.map((h) => h.id)).size).toBe(honors.length)
@@ -34,7 +34,7 @@ describe('public/data/honors.json', () => {
 })
 
 describe('public/data/honors.json shape', () => {
-  const honors = readData<Honor[]>('honors.json') // committed honors
+  const honors = readData<HonorRecord[]>('honors.json') // committed honors
 
   it('has exactly the documented keys on every honor', () => {
     for (const h of honors) {
@@ -60,8 +60,8 @@ describe('public/data/honors.json shape', () => {
 })
 
 describe('patch pictures named in honors.json', () => {
-  const named = readData<Honor[]>('honors.json').filter(
-    (h): h is Honor & { image: string } => h.image !== null,
+  const named = readData<HonorRecord[]>('honors.json').filter(
+    (h): h is HonorRecord & { image: string } => h.image !== null,
   ) // honors that claim a picture
 
   // Bug caught: a JSON pointing at a missing picture goes live as a broken image.

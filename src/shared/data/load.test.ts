@@ -1,7 +1,21 @@
-// Tests for loadHonors, loadSettings and loadClubs: the run-time read of the data files, with fetch mocked at the boundary.
+// Tests for loadShop: the one /shop request, its validation and its error kinds, with fetch mocked at the boundary.
 
-import { describe, expect, it, vi } from 'vitest' // test API and mock helper
-import { loadClubs, loadHonors, loadSettings } from './load.ts' // code under test
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API and mock helper
+import { lineTotalCents } from '@/features/cart/cart.ts' // proves the mapped price keeps exact cents
+import { loadShop, ShopLoadError } from './load.ts' // code under test
+
+const orderable = { id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', priceCents: 400, stock: 12, image: null } // a valid shop row
+const eagles = { name: 'Eagles', area: null, language: null, location: null, churchName: null } // a valid club
+const gilead = { name: 'Gilead', area: 'Klang', language: 'BM', location: 'Hall', churchName: 'Klang BM SDA Church' } // every field set
+const good = { items: [orderable], clubs: [eagles, gilead], settings: { currency: 'MYR' } } // a valid /shop body
+
+beforeEach(() => {
+  vi.stubEnv('VITE_API_URL', '/api') // the dev address, so the URL is a literal
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs() // restore the environment
+})
 
 /**
  * Builds a fake fetch that answers every request with one response.
@@ -13,150 +27,111 @@ function fakeFetch(body: unknown, status = 200) {
   return vi.fn(async () => new Response(JSON.stringify(body), { status })) // one canned response
 }
 
-describe('loadHonors', () => {
-  it('requests the honors file under the base path', async () => {
-    const fetchFn = fakeFetch([])
-    await loadHonors(fetchFn)
-    expect(fetchFn).toHaveBeenCalledWith('/data/honors.json') // vitest's BASE_URL is "/"
+/**
+ * Runs loadShop and returns the kind of the error it throws.
+ * @param fetchFn the fetch to use
+ * @return the ShopLoadError kind, or "none" when it resolved
+ */
+async function failureKind(fetchFn: typeof fetch) {
+  try {
+    await loadShop(fetchFn) // should throw
+    return 'none' // it did not
+  } catch (error) {
+    return error instanceof ShopLoadError ? error.kind : 'wrong error class' // a raw error would reach the screen unclassified
+  }
+}
+
+describe('loadShop', () => {
+  it('requests /shop under VITE_API_URL', async () => {
+    // catches: a wrong path, a doubled slash or a request to the old data files
+    const fetchFn = fakeFetch(good)
+    await loadShop(fetchFn)
+    expect(fetchFn).toHaveBeenCalledWith('/api/shop', { signal: undefined })
   })
 
-  it('returns the array in the file', async () => {
-    const honors = [{ id: 'knot-tying', name: 'Knot Tying' }]
-    expect(await loadHonors(fakeFetch(honors))).toEqual(honors)
+  it('passes the abort signal on to fetch', async () => {
+    // catches: the 30 s cap aborting nothing
+    const fetchFn = fakeFetch(good)
+    const controller = new AbortController() // the caller's cap
+    await loadShop(fetchFn, controller.signal)
+    expect(fetchFn).toHaveBeenCalledWith('/api/shop', { signal: controller.signal })
   })
 
-  it('throws on a 404', async () => {
-    await expect(loadHonors(fakeFetch({}, 404))).rejects.toThrow('404')
-  })
-
-  it('throws when the body is not an array', async () => {
-    await expect(loadHonors(fakeFetch({ honors: [] }))).rejects.toThrow(
-      'not a list',
-    )
-  })
-
-  it('throws on a network error', async () => {
-    const fetchFn = vi.fn(async () => {
-      throw new TypeError('Failed to fetch') // what fetch does offline
+  it('returns honors, clubs and settings', async () => {
+    // catches: a field dropped or renamed on the way to the screens
+    const loaded = await loadShop(fakeFetch(good))
+    expect(loaded).toEqual({
+      honors: [{ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', price: 4, stock: 12, image: null }],
+      clubs: [eagles, gilead],
+      settings: { currency: 'MYR' },
     })
-    await expect(loadHonors(fetchFn)).rejects.toThrow('Failed to fetch')
   })
 
-  it('throws a clear error when the body is not valid JSON', async () => {
-    const fetchFn = vi.fn(async () => new Response('<html>oops</html>')) // e.g. an HTML error page with status 200
-    await expect(loadHonors(fetchFn)).rejects.toThrow(
-      'Could not load honors: the file is not valid JSON',
+  it('turns priceCents into a price whose line total is exactly 115 cents', async () => {
+    // catches: a float price that loses a cent once it is multiplied back into cents
+    const loaded = await loadShop(fakeFetch({ ...good, items: [{ ...orderable, priceCents: 115 }] }))
+    expect(loaded.honors[0].price).toBe(1.15)
+    expect(lineTotalCents({ honor: loaded.honors[0], quantity: 1 })).toBe(115)
+  })
+
+  it('accepts stock 0, a picture path, empty lists and ignores extra keys', async () => {
+    // catches: stock 0 or an empty shop treated as broken, or a later Worker field blanking the shop
+    const loaded = await loadShop(
+      fakeFetch({
+        items: [{ ...orderable, stock: 0, image: 'patches/knot-tying.webp', status: 'active' }],
+        clubs: [],
+        settings: { currency: 'MYR', defaultPrice: 400 },
+      }),
     )
-  })
-})
-
-describe('loadSettings', () => {
-  it('requests the settings file under the base path', async () => {
-    const fetchFn = fakeFetch({ currency: 'MYR', defaultPrice: 4 })
-    await loadSettings(fetchFn)
-    expect(fetchFn).toHaveBeenCalledWith('/data/settings.json') // catches a wrong path or a missing base
-  })
-
-  it('returns the object in the file', async () => {
-    const settings = { currency: 'MYR', defaultPrice: 4 }
-    expect(await loadSettings(fakeFetch(settings))).toEqual(settings) // catches a loader that reshapes the file
-  })
-
-  it('throws on a 404', async () => {
-    await expect(loadSettings(fakeFetch({}, 404))).rejects.toThrow('404') // catches a missing status check
-  })
-
-  it('throws on bad JSON', async () => {
-    const fetchFn = vi.fn(async () => new Response('<html>oops</html>')) // an HTML error page with status 200
-    await expect(loadSettings(fetchFn)).rejects.toThrow('not valid JSON') // catches a raw SyntaxError reaching the screen
+    expect(loaded.honors[0]).toEqual({ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', price: 4, stock: 0, image: 'patches/knot-tying.webp' })
+    expect(loaded.settings).toEqual({ currency: 'MYR' })
   })
 
   it.each([
-    ['an array', []],
-    ['null', null],
-    ['a missing currency', { defaultPrice: 4 }],
-    ['a string defaultPrice', { currency: 'MYR', defaultPrice: '4' }],
-  ])('throws on %s', async (_label, body) => {
-    await expect(loadSettings(fakeFetch(body))).rejects.toThrow(
-      'not valid settings',
-    ) // catches a loader that trusts any JSON and fails later at formatPrice
-  })
-})
-
-describe('loadClubs', () => {
-  const eagles = {
-    name: 'Eagles',
-    area: null,
-    language: null,
-    location: null,
-    churchName: null,
-  } // a valid club
-  const gilead = {
-    name: 'Gilead',
-    area: 'Klang',
-    language: 'BM',
-    location: 'Hall',
-    churchName: 'Klang BM SDA Church',
-  } // every field set
-
-  it('requests the clubs file under the base path', async () => {
-    // catches: a wrong path or a missing base
-    const fetchFn = fakeFetch([])
-    await loadClubs(fetchFn)
-    expect(fetchFn).toHaveBeenCalledWith('/data/clubs.json')
+    ['stock -1', { ...good, items: [{ ...orderable, stock: -1 }] }],
+    ['stock 1.5', { ...good, items: [{ ...orderable, stock: 1.5 }] }],
+    ['stock "3"', { ...good, items: [{ ...orderable, stock: '3' }] }],
+    ['a missing stock', { ...good, items: [{ ...orderable, stock: undefined }] }],
+    ['a fractional priceCents', { ...good, items: [{ ...orderable, priceCents: 1.5 }] }],
+    ['a negative priceCents', { ...good, items: [{ ...orderable, priceCents: -1 }] }],
+    ['an empty name', { ...good, items: [{ ...orderable, name: '' }] }],
+    ['an empty id', { ...good, items: [{ ...orderable, id: '' }] }],
+    ['an empty image string', { ...good, items: [{ ...orderable, image: '' }] }],
+    ['a missing items list', { clubs: [], settings: { currency: 'MYR' } }],
+    ['a missing clubs list', { items: [], settings: { currency: 'MYR' } }],
+    ['missing settings', { items: [], clubs: [] }],
+    ['a lower-case currency', { ...good, settings: { currency: 'myr' } }],
+    ['a four-letter currency', { ...good, settings: { currency: 'MYRR' } }],
+    ['a club with a missing key', { ...good, clubs: [{ name: 'Eagles', area: null, language: null, location: null }] }],
+    ['a club with an empty name', { ...good, clubs: [{ ...eagles, name: '' }] }],
+    ['a repeated club', { ...good, clubs: [eagles, eagles] }],
+    ['a row that is not an object', { ...good, items: ['knot-tying'] }],
+    ['a body that is a list', []],
+    ['a null body', null],
+  ])('is failed for %s', async (_label, body) => {
+    // catches: a bad row reaching a screen instead of blanking the shop
+    expect(await failureKind(fakeFetch(body))).toBe('failed')
   })
 
-  it('returns the list in the file', async () => {
-    // catches: fields dropped on the way through
-    expect(await loadClubs(fakeFetch([eagles, gilead]))).toEqual([
-      eagles,
-      gilead,
-    ])
+  it('is failed for an HTML body and for non-JSON', async () => {
+    // catches: an HTML error page with status 200 read as data, or a raw SyntaxError reaching the screen
+    expect(await failureKind(vi.fn(async () => new Response('<html>oops</html>')))).toBe('failed')
+    expect(await failureKind(vi.fn(async () => new Response('not json at all')))).toBe('failed')
   })
 
-  it('accepts an empty list', async () => {
-    // catches: an empty club file treated as broken, when only Club name should show
-    expect(await loadClubs(fakeFetch([]))).toEqual([])
+  it('is busy on a 429', async () => {
+    // catches: the rate limit shown as a plain failure, so the buyer is not told to wait
+    expect(await failureKind(fakeFetch({ error: 'rate-limited' }, 429))).toBe('busy')
   })
 
-  it('throws on a 404', async () => {
-    // catches: a missing file passing as no clubs
-    await expect(loadClubs(fakeFetch({}, 404))).rejects.toThrow(
-      'Could not load clubs: HTTP 404',
-    )
+  it.each([404, 500])('is failed on a %s', async (status) => {
+    // catches: an error status read as data
+    expect(await failureKind(fakeFetch({}, status))).toBe('failed')
   })
 
-  it('throws a clear error when the body is not valid JSON', async () => {
-    // catches: an HTML error page read as data
-    const fetchFn = vi.fn(async () => new Response('<html>oops</html>'))
-    await expect(loadClubs(fetchFn)).rejects.toThrow(
-      'Could not load clubs: the file is not valid JSON',
-    )
-  })
-
-  it('throws when the body is an object, not a list', async () => {
-    // catches: a wrong top-level shape accepted
-    await expect(loadClubs(fakeFetch({ clubs: [] }))).rejects.toThrow(
-      'Could not load clubs: the file is not a list',
-    )
-  })
-
-  it.each([
-    ['the old string shape', ['Eagles']],
-    [
-      'a missing key',
-      [{ name: 'Eagles', area: null, language: null, location: null }],
-    ],
-    ['an empty name', [{ ...eagles, name: '' }]],
-    ['an empty-string optional field', [{ ...eagles, area: '' }]],
-    ['a number in an optional field', [{ ...eagles, language: 5 }]],
-    ['a duplicate name', [eagles, eagles]],
-    ['an extra key', [{ ...eagles, extra: 1 }]],
-    ['a non-string name', [{ ...eagles, name: 5 }]],
-  ])('throws on %s', async (_label, body) => {
-    // catches: a bad club entry reaching the dropdown
-    await expect(loadClubs(fakeFetch(body))).rejects.toThrow(
-      'Could not load clubs: the file is not a valid club list',
-    )
+  it('is failed on a network error and on an abort', async () => {
+    // catches: a raw TypeError or AbortError reaching the hook unclassified
+    expect(await failureKind(vi.fn(async () => { throw new TypeError('Failed to fetch') }))).toBe('failed')
+    expect(await failureKind(vi.fn(async () => { throw new DOMException('aborted', 'AbortError') }))).toBe('failed')
   })
 })

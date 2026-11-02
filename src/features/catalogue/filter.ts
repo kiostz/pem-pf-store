@@ -7,19 +7,18 @@ import { byText } from '@/shared/sort/sort-by-name.ts' // A to Z compare
 export type CatalogueFilter = { query: string; category: string | null }
 
 /**
- * Keeps the switched-on honors that match the search words and the category.
- * @param honors every honor in the file
+ * Keeps the honors that match the search words and the category.
+ * @param honors every honor the shop lists
  * @param filter the typed query and the chosen category (null for All categories)
- * @return the matching switched-on honors in their input order
+ * @return the matching honors in their input order
  */
 export function filterHonors(
-  honors: Honor[], // every honor in the file
+  honors: Honor[], // every honor the shop lists
   filter: CatalogueFilter, // the typed query and chosen category
 ): Honor[] {
   const words = filter.query.toLowerCase().split(/\s+/).filter(Boolean) // blank input gives no words
   return honors.filter(
     (honor) =>
-      honor.enabled && // switched-off honors stay hidden
       (filter.category === null || honor.category === filter.category) && // the category
       words.every((word) => honor.name.toLowerCase().includes(word)), // every word somewhere in the name
   )
@@ -27,12 +26,12 @@ export function filterHonors(
 
 /**
  * Lists the categories for the category filter.
- * @param honors every honor in the file
- * @return each category with a switched-on honor, once, A to Z
+ * @param honors every honor the shop lists
+ * @return each category of a listed honor, once, A to Z
  */
 export function categoryNames(honors: Honor[]): string[] {
   return [
     // the option names
-    ...new Set(honors.filter((h) => h.enabled).map((h) => h.category)),
+    ...new Set(honors.map((h) => h.category)),
   ].sort(byText) // dedupe, then A to Z
 }

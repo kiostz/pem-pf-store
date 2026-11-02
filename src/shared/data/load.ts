@@ -1,66 +1,24 @@
-// Reads honors.json, settings.json and clubs.json at run time, so the data stays out of the JS bundle and every screen shares one fetch-and-check path.
+// Reads the shop's one API answer (/shop) at run time and checks it where it enters, so the data stays out of the JS bundle and every screen shares one fetch-and-check path.
 
-import type { Club, ClubList, Honor, Settings } from './types.ts' // the shapes of one honor, the settings and the clubs
+import type { Club, ClubList, Honor, ShopSettings } from './types.ts' // the shapes of one honor, the clubs and the settings
 
-/**
- * Fetches one data file that sits next to the built site and parses it.
- * @param path the file's path under the base, such as "data/honors.json"
- * @param label the file's plain name for error messages, such as "honors"
- * @param fetchFn the fetch to use; tests pass a fake
- * @return the parsed JSON, not yet checked
- * @throws Error when the request fails, the status is not 2xx or the body is not JSON
- */
-export async function fetchJson(
-  path: string,
-  label: string,
-  fetchFn: typeof fetch = fetch,
-): Promise<unknown> {
-  const response = await fetchFn(`${import.meta.env.BASE_URL}${path}`) // GET the file under the base path
-  if (!response.ok)
-    throw new Error(`Could not load ${label}: HTTP ${response.status}`) // 404, 500 and so on
-  try {
-    return await response.json() // parse the JSON
-  } catch {
-    throw new Error(`Could not load ${label}: the file is not valid JSON`) // a half-written file or an HTML error page
+// Why a load failed: the API's rate limit asked the buyer to wait, or anything else.
+export type ShopLoadFailure = 'busy' | 'failed'
+
+// Thrown by loadShop for every failure, so the screens only deal with one class.
+export class ShopLoadError extends Error {
+  readonly kind: ShopLoadFailure // busy for a 429, failed for the rest
+
+  /**
+   * Builds the error.
+   * @param kind busy or failed
+   * @param message what went wrong, with no buyer data
+   */
+  constructor(kind: ShopLoadFailure, message: string) {
+    super(message) // the readable text
+    this.name = 'ShopLoadError' // shows in the console
+    this.kind = kind // which copy the screens show
   }
-}
-
-/**
- * Fetches the honors file that sits next to the built site.
- * @param fetchFn the fetch to use; tests pass a fake
- * @return every honor in the file, switched on or off
- * @throws Error when the request fails, the status is not 2xx, the body is not JSON or it is not a list
- */
-export async function loadHonors(
-  fetchFn: typeof fetch = fetch,
-): Promise<Honor[]> {
-  const body = await fetchJson('data/honors.json', 'honors', fetchFn) // the parsed file
-  if (!Array.isArray(body))
-    throw new Error('Could not load honors: the file is not a list') // wrong format
-  return body as Honor[] // the seed and the admin write this shape
-}
-
-/**
- * Fetches the settings file that sits next to the built site.
- * @param fetchFn the fetch to use; tests pass a fake
- * @return the currency and default price
- * @throws Error when the request fails, the status is not 2xx, the body is not JSON or it lacks a string currency and a number defaultPrice
- */
-export async function loadSettings(
-  fetchFn: typeof fetch = fetch,
-): Promise<Settings> {
-  const body = await fetchJson('data/settings.json', 'settings', fetchFn) // the parsed file
-  const fields = body as Partial<Settings> | null // looked at field by field below
-  if (
-    typeof fields !== 'object' || // not an object
-    fields === null || // JSON null
-    Array.isArray(fields) || // a list instead of an object
-    typeof fields.currency !== 'string' || // missing currency code
-    typeof fields.defaultPrice !== 'number' // missing default price
-  )
-    // any failed check means the file is wrong
-    throw new Error('Could not load settings: the file is not valid settings') // wrong format
-  return fields as Settings // checked above
 }
 
 const CLUB_KEYS = ['name', 'area', 'language', 'location', 'churchName'] // the five keys every club has
@@ -89,21 +47,92 @@ function isClub(entry: unknown): entry is Club {
 }
 
 /**
- * Fetches the clubs file that sits next to the built site.
- * @param fetchFn the fetch to use; tests pass a fake
- * @return the clubs in file order
- * @throws Error when the request fails, the body is not JSON or a list, or any club is malformed or repeats a name
+ * Tells whether a value is a plain object.
+ * @param value anything parsed from JSON
+ * @return true for an object that is not null or a list
  */
-export async function loadClubs(
-  fetchFn: typeof fetch = fetch,
-): Promise<ClubList> {
-  const body = await fetchJson('data/clubs.json', 'clubs', fetchFn) // the parsed file
-  if (!Array.isArray(body))
-    throw new Error('Could not load clubs: the file is not a list') // wrong format
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) // JSON null and lists are not objects here
+}
+
+/**
+ * Tells whether a value is a whole number of 0 or more.
+ * @param value anything parsed from JSON
+ * @return true for 0, 1, 2 and so on
+ */
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 // no fractions, no negatives, no strings
+}
+
+/**
+ * Checks one item of the answer and turns it into an honor.
+ * @param entry one item of the parsed answer
+ * @return the honor, with the price in main units
+ * @throws ShopLoadError (failed) when a field is missing or has the wrong type; extra keys are ignored
+ */
+function toHonor(entry: unknown): Honor {
   if (
-    !body.every(isClub) ||
-    new Set(body.map((club) => club.name)).size !== body.length
+    !isRecord(entry) || // not an object
+    typeof entry.id !== 'string' || entry.id === '' || // id is required
+    typeof entry.name !== 'string' || entry.name === '' || // name is required
+    typeof entry.category !== 'string' || entry.category === '' || // category is required
+    !isCount(entry.priceCents) || // whole cents
+    !isCount(entry.stock) || // whole units
+    !(entry.image === null || (typeof entry.image === 'string' && entry.image !== '')) // a path or null
   )
-    throw new Error('Could not load clubs: the file is not a valid club list') // a bad entry or a repeated name
-  return body // checked above
+    throw new ShopLoadError('failed', 'Could not load the shop: a shop row is not valid') // the first bad row blanks the shop
+  return {
+    id: entry.id, // checked above
+    name: entry.name, // checked above
+    category: entry.category, // checked above
+    price: entry.priceCents / 100, // major units, as the cart and the order email expect until they move to cents
+    stock: entry.stock, // checked above
+    image: entry.image, // checked above
+  }
+}
+
+/**
+ * Fetches the shop's items, clubs and settings in one request.
+ * @param fetchFn the fetch to use; tests pass a fake
+ * @param signal aborts the request, for the 30 second cap
+ * @return the honors, the clubs and the settings
+ * @throws ShopLoadError busy on a 429; failed on a network error, an abort, any other status, a body that is not JSON or any invalid field
+ */
+export async function loadShop(
+  fetchFn: typeof fetch = fetch,
+  signal?: AbortSignal,
+): Promise<{ honors: Honor[]; clubs: ClubList; settings: ShopSettings }> {
+  let response: Response // the API's answer
+  try {
+    response = await fetchFn(`${import.meta.env.VITE_API_URL}/shop`, { signal }) // one GET, same origin in dev through the proxy
+  } catch (error) {
+    throw new ShopLoadError('failed', `Could not load the shop: ${error instanceof Error ? error.name : 'request failed'}`) // offline or aborted; the class name only
+  }
+  if (response.status === 429) throw new ShopLoadError('busy', 'Could not load the shop: HTTP 429') // the rate limit
+  if (!response.ok) throw new ShopLoadError('failed', `Could not load the shop: HTTP ${response.status}`) // 404, 500 and so on
+  let body: unknown // the parsed answer, not yet checked
+  try {
+    body = await response.json() // parse the JSON
+  } catch {
+    throw new ShopLoadError('failed', 'Could not load the shop: the answer is not valid JSON') // an HTML error page
+  }
+  if (
+    !isRecord(body) || // not an object
+    !Array.isArray(body.items) || // no item list
+    !Array.isArray(body.clubs) || // no club list
+    !isRecord(body.settings) || // no settings
+    typeof body.settings.currency !== 'string' || // no currency
+    !/^[A-Z]{3}$/.test(body.settings.currency) // not three capitals
+  )
+    throw new ShopLoadError('failed', 'Could not load the shop: the answer is not valid') // wrong format
+  if (
+    !body.clubs.every(isClub) || // a bad club
+    new Set(body.clubs.map((club) => club.name)).size !== body.clubs.length // or a repeated name
+  )
+    throw new ShopLoadError('failed', 'Could not load the shop: the club list is not valid') // a bad entry or a repeated name
+  return {
+    honors: body.items.map(toHonor), // each item checked
+    clubs: body.clubs, // checked above
+    settings: { currency: body.settings.currency }, // only the field the shop uses
+  }
 }

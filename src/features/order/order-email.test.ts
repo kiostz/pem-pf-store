@@ -28,9 +28,7 @@ function line(
     id,
     name,
     category: 'Nature',
-    skillLevel: null,
-    issuedBy: 'General Conference',
-    enabled: true,
+    stock: 10,
     price,
     image: null,
   }

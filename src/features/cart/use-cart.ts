@@ -11,7 +11,7 @@ export type CartValue = {
   removeOrderLines: (
     orderLines: Array<{ honorId: string; quantity: number }>,
   ) => void // takes a sent order's quantities out, called once an order is sent
-  takeOutUnavailable: () => void // removes every switched-off and gone id in one write; called by Checkout
+  takeOutUnavailable: () => void // removes every unavailable honor id in one write; called by Checkout
 }
 
 export const CartContext = createContext<CartValue | null>(null) // null outside a CartProvider

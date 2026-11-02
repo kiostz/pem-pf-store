@@ -2,34 +2,25 @@
 
 import { describe, expect, it } from 'vitest' // test API
 import type { Honor } from '@/shared/data/types.ts' // the honor shape
+import { honor as makeHonor } from '@/test/shop-fetch.ts' // the honor builder
 import { categoryNames, filterHonors } from './filter.ts' // code under test
 
 /**
  * Builds an honor with defaults.
  * @param name display name
  * @param category category name
- * @param enabled whether the honor is switched on
  * @return a complete honor
  */
-function honor(name: string, category = 'Nature', enabled = true): Honor {
-  return {
-    id: name.toLowerCase().replace(/\W+/g, '-'),
-    name,
-    category,
-    skillLevel: 1,
-    issuedBy: 'General Conference',
-    enabled,
-    price: 4,
-    image: null,
-  } // fixed values for the fields the filter ignores
+function honor(name: string, category = 'Nature'): Honor {
+  return makeHonor(name.toLowerCase().replace(/\W+/g, '-'), name, { category }) // id from the name, fixed values for the rest
 }
 
 const all = { query: '', category: null } // no search, All categories
 
 describe('filterHonors', () => {
-  it('drops switched-off honors', () => {
-    const list = [honor('Knot Tying'), honor('Hidden', 'Nature', false)]
-    expect(filterHonors(list, all).map((h) => h.name)).toEqual(['Knot Tying']) // catches switched-off honors reaching buyers
+  it('lists every loaded honor, whatever its stock', () => {
+    const list = [honor('Knot Tying'), { ...honor('Ants'), stock: 0 }]
+    expect(filterHonors(list, all).map((h) => h.name)).toEqual(['Knot Tying', 'Ants']) // catches a leftover filter hiding a loaded honor
   })
 
   it('matches case-insensitively', () => {
@@ -100,7 +91,7 @@ describe('filterHonors', () => {
 })
 
 describe('categoryNames', () => {
-  it('lists each category of a switched-on honor once, A to Z', () => {
+  it('lists each category of a loaded honor once, A to Z', () => {
     const list = [
       honor('A', 'Recreation'),
       honor('B', 'Nature'),
@@ -109,8 +100,8 @@ describe('categoryNames', () => {
     expect(categoryNames(list)).toEqual(['Nature', 'Recreation']) // catches duplicates or file order
   })
 
-  it('leaves out a category with only switched-off honors', () => {
-    const list = [honor('A', 'Nature'), honor('B', 'Outreach', false)]
-    expect(categoryNames(list)).toEqual(['Nature']) // catches an option that leads to an empty list
+  it('lists the category of a stock 0 honor', () => {
+    const list = [{ ...honor('A', 'Nature'), stock: 0 }]
+    expect(categoryNames(list)).toEqual(['Nature']) // catches a Sold out honor's category vanishing from the filter
   })
 })

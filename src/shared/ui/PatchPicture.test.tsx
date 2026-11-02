@@ -15,9 +15,7 @@ function honor(image: string | null): Honor {
     id: 'knot-tying',
     name: 'Knot Tying',
     category: 'Nature',
-    skillLevel: null,
-    issuedBy: 'General Conference',
-    enabled: true,
+    stock: 10,
     price: 4,
     image,
   } // only the image and category matter here

@@ -8,6 +8,7 @@ import { CartProvider } from '@/features/cart/CartProvider.tsx' // the cart stat
 import { CartScreen } from '@/features/cart/CartScreen.tsx' // Checkout lives here
 import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' // the load the screen receives
 import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import { honor } from '@/test/shop-fetch.ts' // the honor builder
 import { PILL_DOCK } from '@/shared/ui/floating-pill-box.ts' // the dock Send order floats in
 import { DetailsScreen } from './DetailsScreen.tsx' // code under test
 import { OrderFormProvider } from './OrderFormProvider.tsx' // the form state
@@ -21,19 +22,10 @@ vi.mock('@/features/order/Captcha.tsx', () => ({
   ),
 }))
 
-const honors: Honor[] = [
-  { id: 'knot-tying', name: 'Knot Tying', price: 4, enabled: true },
-  { id: 'africa-lore', name: 'Africa Lore', price: 5, enabled: false },
-].map((partial) => ({
-  ...partial,
-  category: 'Nature',
-  skillLevel: null,
-  issuedBy: 'General Conference',
-  image: null,
-})) // Knot Tying on, Africa Lore off
+const honors: Honor[] = [honor('knot-tying', 'Knot Tying')] // Knot Tying listed; africa-lore is not, like a Hidden honor
 
 const ready: CatalogueLoad = {
-  state: { status: 'ready', honors, settings: { currency: 'MYR', defaultPrice: 4 }, clubs: [] },
+  state: { status: 'ready', honors, settings: { currency: 'MYR' }, clubs: [] },
   showSkeleton: false,
   retry: () => {},
 } // the load as the app hands it over
@@ -111,7 +103,7 @@ describe('DetailsScreen', () => {
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
   })
 
-  it('leaves for the cart and drops the form when the last orderable honor is switched off while the page is open', () => {
+  it('leaves for the cart and drops the form when the last orderable honor leaves the shop while the page is open', () => {
     // catches: a form left open over a cart that can no longer be ordered, so a buyer could send a wrong order
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}') // one orderable line
     window.location.hash = '#/details' // as a buyer arrives
@@ -129,7 +121,7 @@ describe('DetailsScreen', () => {
     ) // the page for one data load
     const { rerender } = render(page(honors))
     expect(screen.getByLabelText('Name')).toBeInTheDocument() // the form is open
-    rerender(page(honors.map((honor) => ({ ...honor, enabled: false })))) // the data now has Knot Tying off
+    rerender(page([])) // the data no longer lists Knot Tying
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
     expect(window.location.hash).toBe('#/cart')
   })
@@ -141,7 +133,7 @@ describe('DetailsScreen', () => {
     render(
       <CartProvider honors={null}>
         <OrderFormProvider>
-          <DetailsScreen data={{ state: { status: 'error' }, showSkeleton: false, retry: () => {} }} />
+          <DetailsScreen data={{ state: { status: 'error', reason: 'failed' }, showSkeleton: false, retry: () => {} }} />
         </OrderFormProvider>
       </CartProvider>,
     )
@@ -150,8 +142,8 @@ describe('DetailsScreen', () => {
     expect(window.location.hash).toBe('#/details')
   })
 
-  it('sends only the orderable lines after Checkout with a switched-off honor in the cart', async () => {
-    // catches: a wrong order that lists a switched-off honor
+  it('sends only the orderable lines after Checkout with an unlisted honor in the cart', async () => {
+    // catches: a wrong order that lists an unlisted honor
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ success: true }))) // Web3Forms
     vi.stubGlobal('fetch', fetchFn)
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":2,"africa-lore":3}}')

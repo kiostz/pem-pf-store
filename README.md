@@ -11,6 +11,10 @@ Needs Node 24 (see `.nvmrc`).
 
 Open the address Vite prints. For the production build: `npm run build && npm run preview`, then open http://localhost:4173/pem-pf-store/.
 
+## Where the shop gets its data
+
+The shop reads its items, clubs and settings from the API Worker's `/shop`, one request per load, with a 30 second limit. `VITE_API_URL` holds the Worker's address: the live Worker in `.env`, and `/api` in `.env.development` and `.env.fake-send`. `npm run dev` proxies `/api` to the local API Worker on http://localhost:8787, so start that first (`npm run dev` in `workers/`, see "Workers"); with it stopped the shop shows "We couldn't load the shop." `npm run preview` serves the production build, which asks the live Worker, and the Worker allows only the live site's address, so the shop can't load from `localhost` there. The files in `public/data/` stay for the seed and the import but the shop no longer reads them.
+
 ## Order form settings
 
 The order form reads two keys from the committed `.env` files, which are public by design:
@@ -20,7 +24,7 @@ The order form reads two keys from the committed `.env` files, which are public 
 
 To try the whole order flow without a real send, run `npm run dev -- --mode fake-send`: `.env.fake-send` (dev only, never part of the build) makes Send order wait 800 ms, log the email subject and text to the browser console and succeed, with hCaptcha's test key. The order text in that console log holds the buyer's details, so use made-up ones. A real send cannot pass hCaptcha on `localhost`; it is tried once on the live site.
 
-`public/data/clubs.json` is a list of clubs: `name` plus `area`, `language`, `location` and `churchName` (each text or `null`). The seed's `--force` still writes `[]`, which is valid.
+`public/data/clubs.json` (read by the import, not by the shop) is a list of clubs: `name` plus `area`, `language`, `location` and `churchName` (each text or `null`). The seed's `--force` still writes `[]`, which is valid.
 
 ## Seed the data
 

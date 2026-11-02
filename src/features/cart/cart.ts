@@ -55,33 +55,26 @@ export function setQuantity(
 /**
  * Turns the cart into order lines A to Z.
  * @param quantities the cart
- * @param honors every honor in the data
- * @return the order lines by name, and the cart's ids that are switched off (with their name) or missing from the data (name null)
+ * @param honors every honor the shop lists
+ * @return the order lines by name, and the cart's ids that the shop no longer lists
  */
 export function resolveCart(
   quantities: CartQuantities,
   honors: Honor[],
 ): {
   lines: OrderLine[]
-  unavailable: Array<{ honorId: string; name: string | null }>
+  unavailable: Array<{ honorId: string }>
 } {
-  const inCart = honors.filter((honor) => quantities[honor.id] !== undefined) // honors the cart names
-  const available = inCart.filter((honor) => honor.enabled) // switched on
+  const inCart = honors.filter((honor) => quantities[honor.id] !== undefined) // honors the cart names; the shop lists only active ones
   const known = new Set(inCart.map((honor) => honor.id)) // ids the data has
   return {
-    lines: sortByName(available).map((honor) => ({
+    lines: sortByName(inCart).map((honor) => ({
       honor, // the honor
       quantity: quantities[honor.id], // how many are in the cart
     })), // A to Z with quantities
-    unavailable: [
-      ...sortByName(inCart.filter((honor) => !honor.enabled)).map((honor) => ({
-        honorId: honor.id, // which honor
-        name: honor.name, // what the Unavailable notice calls it
-      })), // switched off, by name
-      ...Object.keys(quantities)
-        .filter((honorId) => !known.has(honorId)) // ids the data lacks
-        .map((honorId) => ({ honorId, name: null })), // gone from the data
-    ], // everything the cart holds that cannot be ordered
+    unavailable: Object.keys(quantities)
+      .filter((honorId) => !known.has(honorId)) // ids the shop no longer lists, hidden honors included
+      .map((honorId) => ({ honorId })), // the cart stores ids only
   } // the order lines and what to take out
 }
 

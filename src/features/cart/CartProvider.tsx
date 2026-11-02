@@ -22,7 +22,7 @@ export function CartProvider({ honors, children }: { honors: Honor[] | null; chi
   }, [quantities, initial]) // rerun when the cart changes
 
   /**
-   * Removes every switched-off and gone id from the cart in one write; does nothing before honors load or when all ids are orderable.
+   * Removes every id the shop no longer lists from the cart in one write; does nothing before honors load or when all ids are orderable.
    */
   const takeOutUnavailable = useCallback(() => {
     if (honors === null) return // the data is unknown: nothing can be judged unavailable

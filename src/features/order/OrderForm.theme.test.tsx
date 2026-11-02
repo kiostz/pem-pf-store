@@ -49,9 +49,7 @@ const honor = {
   id: 'knot-tying',
   name: 'Knot Tying',
   category: 'Nature',
-  skillLevel: null,
-  issuedBy: 'General Conference',
-  enabled: true,
+  stock: 10,
   price: 3,
   image: null,
 } as const // one honor at RM 3

@@ -1,7 +1,7 @@
 // Tests for the cart maths: quantity rules, A to Z lines, exact money in cents and the item count.
 
 import { describe, expect, it } from 'vitest' // test API
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import { honor as makeHonor } from '@/test/shop-fetch.ts' // the honor builder
 import {
   cartCount,
   clampQuantity,
@@ -16,20 +16,9 @@ import {
  * @param id honor id
  * @param name display name
  * @param price price in the currency's main unit
- * @return an honor shaped like honors.json
+ * @return an honor as the shop lists it
  */
-function honor(id: string, name: string, price = 4): Honor {
-  return {
-    id,
-    name,
-    category: 'Nature',
-    skillLevel: null,
-    issuedBy: 'General Conference',
-    enabled: true,
-    price,
-    image: null,
-  } // switched on, no picture
-}
+const honor = (id: string, name: string, price = 4) => makeHonor(id, name, { price }) // only the price varies here
 
 describe('clampQuantity', () => {
   it.each([
@@ -105,21 +94,14 @@ describe('money and count', () => {
 })
 
 describe('resolveCart unavailable honors', () => {
-  it('reports a switched-off honor by name and a missing id with null, out of lines, count and total', () => {
-    // catches: a switched-off honor still priced into the total, or a missing id dropped without a trace
-    const honors = [
-      honor('ants', 'Ants'),
-      { ...honor('africa-lore', 'Africa Lore'), enabled: false },
-    ]
+  it('reports an id the shop no longer lists out of lines, count and total', () => {
+    // catches: a missing id (a Hidden honor, which /shop never lists) still priced into the total or dropped without a trace
     const { lines, unavailable } = resolveCart(
-      { ants: 2, 'africa-lore': 1, 'no-such-honor': 3 },
-      honors,
+      { ants: 2, 'africa-lore': 1 },
+      [honor('ants', 'Ants')],
     )
     expect(lines.map((line) => line.honor.name)).toEqual(['Ants'])
-    expect(unavailable).toEqual([
-      { honorId: 'africa-lore', name: 'Africa Lore' },
-      { honorId: 'no-such-honor', name: null },
-    ])
+    expect(unavailable).toEqual([{ honorId: 'africa-lore' }])
     expect(cartCount(lines)).toBe(2)
     expect(estimatedTotalCents(lines)).toBe(800)
   })

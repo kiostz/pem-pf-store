@@ -20,22 +20,13 @@ vi.mock('@/features/order/Captcha.tsx', () => ({
 }))
 
 // The one load answers at once, as a cache would: ready on the very first render.
-vi.mock('@/features/catalogue/use-catalogue-data.ts', () => {
-  const honor = (id: string, name: string, enabled: boolean) => ({
-    id,
-    name,
-    category: 'Recreation',
-    skillLevel: null,
-    issuedBy: 'General Conference',
-    enabled,
-    price: 4,
-    image: null,
-  }) // one honor
+vi.mock('@/features/catalogue/use-catalogue-data.ts', async () => {
+  const { honor } = await import('@/test/shop-fetch.ts') // the mock factory runs before imports, so it loads the builder itself
   const loaded = {
     state: {
       status: 'ready',
-      honors: [honor('knot-tying', 'Knot Tying', true), honor('africa-lore', 'Africa Lore', false)],
-      settings: { currency: 'MYR', defaultPrice: 4 },
+      honors: [honor('knot-tying', 'Knot Tying')], // Africa Lore is not listed, like a Hidden honor
+      settings: { currency: 'MYR' },
       clubs: [],
     },
     showSkeleton: false,
@@ -55,10 +46,10 @@ afterEach(() => {
 describe('App with honors loaded at the first draw', () => {
   it('shows the Unavailable line and banner when the cart is opened from the catalogue', async () => {
     // catches: the unavailable line taken out on first mount of the catalogue, so a buyer is never shown what went
-    window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1,"africa-lore":1}}') // a saved cart holding a switched-off honor
+    window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1,"africa-lore":1}}') // a saved cart holding an honor the shop no longer lists
     render(<App />)
     fireEvent.click(screen.getByRole('link', { name: /^Cart, / })) // open the cart
     expect(await screen.findByText('1 item is no longer available')).toBeInTheDocument() // told once
-    expect(screen.getByText('Africa Lore')).toBeInTheDocument() // and still in the list
+    expect(screen.getByText('Item no longer in the shop')).toBeInTheDocument() // and still in the list
   })
 })

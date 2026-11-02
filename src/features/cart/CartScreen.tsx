@@ -49,16 +49,16 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
   }, [])
 
   const currency = state.status === 'ready' ? state.settings.currency : '' // only read once ready
-  const honors = state.status === 'ready' ? state.honors : [] // every honor in the file
+  const honors = state.status === 'ready' ? state.honors : [] // every honor the shop lists
   const { lines, unavailable } = resolveCart(quantities, honors) // orderable lines A to Z, and what cannot be ordered
   const shownLines: ShownLine[] = [
     ...lines.map((line) => ({ id: line.honor.id, honor: line.honor, quantity: line.quantity, unavailable: false })), // orderable
     ...unavailable.map(({ honorId }) => ({
       id: honorId, // the id
-      honor: honors.find((honor) => honor.id === honorId) ?? null, // null when gone from the data
+      honor: null, // the shop no longer lists it, so there is no honor to show
       quantity: quantities[honorId], // kept so Undo can restore it
       unavailable: true, // greyed
-    })), // switched off or gone
+    })), // not in the shop
   ].sort((a, b) => byText(a.honor?.name ?? '￿', b.honor?.name ?? '￿') || byText(a.id, b.id)) // A to Z, gone honors last, equal names by id so Undo restores the old place
   const totalCents = estimatedTotalCents(lines) // orderable lines only
 

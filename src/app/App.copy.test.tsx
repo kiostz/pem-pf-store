@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react' // render and wait for t
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart's key
 import { writeSentOrder } from '@/features/order/sent-order-storage.ts' // fills the stored order
+import { honor, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
 import { App } from './App.tsx' // code under test
 
 // The real captcha loads hCaptcha's script, which a test must not do.
@@ -20,30 +21,15 @@ afterEach(() => {
 
 /**
  * Makes the global fetch answer with two items whose names avoid the word, and the settings.
- * @param fails true makes every file fail, to show the load error
+ * @param fails true makes the request fail, to show the load error
  */
 function serveData(fails: boolean) {
-  const item = (id: string, name: string) => ({
-    id,
-    name,
-    category: 'Recreation',
-    skillLevel: null,
-    issuedBy: 'General Conference',
-    enabled: true,
-    price: 4,
-    image: null,
-  }) // one switched-on item
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) => {
-      if (fails) return new Response('', { status: 500 }) // every file fails
-      return url.endsWith('clubs.json')
-        ? new Response('[]')
-        : url.endsWith('settings.json')
-          ? new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))
-          : new Response(JSON.stringify([item('knot-tying', 'Knot Tying'), item('ants', 'Ants')]))
-    }),
-  ) // the three files answer
+    fails
+      ? vi.fn(async () => new Response('', { status: 500 })) // the request fails
+      : shopFetch([honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')]), // the shop answers
+  ) // the one request
 }
 
 /**

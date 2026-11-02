@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart's key
 import { writeSentOrder } from '@/features/order/sent-order-storage.ts' // fills the stored order
+import { honor, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
 import { App } from './App.tsx' // code under test
 
 // The real captcha loads hCaptcha's script, which a test must not do; this stand-in ticks and expires on demand.
@@ -33,32 +34,10 @@ afterEach(() => {
 
 /** Makes the global fetch answer with two honors at RM 4 and the settings. */
 function serveTwoHonors() {
-  /**
-   * Builds one honor at RM 4.
-   * @param id the honor id
-   * @param name the honor name
-   * @return the honor
-   */
-  const honor = (id: string, name: string) => ({
-    id,
-    name,
-    category: 'Recreation',
-    skillLevel: null,
-    issuedBy: 'General Conference',
-    enabled: true,
-    price: 4,
-    image: null,
-  }) // one honor
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) =>
-      url.endsWith('clubs.json')
-        ? new Response('[]')
-        : url.endsWith('settings.json')
-          ? new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))
-          : new Response(JSON.stringify([honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')])),
-    ),
-  ) // both files answer
+    shopFetch([honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')]),
+  ) // the shop answers
 }
 
 describe('App', () => {
@@ -66,26 +45,7 @@ describe('App', () => {
     // catches: the shell rendering without the catalogue, without its header, or without the theme control in it
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) =>
-        url.endsWith('clubs.json')
-          ? new Response('[]')
-          : url.endsWith('settings.json')
-            ? new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))
-            : new Response(
-                JSON.stringify([
-                  {
-                    id: 'knot-tying',
-                    name: 'Knot Tying',
-                    category: 'Recreation',
-                    skillLevel: null,
-                    issuedBy: 'General Conference',
-                    enabled: true,
-                    price: 4,
-                    image: null,
-                  },
-                ]),
-              ),
-      ),
+      shopFetch([honor('knot-tying', 'Knot Tying')]),
     ) // one honor
     render(<App />)
     const header = screen.getByRole('banner') // the header band
@@ -148,26 +108,7 @@ describe('App', () => {
     // catches: cards and the pill holding separate state, or a Cart tab that never grows
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) =>
-        url.endsWith('clubs.json')
-          ? new Response('[]')
-          : url.endsWith('settings.json')
-            ? new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))
-            : new Response(
-                JSON.stringify([
-                  {
-                    id: 'knot-tying',
-                    name: 'Knot Tying',
-                    category: 'Recreation',
-                    skillLevel: null,
-                    issuedBy: 'General Conference',
-                    enabled: true,
-                    price: 4,
-                    image: null,
-                  },
-                ]),
-              ),
-      ),
+      shopFetch([honor('knot-tying', 'Knot Tying')]),
     ) // one honor at RM 4
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
@@ -187,6 +128,17 @@ describe('App', () => {
     await screen.findByRole('button', { name: 'Try again' })
     expect(screen.getByRole('link', { name: 'Cart' })).toBeInTheDocument()
     vi.restoreAllMocks() // put console back
+  })
+
+  it('keeps the stored cart as it was after a failed load', async () => {
+    // catches: a failed load clearing or rewriting the saved cart, so the buyer loses it
+    vi.spyOn(console, 'error').mockImplementation(() => {}) // the failed load is logged
+    const stored = '{"version":1,"quantities":{"knot-tying":2,"gone":1}}' // a saved cart
+    window.localStorage.setItem(CART_STORAGE_KEY, stored)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 500 }))) // the shop fails
+    render(<App />)
+    await screen.findByRole('button', { name: 'Try again' })
+    expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe(stored)
   })
 
   it('has no footer', async () => {
@@ -327,39 +279,21 @@ describe('App', () => {
 
   it('keeps an unavailable line in the cart, and Checkout takes it out, opens the details page, and Back shows the cart without it', async () => {
     // catches: an unavailable line hidden on load, or one that stays in the cart that goes to the details page
-    const honor = (id: string, name: string, enabled: boolean) => ({
-      id,
-      name,
-      category: 'Recreation',
-      skillLevel: null,
-      issuedBy: 'General Conference',
-      enabled,
-      price: 4,
-      image: null,
-    }) // one honor
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) =>
-        url.endsWith('clubs.json')
-          ? new Response('[]')
-          : url.endsWith('settings.json')
-            ? new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))
-            : new Response(
-                JSON.stringify([honor('knot-tying', 'Knot Tying', true), honor('africa-lore', 'Africa Lore', false)]),
-              ),
-      ),
-    ) // Africa Lore is switched off
+      shopFetch([honor('knot-tying', 'Knot Tying')]),
+    ) // Africa Lore is not listed, like a Hidden honor
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1,"africa-lore":1}}') // a saved cart holding it
     window.location.hash = '#/cart' // opened by address
     render(<App />)
     expect(await screen.findByText('1 item is no longer available')).toBeInTheDocument()
-    expect(screen.getByText('Africa Lore')).toBeInTheDocument() // greyed, still there
+    expect(screen.getByText('Item no longer in the shop')).toBeInTheDocument() // greyed, still there; the cart stores ids only, so its name is gone
     fireEvent.click(screen.getByRole('button', { name: 'Checkout' }))
     expect(await screen.findByRole('heading', { name: 'Your details' })).toHaveFocus()
     expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{"knot-tying":1}}')
     fireEvent.click(screen.getByRole('link', { name: 'Back' }))
     await screen.findByRole('heading', { name: 'Your cart' })
-    expect(screen.queryByText('Africa Lore')).not.toBeInTheDocument()
+    expect(screen.queryByText('Item no longer in the shop')).not.toBeInTheDocument()
     expect(screen.queryByText(/no longer available/)).not.toBeInTheDocument()
   })
 
@@ -367,43 +301,14 @@ describe('App', () => {
     // catches: the details page opening by address with a line that cannot be ordered
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) =>
-        url.endsWith('clubs.json')
-          ? new Response('[]')
-          : url.endsWith('settings.json')
-            ? new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))
-            : new Response(
-                JSON.stringify([
-                  {
-                    id: 'knot-tying',
-                    name: 'Knot Tying',
-                    category: 'Recreation',
-                    skillLevel: null,
-                    issuedBy: 'General Conference',
-                    enabled: true,
-                    price: 4,
-                    image: null,
-                  },
-                  {
-                    id: 'africa-lore',
-                    name: 'Africa Lore',
-                    category: 'Recreation',
-                    skillLevel: null,
-                    issuedBy: 'General Conference',
-                    enabled: false,
-                    price: 4,
-                    image: null,
-                  },
-                ]),
-              ),
-      ),
-    ) // Africa Lore is switched off
+      shopFetch([honor('knot-tying', 'Knot Tying')]),
+    ) // Africa Lore is not listed, like a Hidden honor
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1,"africa-lore":1}}')
     window.location.hash = '#/details'
     render(<App />)
     expect(await screen.findByRole('heading', { name: 'Your cart' })).toBeInTheDocument()
     expect(window.location.hash).toBe('#/cart')
-    expect(screen.getByText('Africa Lore')).toBeInTheDocument()
+    expect(screen.getByText('Item no longer in the shop')).toBeInTheDocument()
   })
 
   it('opens the details page from Checkout with its title, and Back to cart returns to the cart', async () => {
@@ -489,29 +394,8 @@ describe('App', () => {
     // catches: pieces that work alone but do not join: the cart not cleared, no confirmation, or the number not shown
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) =>
-        url.includes('web3forms')
-          ? new Response(JSON.stringify({ success: true }))
-          : url.endsWith('clubs.json')
-            ? new Response('[]')
-            : url.endsWith('settings.json')
-              ? new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))
-              : new Response(
-                  JSON.stringify([
-                    {
-                      id: 'knot-tying',
-                      name: 'Knot Tying',
-                      category: 'Recreation',
-                      skillLevel: null,
-                      issuedBy: 'General Conference',
-                      enabled: true,
-                      price: 4,
-                      image: null,
-                    },
-                  ]),
-                ),
-      ),
-    ) // data files and Web3Forms answer
+      shopFetch([honor('knot-tying', 'Knot Tying')], [], (url) => (url.includes('web3forms') ? new Response(JSON.stringify({ success: true })) : undefined)),
+    ) // the shop and Web3Forms answer
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
     fireEvent.click(screen.getByRole('link', { name: /^Cart, / }))
@@ -542,18 +426,10 @@ describe('App', () => {
        * @param category the category
        * @return the item
        */
-      const item = (id: string, name: string, category: string) => ({
-        id, name, category, skillLevel: null, issuedBy: 'General Conference', enabled: true, price: 4, image: null,
-      }) // one item
+      const item = (id: string, name: string, category: string) => honor(id, name, { category }) // one item
       vi.stubGlobal(
         'fetch',
-        vi.fn(async (url: string) =>
-          url.endsWith('clubs.json')
-            ? new Response('[]')
-            : url.endsWith('settings.json')
-              ? new Response(JSON.stringify({ currency: 'MYR', defaultPrice: 4 }))
-              : new Response(JSON.stringify([item('ants', 'Ants', 'Nature'), item('knot-tying', 'Knot Tying', 'Recreation'), item('camping', 'Camping', 'Recreation')])),
-        ),
+        shopFetch([item('ants', 'Ants', 'Nature'), item('knot-tying', 'Knot Tying', 'Recreation'), item('camping', 'Camping', 'Recreation')]),
       ) // three items in two categories
     }
 

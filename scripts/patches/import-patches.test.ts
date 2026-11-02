@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os' // temp folder location
 import { join } from 'node:path' // path helper
 import { afterEach, beforeEach, describe, expect, it } from 'vitest' // test API
 import { serializeData } from '../../src/shared/data/serialize.ts' // writer used for honors.json
-import type { Honor } from '../../src/shared/data/types.ts' // data shape
+import type { HonorRecord } from '../../src/shared/data/types.ts' // data shape
 import {
   importPatches,
   importReport,
@@ -38,7 +38,7 @@ afterEach(() => {
 })
 
 /** Builds an honor with the given fields over test defaults. */
-function honor(id: string, name: string, extra: Partial<Honor> = {}): Honor {
+function honor(id: string, name: string, extra: Partial<HonorRecord> = {}): HonorRecord {
   return {
     id,
     name,
@@ -377,7 +377,7 @@ describe('importReport', () => {
 
 describe('runImport', () => {
   /** Writes honors.json in the temp folder and returns its path. */
-  function writeHonors(honors: Honor[]): string {
+  function writeHonors(honors: HonorRecord[]): string {
     const path = join(dir, 'honors.json') // file under test
     writeFileSync(path, serializeData(honors))
     return path
@@ -464,7 +464,7 @@ describe('runImport', () => {
       '2026-10-28',
     )
     expect(code).toBe(0)
-    const saved = JSON.parse(readFileSync(honorsPath, 'utf8')) as Honor[] // file after the run
+    const saved = JSON.parse(readFileSync(honorsPath, 'utf8')) as HonorRecord[] // file after the run
     expect(saved.map((h) => h.image)).toEqual([
       'patches/p1.webp',
       'patches/p2.webp',
@@ -498,7 +498,7 @@ describe('runImport', () => {
       '2026-10-28',
     )
     expect(code).toBe(0)
-    const saved = JSON.parse(readFileSync(honorsPath, 'utf8')) as Honor[] // file after the run
+    const saved = JSON.parse(readFileSync(honorsPath, 'utf8')) as HonorRecord[] // file after the run
     expect(saved.map((h) => h.image)).toEqual(['patches/a.webp', null])
   })
 

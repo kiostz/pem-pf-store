@@ -17,7 +17,7 @@ import { join } from 'node:path' // path helper
 import { promisify } from 'node:util' // makes execFile awaitable
 import { patchImagePath } from '../../src/shared/data/patch.ts' // the picture path rule
 import { serializeData } from '../../src/shared/data/serialize.ts' // stable JSON writer
-import type { Honor } from '../../src/shared/data/types.ts' // data shape
+import type { HonorRecord } from '../../src/shared/data/types.ts' // data shape
 import {
   fetchWithRetry,
   findInsignias,
@@ -72,7 +72,7 @@ export async function cwebpConvert(
  * @return counts, the misses and the groups of honors that share one wiki file
  */
 export async function importPatches(
-  honors: Honor[],
+  honors: HonorRecord[],
   deps: ImportDeps,
 ): Promise<{
   saved: number
@@ -85,7 +85,7 @@ export async function importPatches(
     if (name.endsWith('.webp.tmp'))
       rmSync(join(deps.patchesDir, name), { force: true }) // left by a killed run
   const wikiHonors = honors.filter((h) => h.issuedBy !== 'Club') // every honor the wiki can know
-  const hasFile = (h: Honor) =>
+  const hasFile = (h: HonorRecord) =>
     existsSync(join(deps.patchesDir, `${h.id}.webp`)) // picture already saved
   const todoIds = new Set(
     wikiHonors.filter((h) => !hasFile(h)).map((h) => h.id),
@@ -97,12 +97,12 @@ export async function importPatches(
 
   /** Files each honor's result: its file name, a retry request, or a miss. */
   const settle = (
-    list: Honor[],
-    titleOf: (h: Honor) => string,
+    list: HonorRecord[],
+    titleOf: (h: HonorRecord) => string,
     answers: Map<string, string | null | 'no-insignia' | 'fetch-failed'>,
     finalRound: boolean,
-  ): Honor[] => {
-    const retry: Honor[] = [] // honors to try again with the shorter title
+  ): HonorRecord[] => {
+    const retry: HonorRecord[] = [] // honors to try again with the shorter title
     for (const honor of list) {
       const title = titleOf(honor) // the title asked
       const answer = answers.get(title) // the wiki's answer
@@ -128,8 +128,8 @@ export async function importPatches(
     return retry
   }
 
-  const exactTitle = (h: Honor) => wikiPageTitle(h.name, false) // first try
-  const shortTitle = (h: Honor) => wikiPageTitle(h.name, true) // fallback
+  const exactTitle = (h: HonorRecord) => wikiPageTitle(h.name, false) // first try
+  const shortTitle = (h: HonorRecord) => wikiPageTitle(h.name, true) // fallback
   const exact = await findInsignias(
     [...new Set(wikiHonors.map(exactTitle))],
     wiki,
@@ -141,7 +141,7 @@ export async function importPatches(
     (m) => todoIds.has(m.id) || m.reason === 'fetch-failed',
   ) // saved honors report only retryable misses, so a failed lookup is never lost
 
-  const groups = new Map<string, Honor[]>() // wiki file → honors sharing it
+  const groups = new Map<string, HonorRecord[]>() // wiki file → honors sharing it
   for (const honor of wikiHonors) {
     const file = fileOf.get(honor.id) // set when a page gave an insignia
     if (file !== undefined)
@@ -239,9 +239,9 @@ export async function importPatches(
  * @return a new array; only a `null` image changes, to `patches/<id>.webp`
  */
 export function setPatchImages(
-  honors: Honor[],
+  honors: HonorRecord[],
   hasPicture: (id: string) => boolean,
-): Honor[] {
+): HonorRecord[] {
   return honors.map((honor) =>
     honor.image === null && hasPicture(honor.id)
       ? { ...honor, image: patchImagePath(honor.id) } // the only change
@@ -307,10 +307,10 @@ export async function runImport(
   if (!Array.isArray(honors))
     throw new Error(`${honorsPath}: honors.json must be a list of honors`) // fail on bad input
   const { saved, skipped, misses, shared } = await importPatches(
-    honors as Honor[],
+    honors as HonorRecord[],
     deps,
   )
-  const updated = setPatchImages(honors as Honor[], (id) =>
+  const updated = setPatchImages(honors as HonorRecord[], (id) =>
     existsSync(join(deps.patchesDir, `${id}.webp`)),
   ) // phase 2 from the files on disk
   const text = serializeData(updated) // new file text

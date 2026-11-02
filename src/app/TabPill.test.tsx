@@ -5,23 +5,11 @@ import { describe, expect, it } from 'vitest' // test API
 import { CartProvider } from '@/features/cart/CartProvider.tsx' // the state the pill reads
 import { useCart } from '@/features/cart/use-cart.ts' // reads and sets the cart
 import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import { honor } from '@/test/shop-fetch.ts' // the honor builder
 import { PILL_DOCK, PILL_SURFACE } from '@/shared/ui/floating-pill-box.ts' // the shared pill classes
 import { TabPill } from './TabPill.tsx' // code under test
 
-const honors: Honor[] = [
-  { id: 'knot-tying', name: 'Knot Tying', enabled: true },
-  { id: 'ants', name: 'Ants', enabled: true },
-  { id: 'africa-lore', name: 'Africa Lore', enabled: false },
-].map(({ id, name, enabled }) => ({
-  id,
-  name,
-  category: 'Nature',
-  skillLevel: null,
-  issuedBy: 'General Conference',
-  enabled,
-  price: 4,
-  image: null,
-})) // two switched on at RM 4, one switched off
+const honors: Honor[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')] // two listed at RM 4; africa-lore is not listed, like a Hidden honor
 
 /**
  * Renders the pill with buttons that set quantities.
@@ -46,7 +34,7 @@ function renderPill({
         <button onClick={() => setQuantity('knot-tying', 1)}>one knot</button>
         <button onClick={() => setQuantity('knot-tying', 0)}>no knots</button>
         <button onClick={() => setQuantity('ants', 0)}>no ants</button>
-        <button onClick={() => setQuantity('africa-lore', 2)}>two switched off</button>
+        <button onClick={() => setQuantity('africa-lore', 2)}>two not listed</button>
       </>
     )
   }
@@ -119,18 +107,18 @@ describe('TabPill', () => {
     expect(within(tabs().cart).getByText('1 item')).toBeInTheDocument()
   })
 
-  it('does not count a switched-off item', () => {
+  it('does not count an item the shop no longer lists', () => {
     // catches: the pill disagreeing with the Checkout bar about what is orderable
     renderPill()
     fireEvent.click(screen.getByText('one knot'))
-    fireEvent.click(screen.getByText('two switched off'))
+    fireEvent.click(screen.getByText('two not listed'))
     expect(tabs().cart).toHaveAccessibleName('Cart, 1 item, estimated total RM 4.00')
   })
 
-  it('stays plain when only a switched-off item is in the cart', () => {
+  it('stays plain when only an unlisted item is in the cart', () => {
     // catches: a grown tab over a cart with nothing to order
     renderPill()
-    fireEvent.click(screen.getByText('two switched off'))
+    fireEvent.click(screen.getByText('two not listed'))
     expect(tabs().cart).toHaveAccessibleName('Cart')
   })
 

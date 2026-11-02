@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs' // Node file h
 import { parseCsv } from '../../src/shared/data/csv.ts' // CSV reader
 import { honorId } from '../../src/shared/data/slug.ts' // id rule
 import { serializeData } from '../../src/shared/data/serialize.ts' // stable JSON writer
-import type { Honor, Settings } from '../../src/shared/data/types.ts' // data shapes
+import type { HonorRecord, Settings } from '../../src/shared/data/types.ts' // data shapes
 
 const requiredColumns = ['honor', 'category', 'skill_level', 'issued_by'] // columns every row must have
 
@@ -18,7 +18,7 @@ const requiredColumns = ['honor', 'category', 'skill_level', 'issued_by'] // col
 export function seedHonors( // rows in, honors out
   rows: Record<string, string>[],
   settings: Settings,
-): Honor[] {
+): HonorRecord[] {
   const seen = new Set<string>() // ids used so far
   return rows.map((row) => {
     // one honor per row

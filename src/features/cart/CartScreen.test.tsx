@@ -7,26 +7,17 @@ import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' 
 import { OrderFormProvider } from '@/features/order/OrderFormProvider.tsx' // the form state the screen reads
 import { useOrderForm } from '@/features/order/use-order-form.ts' // starts a send
 import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import { honor } from '@/test/shop-fetch.ts' // the honor builder
 import { CART_STORAGE_KEY } from './cart-storage.ts' // where the cart is kept
 import { CartProvider } from './CartProvider.tsx' // the state the screen edits
 import { CartScreen } from './CartScreen.tsx' // code under test
 import { PILL_DOCK } from '@/shared/ui/floating-pill-box.ts' // the dock the pill and the note share
 import { useCart } from './use-cart.ts' // reads the cart
 
-const honors: Honor[] = [
-  { id: 'knot-tying', name: 'Knot Tying', price: 4, enabled: true },
-  { id: 'ants', name: 'Ants', price: 3.5, enabled: true },
-  { id: 'africa-lore', name: 'Africa Lore', price: 5, enabled: false },
-].map((partial) => ({
-  ...partial,
-  category: 'Nature',
-  skillLevel: null,
-  issuedBy: 'General Conference',
-  image: null,
-})) // Knot Tying RM 4.00, Ants RM 3.50, Africa Lore RM 5.00 and switched off
+const honors: Honor[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants', { price: 3.5 })] // Knot Tying RM 4.00 and Ants RM 3.50; africa-lore is not listed, like a Hidden honor
 
 const ready: CatalogueLoad = {
-  state: { status: 'ready', honors, settings: { currency: 'MYR', defaultPrice: 4 }, clubs: [] },
+  state: { status: 'ready', honors, settings: { currency: 'MYR' }, clubs: [] },
   showSkeleton: false,
   retry: () => {},
 } // the load as the app hands it over
@@ -347,16 +338,16 @@ describe('CartScreen removal and Undo', () => {
 })
 
 describe('CartScreen Unavailable lines', () => {
-  it('shows a switched-off honor greyed with the tag, "Not in your total", a Remove button and no stepper', () => {
+  it('shows a Hidden honor, which the shop no longer lists, greyed with the tag, "Not in your total", a Remove button and no stepper', () => {
     // catches: an unavailable line that can still be stepped, or one that is priced into the total
     renderScreen({ 'knot-tying': 2, 'africa-lore': 3 })
-    const line = screen.getByText('Africa Lore').closest('li')!
+    const line = screen.getByText('Item no longer in the shop').closest('li')!
     expect(within(line).getByText('Unavailable')).toBeInTheDocument()
     expect(within(line).getByText('Not in your total')).toBeInTheDocument()
-    expect(within(line).getByRole('button', { name: 'Remove Africa Lore' })).toBeInTheDocument()
+    expect(within(line).getByRole('button', { name: 'Remove Item no longer in the shop (africa-lore)' })).toBeInTheDocument()
     expect(within(line).queryByRole('textbox')).not.toBeInTheDocument()
     expect(within(line).queryByText(/RM 15\.00/)).not.toBeInTheDocument()
-    expect(screen.getByText('Africa Lore')).toHaveClass('text-text-muted')
+    expect(screen.getByText('Item no longer in the shop')).toHaveClass('text-text-muted')
     expect(screen.getAllByText('RM 8.00')).toHaveLength(2) // Knot Tying's line and the bar: Africa Lore is left out
   })
 
@@ -374,7 +365,7 @@ describe('CartScreen Unavailable lines', () => {
     // catches: a gone id vanishing silently, or a count of quantities instead of lines
     renderScreen({ 'knot-tying': 1, 'africa-lore': 4, 'no-such-honor': 2 })
     expect(screen.getByText('2 items are no longer available')).toBeInTheDocument()
-    const line = screen.getByText('Item no longer in the shop').closest('li')!
+    const line = screen.getAllByText('Item no longer in the shop')[1].closest('li')! // two gone lines, africa-lore then no-such-honor
     expect(within(line).getByText('Unavailable')).toBeInTheDocument()
     expect(
       within(line).getByRole('button', { name: 'Remove Item no longer in the shop (no-such-honor)' }),
@@ -415,9 +406,9 @@ describe('CartScreen Unavailable lines', () => {
   it('removing an unavailable line lowers the count and shows the note; at 0 the banner goes', () => {
     // catches: a stale banner, or a removal with no way back
     renderScreen({ 'knot-tying': 1, 'africa-lore': 4, 'no-such-honor': 2 })
-    removeLine('Africa Lore')
+    removeLine('Item no longer in the shop (africa-lore)')
     expect(screen.getByText('1 item is no longer available')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Undo removing Africa Lore' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Undo removing Item no longer in the shop (africa-lore)' })).toBeInTheDocument()
     removeLine('Item no longer in the shop (no-such-honor)')
     expect(screen.queryByText(/no longer available/)).not.toBeInTheDocument()
   })
@@ -426,7 +417,7 @@ describe('CartScreen Unavailable lines', () => {
     // catches: a Checkout that leads to an order with nothing in it
     const onBack = vi.fn()
     renderScreen({ 'africa-lore': 2 }, ready, onBack)
-    expect(screen.getByText('Africa Lore')).toBeInTheDocument()
+    expect(screen.getByText('Item no longer in the shop')).toBeInTheDocument()
     expect(screen.getByText('1 item is no longer available')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Checkout' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Browse more' }))
@@ -526,7 +517,7 @@ describe('CartScreen empty, loading and error', () => {
   it('shows the catalogue error copy and Try again, and no bar, when the load failed', () => {
     // catches: no way to recover from a failed load, or a Checkout over an error
     const retry = vi.fn()
-    renderScreen({ 'knot-tying': 1 }, { state: { status: 'error' }, showSkeleton: false, retry })
+    renderScreen({ 'knot-tying': 1 }, { state: { status: 'error', reason: 'failed' }, showSkeleton: false, retry })
     expect(screen.getByText("We couldn't load the shop. Check your connection and try again.")).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(retry).toHaveBeenCalledTimes(1)
@@ -556,7 +547,7 @@ describe('CartScreen floating pill', () => {
     expect(note.nextElementSibling).toBe(pill)
   })
 
-  it('counts five items in the pill for a 2 + 3 cart with a switched-off line', () => {
+  it('counts five items in the pill for a 2 + 3 cart with an unavailable line', () => {
     // catches: a pill that counts unavailable lines or quantities wrongly, so it disagrees with the Cart tab
     renderScreen({ 'knot-tying': 2, ants: 3, 'africa-lore': 4 })
     expect(screen.getByText('Estimated total · 5 items')).toBeInTheDocument()

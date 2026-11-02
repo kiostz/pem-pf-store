@@ -4,22 +4,12 @@ import { StrictMode } from 'react' // React's double render and double effect ru
 import { act, fireEvent, render, screen } from '@testing-library/react' // render and query
 import { beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import { honor } from '@/test/shop-fetch.ts' // the honor builder
 import { CART_STORAGE_KEY } from './cart-storage.ts' // the key under test
 import { CartProvider } from './CartProvider.tsx' // code under test
 import { useCart } from './use-cart.ts' // reads the cart
 
-const honors: Honor[] = [
-  { id: 'knot-tying', name: 'Knot Tying', enabled: true },
-  { id: 'africa-lore', name: 'Africa Lore', enabled: false },
-  { id: 'ants', name: 'Ants', enabled: true },
-].map((partial) => ({
-  ...partial,
-  category: 'Nature',
-  skillLevel: null,
-  issuedBy: 'General Conference',
-  price: 4,
-  image: null,
-})) // Africa Lore is switched off
+const honors: Honor[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')] // Africa Lore is not listed, like a Hidden honor
 
 /**
  * Shows the cart as text and offers one button to change it.
@@ -123,7 +113,7 @@ describe('CartProvider', () => {
     expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{"africa-lore":1,"gone":2}}')
   })
 
-  it('keeps switched-off and missing ids when honors arrive, with no write', () => {
+  it('keeps unavailable ids when honors arrive, with no write', () => {
     // catches: the old take-out on load, which hides an unavailable line before the buyer sees it
     const stored = '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-honor":3}}'
     window.localStorage.setItem(CART_STORAGE_KEY, stored)
@@ -149,7 +139,7 @@ describe('CartProvider', () => {
     expect(screen.getByTestId('quantities')).toHaveTextContent('{"africa-lore":1,"ants":2,"knot-tying":5}')
   })
 
-  it('takeOutUnavailable removes every switched-off and missing id in one write and keeps the rest', () => {
+  it('takeOutUnavailable removes every unavailable id in one write and keeps the rest', () => {
     // catches: an unavailable line left in an order, or a take-out that writes twice or drops an orderable line
     window.localStorage.setItem(
       CART_STORAGE_KEY,
@@ -167,7 +157,7 @@ describe('CartProvider', () => {
     window.localStorage.setItem(
       CART_STORAGE_KEY,
       '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-honor":3}}',
-    ) // a stored cart with a switched-off and a missing honor
+    ) // a stored cart with an unavailable and a missing honor
     const setItem = vi.spyOn(Storage.prototype, 'setItem') // counts the writes
     render(
       <StrictMode>
