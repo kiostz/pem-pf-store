@@ -36,6 +36,24 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   })) as unknown as typeof window.matchMedia
 }
 
+// jsdom does not implement the modal methods of <dialog>; this gives it showModal and close that set the `open` attribute and fire `close`, enough for the sheets' tests (focus trapping and Escape are the browser's job, checked in the browser).
+if (
+  typeof window !== 'undefined' &&
+  typeof HTMLDialogElement !== 'undefined' &&
+  typeof HTMLDialogElement.prototype.showModal !== 'function'
+) {
+  HTMLDialogElement.prototype.showModal = function showModal(
+    this: HTMLDialogElement,
+  ) {
+    this.setAttribute('open', '') // shown
+  }
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    if (!this.hasAttribute('open')) return // already closed
+    this.removeAttribute('open') // hidden
+    this.dispatchEvent(new Event('close')) // as a browser does
+  }
+}
+
 // Remove anything a test rendered so tests do not leak into each other.
 afterEach(() => {
   cleanup() // unmount

@@ -1,88 +1,164 @@
-// Tests for the pending-changes functions: set-back removal, counting by field, `from` taken from the base, and the rebase after a conflict.
+// Tests for the pending-changes functions: edits per field against a snapshot of the row, counting, the request's `from` values, and the three rebases.
 
 import { describe, expect, it } from 'vitest' // test API
-import type { AdminHonor } from '../../../workers/admin/src/admin-types.ts' // the row shape
 import {
   applySaved,
   countChanges,
+  dropIds,
+  mergeSaved,
   rebaseAfterConflict,
-  setStatus,
-  setStock,
+  rebaseOnFetch,
+  setEdit,
   toHonorChanges,
+  type PendingChanges,
 } from './pending-changes.ts' // the code under test
+import { makeItem } from './item-fixtures.ts' // row builder
 
-const base: AdminHonor[] = [
-  {
-    id: 'knot-tying',
-    name: 'Knot Tying',
-    category: 'Outdoor',
-    status: 'active',
-    stock: 12,
-  },
-  {
-    id: 'africa-lore',
-    name: 'Africa Lore',
-    category: 'Mission',
-    status: 'hidden',
-    stock: 0,
-  },
-] // two rows as the admin saw them
+const knot = makeItem({
+  id: 'knot-tying',
+  name: 'Knot Tying',
+  category: 'Recreation',
+  stock: 12,
+}) // a row as seen
 
-describe('pending changes', () => {
-  it('removes a field when it is set back to the base value, and the row when it has no field left', () => {
-    // Catches a Save pill that keeps counting an edit that was undone by hand.
-    const edited = setStock({}, base, 'knot-tying', 5)
-    expect(edited).toEqual({ 'knot-tying': { stock: 5 } })
-    expect(setStock(edited, base, 'knot-tying', 12)).toEqual({})
+describe('setEdit', () => {
+  it('records an edit with the row as seen, and drops the row when the edit is set back', () => {
+    // Catches an edit that lingers after the admin types the old value back.
+    const edited = setEdit({}, knot, 'stock', 5)
+    expect(edited).toEqual({
+      'knot-tying': { seen: knot, edits: { stock: 5 } },
+    })
+    expect(setEdit(edited, knot, 'stock', 12)).toEqual({})
   })
 
-  it('counts by field, not by row', () => {
-    // Catches "Save (1 change)" for a row with both its status and its stock edited.
-    let pending = setStock({}, base, 'knot-tying', 5)
-    pending = setStatus(pending, base, 'knot-tying', 'hidden')
-    pending = setStatus(pending, base, 'africa-lore', 'active')
+  it('keeps the first snapshot even when the shown row has moved on', () => {
+    // Catches `from` being taken from a newer row than the one the admin edited against.
+    const first = setEdit({}, knot, 'stock', 5)
+    const moved = { ...knot, stock: 9 }
+    expect(setEdit(first, moved, 'name', 'Knots')['knot-tying'].seen).toEqual(
+      knot,
+    )
+  })
+
+  it('edits name, category and price like status and stock', () => {
+    // Catches a field the pending model cannot hold.
+    let pending: PendingChanges = {}
+    pending = setEdit(pending, knot, 'name', 'Knots')
+    pending = setEdit(pending, knot, 'category', 'Nature')
+    pending = setEdit(pending, knot, 'priceCents', 550)
+    expect(pending['knot-tying'].edits).toEqual({
+      name: 'Knots',
+      category: 'Nature',
+      priceCents: 550,
+    })
     expect(countChanges(pending)).toBe(3)
   })
+})
 
-  it('takes `from` from the base and `to` from the edit', () => {
-    // Catches a save that sends the edited value as `from`, which the Worker would never refuse.
-    const pending = setStock(
-      setStatus({}, base, 'africa-lore', 'active'),
-      base,
-      'africa-lore',
-      7,
-    )
-    expect(toHonorChanges(pending, base)).toEqual([
+describe('toHonorChanges', () => {
+  it('takes every `from` from the snapshot, per edited field only', () => {
+    // Catches a `from` read from a list that has since changed, which would hide a conflict.
+    let pending: PendingChanges = {}
+    pending = setEdit(pending, knot, 'priceCents', 550)
+    pending = setEdit(pending, knot, 'status', 'hidden')
+    expect(toHonorChanges(pending)).toEqual([
       {
-        id: 'africa-lore',
-        status: { from: 'hidden', to: 'active' },
-        stock: { from: 0, to: 7 },
+        id: 'knot-tying',
+        priceCents: { from: 400, to: 550 },
+        status: { from: 'active', to: 'hidden' },
       },
     ])
   })
+})
 
-  it('applies saved rows over the base by id and leaves the others alone', () => {
-    // Catches a saved row that is not shown as saved, or one that wipes its neighbours.
-    const saved: AdminHonor = { ...base[0], stock: 5 }
-    expect(applySaved(base, [saved])).toEqual([saved, base[1]])
+describe('mergeSaved', () => {
+  it('takes only the saved fields and the new change time, leaving other fields as seen', () => {
+    // Catches a save answer that silently shows a name another admin changed, hiding a later conflict.
+    const sent = setEdit({}, knot, 'priceCents', 550)
+    const answer = {
+      ...knot,
+      name: 'Other',
+      priceCents: 550,
+      modifiedAt: '2026-11-03T05:00:00.000Z',
+    }
+    expect(mergeSaved(sent, [answer])).toEqual([
+      { ...knot, priceCents: 550, modifiedAt: '2026-11-03T05:00:00.000Z' },
+    ])
   })
 
-  it('rebases after a conflict: keeps the edit, drops an edit that equals the current value, lists the conflicted ids', () => {
-    // Catches a conflict that throws the admin's edits away, or keeps one that is already true.
-    const pending = {
-      'knot-tying': { stock: 7 }, // differs from the current 5: stays
-      'africa-lore': { status: 'active' as const }, // equals the current value: goes
-    }
-    const current: AdminHonor[] = [
-      { ...base[0], stock: 5 },
-      { ...base[1], status: 'active' },
-    ]
-    const result = rebaseAfterConflict(base, pending, current)
-    expect(result.pending).toEqual({ 'knot-tying': { stock: 7 } })
-    expect(result.base).toEqual(current)
-    expect(result.conflictedIds).toEqual(['knot-tying', 'africa-lore'])
-    expect(toHonorChanges(result.pending, result.base)).toEqual([
-      { id: 'knot-tying', stock: { from: 5, to: 7 } },
-    ])
+  it('keeps an answer for a row nothing was sent for', () => {
+    // Catches a dropped row.
+    expect(mergeSaved({}, [knot])).toEqual([knot])
+  })
+})
+
+describe('applySaved', () => {
+  it('makes the saved row the snapshot, drops what was written, and keeps edits made meanwhile', () => {
+    // Catches a save that clears an edit typed while it ran, or leaves the written edit pending.
+    let pending = setEdit({}, knot, 'stock', 5)
+    pending = setEdit(pending, knot, 'name', 'Knots')
+    const saved = { ...knot, stock: 5, modifiedAt: '2026-11-03T05:00:00.000Z' }
+    const next = applySaved(pending, [saved])
+    expect(next).toEqual({
+      'knot-tying': { seen: saved, edits: { name: 'Knots' } },
+    })
+  })
+})
+
+describe('rebaseOnFetch', () => {
+  it('rebases and flags a row whose edited field moved', () => {
+    // Catches a refetch that leaves a stale `from`, or one that silently drops the admin's edit.
+    const pending = setEdit({}, knot, 'stock', 5)
+    const fresh = { ...knot, stock: 9 }
+    const result = rebaseOnFetch(pending, [fresh])
+    expect(result.pending).toEqual({
+      'knot-tying': { seen: fresh, edits: { stock: 5 } },
+    })
+    expect(result.flagged).toEqual([fresh])
+  })
+
+  it('only updates the snapshot when an unedited field moved, with no flag', () => {
+    // Catches a flag on a row where nothing the admin touched changed.
+    const pending = setEdit({}, knot, 'stock', 5)
+    const fresh = { ...knot, name: 'Knot Tying 2' }
+    const result = rebaseOnFetch(pending, [fresh])
+    expect(result.pending['knot-tying'].seen).toEqual(fresh)
+    expect(result.flagged).toEqual([])
+  })
+
+  it('ignores rows with no pending edit', () => {
+    // Catches pending entries invented for every fetched row.
+    expect(rebaseOnFetch({}, [knot]).pending).toEqual({})
+  })
+})
+
+describe('rebaseAfterConflict', () => {
+  it('rebases the current rows, flags them, and drops ids another admin deleted', () => {
+    // Catches a conflict that re-sends the stale `from`, or keeps an edit for a gone row.
+    const gone = makeItem({ id: 'gone', name: 'Gone' })
+    let pending = setEdit({}, knot, 'stock', 5)
+    pending = setEdit(pending, gone, 'stock', 1)
+    const current = { ...knot, stock: 7 }
+    const result = rebaseAfterConflict(pending, [current], ['gone'])
+    expect(result.pending).toEqual({
+      'knot-tying': { seen: current, edits: { stock: 5 } },
+    })
+    expect(result.conflictedIds).toEqual(['knot-tying'])
+  })
+
+  it('drops an edit that the current row already holds', () => {
+    // Catches a pending edit that equals the base and would show a pointless Changed label.
+    const pending = setEdit({}, knot, 'stock', 5)
+    expect(
+      rebaseAfterConflict(pending, [{ ...knot, stock: 5 }], []).pending,
+    ).toEqual({})
+  })
+})
+
+describe('dropIds', () => {
+  it('removes the named rows', () => {
+    // Catches a deleted row that keeps its edits.
+    const pending = setEdit({}, knot, 'stock', 5)
+    expect(dropIds(pending, ['knot-tying'])).toEqual({})
   })
 })

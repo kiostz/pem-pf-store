@@ -302,13 +302,19 @@ The admin page (`admin.html`) reuses every token above; it adds no colour, radiu
 | Column                      | 768 px max, 16 px gutter                | the cart's column: a row is a name and two controls                    |
 | Row                         | card, `p-3`, 12 px between rows         | the cart's values                                                      |
 | Row layout                  | two lines under 768 px, one from 768 px | the status control and stepper (about 290 px) do not fit beside a name at 375 px |
+| Row text                    | the name (a 44 px underlined button that opens the Item sheet), then "Category · price · changed 3 Nov" in 14 px muted | one line of facts: no count anywhere, and the year appears only outside the current one |
+| Toolbar                     | sticky; Search and Add item, then Category and Sort (5:6 widths), 44 px each, 8 px apart; one row from 640 px | Sort and Category read "Recently changed" and "All categories" without wrapping at 375 px (`truncate`) |
+| Add item                    | the quiet soft button (soft fill, oxblood text) | Save (n changes) stays the one primary action |
+| Item sheet                  | a native `<dialog>`: a bottom sheet at 375 px (16 px corners on top, 16 px padding, 90% of the height at most), a 480 px card (`max-w-120`) from 640 px; Done or Add item is the one oxblood action, Delete item the quiet red one | modal focus trap, Escape and focus return come from `showModal()`; entry is the note's slide-up, or a fade under Reduce Motion |
+| Delete dialog               | the same sheet shape; Delete item in the danger red with the page colour as lettering (5.7:1 light, 7.6:1 dark), Keep item soft, focus on Keep item | white on the dark theme's light red would be 2.8:1 |
+| Load more                   | a soft 44 px button under the last row; "Loading…" dims it; failure line with Try again | the Load more button sits above the Save pill's clearance, not inside the pill |
+| Conflict flag               | the amber pair (Unavailable tag colours) with "This item has been updated." in bold, then "Latest: …" | the one existing amber pair, 6.1:1 and 8.3:1; the admin's own edit stays pending beneath it, and a save whose answer differs from a shown value raises the same flag |
 | Pending row edge            | 4 px inset oxblood on the start side (`shadow-[inset_4px_0_0_var(--color-accent)]`) | new: marks a pending row without changing its size; the "Changed" label says it too, so it is never colour alone |
 | Status control              | one switch, 44 px target: 44 x 24 px track, green (`success`) when Active, grey (`text-muted`, 7.4:1 on card) when Hidden, the word beside it | green is the one new token: the track must hold 3:1 against the card as a non-text control, and green says shown where grey says off; the word means it is never colour alone |
 | Stock stepper number        | 56 px wide (`w-14`), controls 44 px     | new: room for four digits (9,999) at 18 px; the cart's number is 44 px for two |
-| Conflict flag               | Unavailable tag colours                 | the one existing amber pair, 6.1:1 and 8.3:1                           |
 | Notes above the pill        | the Removed note's dark note, 12 px over the pill | the same note shape and slide-up                                |
 | Bottom clearance            | 208 px (`pb-52`)                        | the cart's clearance: a note (about 52 px), the 12 px gap and the pill |
-| Skeleton row                | 124 px under 768 px, 72 px from 768 px  | stand-ins for a row's two heights; shown after `delay-loader`          |
+| Skeleton row                | 144 px under 768 px, 90 px from 768 px  | the real row's two heights, measured at 375 px and 1280 px (the details line grew); shown after `delay-loader` |
 
 ## Principles
 
