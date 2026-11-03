@@ -4,7 +4,7 @@ import { env } from 'cloudflare:workers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHandler } from '../src/handler'
 import { saveHonorChanges } from '../src/honors'
-import { call, pages, postChanges, rowOf, seedHonors } from './helpers'
+import { BACKFILL_TIME, call, fullRowOf, pages, postChanges, rowOf, seedHonors, wire } from './helpers'
 
 beforeEach(async () => {
   await seedHonors([
@@ -12,11 +12,37 @@ beforeEach(async () => {
     { id: 'africa-lore', name: 'Africa Lore', category: 'Mission', status: 'hidden', stock: 0 },
   ])
 })
-afterEach(() => vi.restoreAllMocks()) // Spies never leak between tests.
+afterEach(() => {
+  vi.restoreAllMocks() // Spies never leak between tests.
+  vi.useRealTimers() // Nor a frozen clock.
+})
+
+// The time a frozen-clock save stamps.
+const NOW = '2026-11-03T09:30:15.123Z'
+
+/**
+ * Freezes the clock the Worker reads, so a save's modified time is known.
+ * @return Nothing.
+ */
+function freezeClock(): void {
+  vi.useFakeTimers({ toFake: ['Date'] }) // Only Date: D1 calls still run.
+  vi.setSystemTime(new Date(NOW))
+}
+
+/**
+ * Reads the honors of a save result that is a conflict or a save.
+ * @param result The result.
+ * @return Its honors.
+ */
+function honorsOf(result: Awaited<ReturnType<typeof saveHonorChanges>>) {
+  if (result.kind === 'name-taken') throw new Error('unexpected name-taken') // A test bug.
+  return result.honors
+}
 
 describe('POST /api/items/changes', () => {
   it('saves a stock and a status and returns the saved rows', async () => {
     // Catches a save that writes nothing, or answers with the old rows.
+    freezeClock()
     const res = await postChanges({
       changes: [
         { id: 'knot-tying', stock: { from: 12, to: 20 } },
@@ -27,8 +53,8 @@ describe('POST /api/items/changes', () => {
     expect(res.headers.get('Cache-Control')).toBe('no-store')
     expect(await res.json()).toEqual({
       honors: [
-        { id: 'africa-lore', name: 'Africa Lore', category: 'Mission', status: 'active', stock: 0 },
-        { id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 20 },
+        wire({ id: 'africa-lore', name: 'Africa Lore', category: 'Mission', status: 'active', stock: 0, modifiedAt: NOW }),
+        wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 20, modifiedAt: NOW }),
       ],
     })
     expect(await rowOf('knot-tying')).toEqual({ stock: 20, status: 'active' }) // Really stored.
@@ -36,7 +62,7 @@ describe('POST /api/items/changes', () => {
   })
 
   it('refuses a stale stock with 409 and the current row, writing nothing', async () => {
-    // Catches a save that overwrites a newer stock (a Task 10 sale) with the admin's old view.
+    // Catches a save that overwrites a newer stock (a sale) with the admin's old view.
     const res = await postChanges({
       changes: [
         { id: 'knot-tying', stock: { from: 99, to: 5 } }, // The admin saw 99; it is 12.
@@ -46,7 +72,8 @@ describe('POST /api/items/changes', () => {
     expect(res.status).toBe(409)
     expect(await res.json()).toEqual({
       error: 'conflict',
-      honors: [{ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 12 }],
+      honors: [wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 12 })],
+      deletedIds: [],
     })
     expect(await rowOf('knot-tying')).toEqual({ stock: 12, status: 'active' }) // Untouched.
     expect((await rowOf('africa-lore')).status).toBe('hidden') // The valid change was not written either.
@@ -74,12 +101,12 @@ describe('POST /api/items/changes', () => {
         return env.DB.batch(statements)
       },
     } as unknown as D1Database
-    const result = await saveHonorChanges(racing, [
+    const result = await saveHonorChanges(racing, NOW, [
       { id: 'knot-tying', stock: { from: 12, to: 20 } },
       { id: 'africa-lore', status: { from: 'hidden', to: 'active' } },
     ])
     expect(result.kind).toBe('conflict')
-    expect(result.honors).toEqual([{ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 3 }])
+    expect(honorsOf(result)).toEqual([wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 3 })])
     expect(await rowOf('knot-tying')).toEqual({ stock: 3, status: 'active' }) // The sale stands.
     expect((await rowOf('africa-lore')).status).toBe('hidden') // The whole batch rolled back.
   })
@@ -93,12 +120,12 @@ describe('POST /api/items/changes', () => {
         return env.DB.batch(statements)
       },
     } as unknown as D1Database
-    const result = await saveHonorChanges(racing, [
+    const result = await saveHonorChanges(racing, NOW, [
       { id: 'knot-tying', status: { from: 'active', to: 'hidden' } },
       { id: 'africa-lore', stock: { from: 0, to: 5 } }, // Valid beside it.
     ])
     expect(result.kind).toBe('conflict')
-    expect(result.honors).toEqual([{ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'hidden', stock: 12 }])
+    expect(honorsOf(result)).toEqual([wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'hidden', stock: 12 })])
     expect((await rowOf('africa-lore')).stock).toBe(0) // The whole batch rolled back.
   })
 
@@ -126,28 +153,45 @@ describe('POST /api/items/changes', () => {
         throw new Error('D1_ERROR: connection reset') // ...but the answer is lost.
       },
     } as unknown as D1Database
-    const result = await saveHonorChanges(blip, [
+    const result = await saveHonorChanges(blip, NOW, [
       { id: 'knot-tying', stock: { from: 12, to: 20 } },
       { id: 'africa-lore', status: { from: 'hidden', to: 'active' } },
     ])
     expect(result.kind).toBe('saved')
-    expect(result.honors.map((honor) => [honor.id, honor.stock, honor.status])).toEqual([
+    expect(honorsOf(result).map((honor) => [honor.id, honor.stock, honor.status])).toEqual([
       ['africa-lore', 0, 'active'],
       ['knot-tying', 20, 'active'],
     ])
   })
 
-  it('answers 400 invalid for an unknown id and writes nothing', async () => {
-    // Catches a silent no-op UPDATE on a missing row reported as saved.
+  it('answers 409 with deletedIds for an id that is gone, writing nothing', async () => {
+    // Catches a silent no-op UPDATE on a missing row reported as saved, or a 400 that hides another admin's delete.
     const res = await postChanges({
       changes: [
         { id: 'knot-tying', stock: { from: 12, to: 20 } },
         { id: 'no-such-honor', stock: { from: 0, to: 1 } },
       ],
     })
-    expect(res.status).toBe(400)
-    expect(await res.json()).toEqual({ error: 'invalid' })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'conflict', honors: [], deletedIds: ['no-such-honor'] })
     expect((await rowOf('knot-tying')).stock).toBe(12)
+  })
+
+  it('rolls back to 409 with deletedIds when a row is deleted between the read and the write', async () => {
+    // Catches a delete after the first read being lost: the UPDATE of a missing row changes nothing, so the rest would be written.
+    const racing = {
+      prepare: (sql: string) => env.DB.prepare(sql), // Reads go through.
+      batch: async (statements: D1PreparedStatement[]) => {
+        await env.DB.prepare('DELETE FROM honors WHERE id = ?').bind('africa-lore').run() // Another admin deletes it first.
+        return env.DB.batch(statements)
+      },
+    } as unknown as D1Database
+    const result = await saveHonorChanges(racing, NOW, [
+      { id: 'knot-tying', stock: { from: 12, to: 20 } },
+      { id: 'africa-lore', stock: { from: 0, to: 5 } },
+    ])
+    expect(result).toEqual({ kind: 'conflict', honors: [], deletedIds: ['africa-lore'] })
+    expect((await rowOf('knot-tying')).stock).toBe(12) // Nothing written.
   })
 
   it('refuses a foreign or missing Origin with 403', async () => {
@@ -242,5 +286,123 @@ describe('POST /api/items/changes', () => {
     const logged = JSON.stringify(spy.mock.calls)
     expect(logged).toContain('TypeError') // Class only...
     expect(logged).not.toMatch(/admin@example|lookup failed/) // ...never the email.
+  })
+})
+
+describe('name, category and price', () => {
+  it('saves each new field and stamps modified_at, leaving created_at alone', async () => {
+    // Catches a field that is validated but never written, and a save that forgets the modified time.
+    freezeClock()
+    const res = await postChanges({
+      changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots' }, category: { from: 'Outdoor', to: 'Shirt' }, priceCents: { from: 400, to: 650 } }],
+    })
+    expect(res.status).toBe(200)
+    expect(await fullRowOf('knot-tying')).toMatchObject({ name: 'Knots', category: 'Shirt', price_cents: 650, created_at: BACKFILL_TIME, modified_at: NOW })
+    expect(((await res.json()) as { honors: { modifiedAt: string }[] }).honors[0].modifiedAt).toBe(NOW)
+  })
+
+  it('stamps one time on every row of one save', async () => {
+    // Catches a clock read per row, which gives one save two times.
+    freezeClock()
+    await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 12, to: 13 } }, { id: 'africa-lore', status: { from: 'hidden', to: 'active' } }] })
+    expect((await fullRowOf('knot-tying'))!.modified_at).toBe(NOW)
+    expect((await fullRowOf('africa-lore'))!.modified_at).toBe(NOW)
+  })
+
+  for (const [field, stale] of [['name', { from: 'Not Its Name', to: 'X' }], ['category', { from: 'Nature', to: 'Shirt' }], ['priceCents', { from: 999, to: 5 }]] as const) {
+    it(`answers 409 with the current row and writes nothing when the ${field} was changed by someone else`, async () => {
+      // Catches a missing per-field guard on ${field}: an old view would overwrite another admin's edit.
+      freezeClock()
+      const res = await postChanges({ changes: [{ id: 'knot-tying', [field]: stale, stock: { from: 12, to: 13 } }] })
+      expect(res.status).toBe(409)
+      expect(await res.json()).toEqual({ error: 'conflict', honors: [wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', stock: 12 })], deletedIds: [] })
+      expect(await fullRowOf('knot-tying')).toMatchObject({ stock: 12, modified_at: BACKFILL_TIME }) // A 409 leaves the time alone.
+    })
+  }
+
+  it('does not use modified_at as a guard: a sale moves stock without touching it', async () => {
+    // Catches a guard on the time, which a sale never changes, so a stale stock would pass; and the reverse, a time-only difference blocking a save.
+    await env.DB.prepare("UPDATE honors SET modified_at = '2026-11-02T00:00:00.000Z' WHERE id = 'knot-tying'").run() // Changed since the admin looked, in a field the admin is not editing.
+    const res = await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 12, to: 13 } }] })
+    expect(res.status).toBe(200) // Per-field guards only.
+  })
+
+  it('rolls back to 409 when a name changes between the read and the write', async () => {
+    // Catches the name guard being checked only at the first read.
+    const racing = {
+      prepare: (sql: string) => env.DB.prepare(sql),
+      batch: async (statements: D1PreparedStatement[]) => {
+        await env.DB.prepare("UPDATE honors SET name = 'Renamed' WHERE id = 'knot-tying'").run() // Another admin renames it.
+        return env.DB.batch(statements)
+      },
+    } as unknown as D1Database
+    const result = await saveHonorChanges(racing, NOW, [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots' } }, { id: 'africa-lore', stock: { from: 0, to: 5 } }])
+    expect(result.kind).toBe('conflict')
+    expect((await fullRowOf('knot-tying'))!.name).toBe('Renamed')
+    expect((await rowOf('africa-lore')).stock).toBe(0)
+  })
+
+  it('answers 409 name-taken for a name another item has, in any case, writing nothing', async () => {
+    // Catches a rename onto an existing name, which would show two identical rows.
+    const res = await postChanges({ changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'africa lore' } }, { id: 'africa-lore', stock: { from: 0, to: 5 } }] })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'name-taken', ids: ['knot-tying'] })
+    expect((await rowOf('africa-lore')).stock).toBe(0)
+  })
+
+  it('answers 409 name-taken with both ids for two renames to one name in one save, writing nothing', async () => {
+    // Catches a 400 invalid for a case the page can reach (two rows renamed before one Save), which flags no row.
+    const res = await postChanges({ changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Shared' } }, { id: 'africa-lore', name: { from: 'Africa Lore', to: 'shared' } }] })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'name-taken', ids: ['knot-tying', 'africa-lore'] })
+    expect((await fullRowOf('knot-tying'))!.name).toBe('Knot Tying')
+    expect((await fullRowOf('africa-lore'))!.name).toBe('Africa Lore')
+  })
+
+  it('refuses a swap of two names in one save with 409 name-taken, writing nothing', async () => {
+    // Documents the ruling: the unique index is checked per statement, so a swap is refused and the admin renames through a temporary name in two saves; catches a swap that half-applies.
+    const res = await postChanges({ changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Africa Lore' } }, { id: 'africa-lore', name: { from: 'Africa Lore', to: 'Knot Tying' } }] })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'name-taken', ids: ['knot-tying', 'africa-lore'] })
+    expect((await fullRowOf('knot-tying'))!.name).toBe('Knot Tying')
+    expect((await fullRowOf('africa-lore'))!.name).toBe('Africa Lore')
+  })
+
+  it('lets an item change only the case of its own name', async () => {
+    // Catches the unique check seeing the item's own old name as a clash.
+    const res = await postChanges({ changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'KNOT TYING' } }] })
+    expect(res.status).toBe(200)
+  })
+
+  it('gives name-taken to the later of two parallel renames to one name', async () => {
+    // Catches the race the unique index exists for: both renames pass the first read.
+    const [a, b] = await Promise.all([
+      postChanges({ changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Shared' } }] }),
+      postChanges({ changes: [{ id: 'africa-lore', name: { from: 'Africa Lore', to: 'shared' } }] }),
+    ])
+    expect([a.status, b.status].sort()).toEqual([200, 409])
+    const taken = a.status === 409 ? a : b
+    expect(((await taken.json()) as { error: string }).error).toBe('name-taken')
+    const names = [(await fullRowOf('knot-tying'))!.name, (await fullRowOf('africa-lore'))!.name].map((n) => n.toLowerCase())
+    expect(names.filter((n) => n === 'shared')).toHaveLength(1)
+  })
+
+  it('logs no name when a save fails', async () => {
+    // Catches an item name in console.error: a name is catalogue text, but the rule is ids and classes only.
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const failing = { prepare: (sql: string) => env.DB.prepare(sql), batch: async () => { throw new Error('D1_ERROR: Knot Tying Knots') } } as unknown as D1Database
+    const res = await postChanges({ changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots' } }] }, {}, { env: { DB: failing } })
+    expect(res.status).toBe(500)
+    expect(JSON.stringify(spy.mock.calls)).not.toMatch(/Knot/)
+  })
+})
+
+describe('what leaves modified_at alone', () => {
+  it('stamps a stock-only save and leaves rows outside the save alone', async () => {
+    // Catches the time being set for rows the save did not name, or not set by a stock save.
+    freezeClock()
+    await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 12, to: 14 } }] })
+    expect((await fullRowOf('knot-tying'))!.modified_at).toBe(NOW)
+    expect((await fullRowOf('africa-lore'))!.modified_at).toBe(BACKFILL_TIME) // Not in the save.
   })
 })

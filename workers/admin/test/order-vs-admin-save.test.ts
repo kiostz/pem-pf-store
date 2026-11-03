@@ -4,7 +4,7 @@ import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { saveOrder } from '../../api/src/save-order'
 import { parseOrderRequest } from '../../api/src/order-request'
-import { postChanges, rowOf, seedHonors } from './helpers'
+import { postChanges, rowOf, seedHonors, wire } from './helpers'
 
 beforeEach(async () => {
   await env.DB.batch([env.DB.prepare('DELETE FROM order_lines'), env.DB.prepare('DELETE FROM orders'), env.DB.prepare('DELETE FROM settings')]) // Clean slate.
@@ -20,7 +20,7 @@ describe('an order between the admin load and save', () => {
     expect(sold.kind).toBe('saved') // Saved.
     const stale = await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 5, to: 8 } }] }) // The admin still sees 5.
     expect(stale.status).toBe(409) // Conflict.
-    expect(await stale.json()).toEqual({ error: 'conflict', honors: [{ id: 'knot-tying', name: 'Knot Tying', category: 'Nature', status: 'active', stock: 3 }] }) // The current row.
+    expect(await stale.json()).toEqual({ error: 'conflict', honors: [wire({ id: 'knot-tying', name: 'Knot Tying', stock: 3 })], deletedIds: [] }) // The current row.
     expect(await rowOf('knot-tying')).toEqual({ stock: 3, status: 'active' }) // Not overwritten.
     const orders = await env.DB.prepare('SELECT COUNT(*) AS n FROM orders').first<{ n: number }>() // The sale.
     expect(orders?.n).toBe(1) // Still there.

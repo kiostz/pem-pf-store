@@ -22,13 +22,13 @@ describe('read endpoints', () => {
     ]) // Literal expected values.
   })
 
-  it('sorts /items names ignoring case, equal names by id', async () => {
-    // Catches binary order (apple after Banana) and unstable order for equal names.
+  it('sorts /items names ignoring case', async () => {
+    // Catches binary order (apple after Banana); names are unique ignoring case, so no tie remains.
     await addHonor({ id: 'b1', name: 'Banana' }) // Sorts last.
-    await addHonor({ id: 'a2', name: 'apple' }) // Higher id.
-    await addHonor({ id: 'a1', name: 'Apple' }) // Lower id, inserted last.
+    await addHonor({ id: 'a2', name: 'apple' }) // Lower case, sorts first.
+    await addHonor({ id: 'a1', name: 'Apple Pie' }) // Inserted last, sorts second.
     const items = (await (await call('/items')).json()) as { id: string }[] // The items.
-    expect(items.map((honor) => honor.id)).toEqual(['a1', 'a2', 'b1']) // Case-insensitive, ties by id.
+    expect(items.map((honor) => honor.id)).toEqual(['a2', 'a1', 'b1']) // Case-insensitive.
   })
 
   it('never lists a hidden honor even with stock', async () => {

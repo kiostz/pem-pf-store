@@ -68,6 +68,16 @@ describe('POST /orders', () => {
     expect(row?.club).toBe('Other: Riverside') // Body text.
   })
 
+  it('lowers stock and leaves the honor\'s created_at and modified_at as they were', async () => {
+    // Catches an order's stock drop stamping modified_at, which would put every sold item at the top of Recently changed.
+    mockSiteverify() // Captcha passes.
+    await env.DB.exec("UPDATE honors SET created_at = '2026-11-02T03:04:05.678Z', modified_at = '2026-11-02T06:07:08.910Z' WHERE id = 'knots'") // Times an admin edit left.
+    const { res } = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 2 }] }))
+    expect(res.status).toBe(201) // Created.
+    expect(await stockOf('knots')).toBe(3) // 5 - 2.
+    expect(await env.DB.prepare("SELECT created_at, modified_at FROM honors WHERE id = 'knots'").first()).toEqual({ created_at: '2026-11-02T03:04:05.678Z', modified_at: '2026-11-02T06:07:08.910Z' }) // Untouched.
+  })
+
   it('refuses a line above stock, a Hidden item and an unknown id together with 409, writing nothing', async () => {
     // Catches a refusal that lists only the first short line, or that writes anything.
     mockSiteverify() // Captcha passes.

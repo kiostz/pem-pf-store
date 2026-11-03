@@ -46,15 +46,16 @@ export async function call(path: string, init: RequestInit = {}, options: CallOp
 }
 
 /**
- * Sends a save request as the page would: own origin and JSON.
+ * Sends a JSON POST as the page would: own origin and JSON.
+ * @param path The route path.
  * @param body The value to send as JSON.
  * @param init Header or body overrides.
  * @param options The Access context and env overrides.
  * @return The Worker's response.
  */
-export function postChanges(body: unknown, init: RequestInit = {}, options: CallOptions = {}): Promise<Response> {
+export function postTo(path: string, body: unknown, init: RequestInit = {}, options: CallOptions = {}): Promise<Response> {
   return call(
-    '/api/items/changes',
+    path,
     {
       method: 'POST',
       headers: { Origin: 'https://admin.test', 'Content-Type': 'application/json' }, // What the page sends.
@@ -65,6 +66,20 @@ export function postChanges(body: unknown, init: RequestInit = {}, options: Call
   )
 }
 
+/**
+ * Sends a save request as the page would.
+ * @param body The value to send as JSON.
+ * @param init Header or body overrides.
+ * @param options The Access context and env overrides.
+ * @return The Worker's response.
+ */
+export function postChanges(body: unknown, init: RequestInit = {}, options: CallOptions = {}): Promise<Response> {
+  return postTo('/api/items/changes', body, init, options) // The save route.
+}
+
+// The time every seeded row carries unless a test says otherwise (the migration's backfill value).
+export const BACKFILL_TIME = '2026-11-01T00:00:00.000Z'
+
 // A honor row to seed.
 export interface SeedHonor {
   id: string
@@ -72,6 +87,10 @@ export interface SeedHonor {
   category?: string
   status?: 'active' | 'hidden'
   stock?: number
+  priceCents?: number
+  issuedBy?: string
+  createdAt?: string
+  modifiedAt?: string
 }
 
 /**
@@ -81,13 +100,33 @@ export interface SeedHonor {
  */
 export async function seedHonors(honors: SeedHonor[]): Promise<void> {
   await env.DB.prepare('DELETE FROM honors').run() // Start clean.
-  for (const honor of honors) {
-    await env.DB.prepare(
-      'INSERT INTO honors (id, name, category, issued_by, status, stock, price_cents) VALUES (?, ?, ?, ?, ?, ?, 400)',
-    )
-      .bind(honor.id, honor.name ?? honor.id, honor.category ?? 'Nature', 'GC', honor.status ?? 'active', honor.stock ?? 0)
-      .run() // Price and issuer are irrelevant here.
-  }
+  await insertHonors(honors) // Then the rows.
+}
+
+/**
+ * Adds honors without clearing the table, in one batch.
+ * @param honors The rows to insert; missing fields get defaults.
+ * @return Nothing.
+ */
+export async function insertHonors(honors: SeedHonor[]): Promise<void> {
+  if (honors.length === 0) return // Nothing to batch.
+  await env.DB.batch(
+    honors.map((honor) =>
+      env.DB.prepare(
+        'INSERT INTO honors (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ).bind(
+        honor.id,
+        honor.name ?? honor.id,
+        honor.category ?? 'Nature',
+        honor.issuedBy ?? 'General Conference',
+        honor.status ?? 'active',
+        honor.stock ?? 0,
+        honor.priceCents ?? 400,
+        honor.createdAt ?? BACKFILL_TIME,
+        honor.modifiedAt ?? BACKFILL_TIME,
+      ),
+    ),
+  ) // One transaction.
 }
 
 /**
@@ -99,4 +138,22 @@ export async function rowOf(id: string): Promise<{ stock: number; status: string
   const row = await env.DB.prepare('SELECT stock, status FROM honors WHERE id = ?').bind(id).first<{ stock: number; status: string }>() // One row.
   if (row === null) throw new Error(`no honor ${id}`) // A test bug.
   return row
+}
+
+/**
+ * Reads every stored column a test cares about, straight from the database.
+ * @param id The honor id.
+ * @return The row, or null when it does not exist.
+ */
+export async function fullRowOf(id: string): Promise<{ name: string; category: string; price_cents: number; status: string; stock: number; issued_by: string; created_at: string; modified_at: string } | null> {
+  return env.DB.prepare('SELECT name, category, price_cents, status, stock, issued_by, created_at, modified_at FROM honors WHERE id = ?').bind(id).first() // Null when absent.
+}
+
+/**
+ * Builds the JSON an `AdminHonor` has on the wire.
+ * @param over Fields that differ from a default seeded row called `id`.
+ * @return The expected honor.
+ */
+export function wire(over: Record<string, unknown> & { id: string }): Record<string, unknown> {
+  return { name: over.id, category: 'Nature', status: 'active', stock: 0, priceCents: 400, clubAdded: false, createdAt: BACKFILL_TIME, modifiedAt: BACKFILL_TIME, ...over } // Seed defaults plus overrides.
 }

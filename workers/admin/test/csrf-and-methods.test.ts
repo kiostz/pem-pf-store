@@ -1,7 +1,7 @@
 // Tests the save route's same-origin (CSRF) rules, method handling and gate ordering beyond the basic cases, so a loose Origin compare or a late gate cannot let a foreign page or a stranger save.
 
 import { describe, expect, it } from 'vitest'
-import { call, postChanges, rowOf, seedHonors } from './helpers'
+import { call, fullRowOf, postChanges, postTo, rowOf, seedHonors } from './helpers'
 
 // A valid save the admin page could send.
 const body = { changes: [{ id: 'knot-tying', stock: { from: 12, to: 20 } }] }
@@ -72,5 +72,41 @@ describe('guarded save, one row with two fields', () => {
     })
     expect(res.status).toBe(409)
     expect(await rowOf('knot-tying')).toEqual({ stock: 12, status: 'active' })
+  })
+})
+
+describe('the other write routes', () => {
+  // Each write route with a body that would succeed.
+  const writes: [string, unknown][] = [
+    ['/api/items', { name: 'Camp Shirt', category: 'Shirt', priceCents: 400 }],
+    ['/api/items/delete', { id: 'knot-tying', seen: { name: 'Knot Tying', category: 'Nature', priceCents: 400, status: 'active', stock: 12, modifiedAt: '2026-11-01T00:00:00.000Z' } }],
+  ]
+
+  it('refuses a foreign Origin and a non-JSON type, before any write', async () => {
+    // Catches a new write route that skipped the CSRF checks the save has.
+    await seed()
+    for (const [path, payload] of writes) {
+      expect((await postTo(path, payload, { headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json' } })).status, path).toBe(403)
+      expect((await postTo(path, payload, { headers: { Origin: 'https://admin.test', 'Content-Type': 'text/plain' } })).status, path).toBe(415)
+      expect((await postTo(path, payload, { headers: { 'Content-Type': 'application/json' } })).status, path).toBe(403) // No Origin.
+    }
+    expect(await fullRowOf('camp-shirt')).toBeNull()
+    expect(await fullRowOf('knot-tying')).not.toBeNull()
+  })
+
+  it('answers 405 with Allow for the wrong method on every route', async () => {
+    // Catches a route that answers 404 or runs for the wrong method.
+    await seed()
+    const cases: [string, string, string][] = [
+      ['/api/items', 'PUT', 'GET, POST'],
+      ['/api/items', 'DELETE', 'GET, POST'],
+      ['/api/items/delete', 'GET', 'POST'],
+      ['/api/meta', 'POST', 'GET'],
+    ]
+    for (const [path, method, allow] of cases) {
+      const res = await call(path, { method })
+      expect(res.status, `${method} ${path}`).toBe(405)
+      expect(res.headers.get('Allow')).toBe(allow)
+    }
   })
 })

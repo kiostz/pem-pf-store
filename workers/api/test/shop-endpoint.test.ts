@@ -49,16 +49,16 @@ describe('GET /shop', () => {
     expect(body.items).toEqual([]) // Nothing shown.
   })
 
-  it('sorts names case-insensitively and equal names by id, on /shop and /items', async () => {
-    // Catches binary order (apple after Banana) and unstable order for equal names.
+  it('sorts names case-insensitively, on /shop and /items', async () => {
+    // Catches binary order (apple after Banana); names are unique ignoring case, so no tie remains.
     await addSettings() // Needed for 200.
     await addHonor({ id: 'b1', name: 'Banana' }) // Sorts last.
-    await addHonor({ id: 'a2', name: 'apple' }) // Same name as a1 apart from case, higher id.
-    await addHonor({ id: 'a1', name: 'Apple' }) // Same name, lower id, inserted last.
+    await addHonor({ id: 'a2', name: 'apple' }) // Lower case, sorts first.
+    await addHonor({ id: 'a1', name: 'Apple Pie' }) // Inserted last, sorts second.
     const shop = (await (await call('/shop')).json()) as { items: { id: string }[] } // Combined read.
     const items = (await (await call('/items')).json()) as { id: string }[] // Items read.
-    expect(shop.items.map((honor) => honor.id)).toEqual(['a1', 'a2', 'b1']) // Case-insensitive, ties by id.
-    expect(items.map((honor) => honor.id)).toEqual(['a1', 'a2', 'b1']) // Same order.
+    expect(shop.items.map((honor) => honor.id)).toEqual(['a2', 'a1', 'b1']) // Case-insensitive.
+    expect(items.map((honor) => honor.id)).toEqual(['a2', 'a1', 'b1']) // Same order.
   })
 
   it('gives empty lists for an empty database with a settings row', async () => {

@@ -1,7 +1,10 @@
 // Admin Worker request handler: the Access gate, CSRF checks, router, headers and short error codes.
 
-import { readAdminHonors, saveHonorChanges, UnknownHonorError } from './honors' // The reads and the guarded save.
-import { parseHonorChanges } from './validate-changes' // The body validator.
+import { addHonor } from './add-honor' // The Add.
+import { deleteHonor } from './delete-honor' // The Delete.
+import { readAdminPage, readMeta, saveHonorChanges } from './honors' // The reads and the guarded save.
+import { parseItemQuery } from './item-query' // The list query validator.
+import { parseDeleteRequest, parseHonorChanges, parseNewItem } from './validate-changes' // The body validators.
 
 // The built admin page files, handed in by index.ts (tests pass stand-ins).
 export interface Pages {
@@ -184,34 +187,83 @@ async function readLimitedText(request: Request): Promise<string | null> {
 }
 
 /**
+ * Runs the checks every write shares: own Origin, JSON type, size limit and JSON syntax.
+ * @param request The request.
+ * @return The parsed body, or the response to send instead.
+ */
+async function readJsonBody(request: Request): Promise<{ body: unknown } | { refusal: Response }> {
+  if (request.headers.get('Origin') !== new URL(request.url).origin) return { refusal: json({ error: 'forbidden' }, 403) } // Own origin only.
+  const type = (request.headers.get('Content-Type') ?? '').split(';')[0].trim().toLowerCase() // The media type without parameters.
+  if (type !== 'application/json') return { refusal: json({ error: 'json-only' }, 415) } // Forces a CORS preflight for other sites.
+  const text = await readLimitedText(request)
+  if (text === null) return { refusal: json({ error: 'too-large' }, 413) } // Over 64 KB.
+  try { // Parse can throw.
+    return { body: JSON.parse(text) } // Text to value.
+  } catch { // Not JSON.
+    return { refusal: json({ error: 'invalid' }, 400) } // Broken JSON.
+  }
+}
+
+/**
+ * Handles `GET /api/items`: one page of the list.
+ * @param request The request.
+ * @param env The Worker bindings.
+ * @return The response.
+ */
+async function getItems(request: Request, env: Env): Promise<Response> {
+  const query = parseItemQuery(new URL(request.url)) // Null when invalid.
+  if (query === null) return json({ error: 'invalid' }, 400) // Fails validation.
+  return json(await readAdminPage(env.DB, query), 200) // The page.
+}
+
+/**
  * Handles `POST /api/items/changes`: CSRF checks, validation and the guarded save.
  * @param request The request.
  * @param env The Worker bindings.
  * @return The response.
  */
 async function postChanges(request: Request, env: Env): Promise<Response> {
-  if (request.headers.get('Origin') !== new URL(request.url).origin) return json({ error: 'forbidden' }, 403) // Own origin only.
-  const type = (request.headers.get('Content-Type') ?? '').split(';')[0].trim().toLowerCase() // The media type without parameters.
-  if (type !== 'application/json') return json({ error: 'json-only' }, 415) // Forces a CORS preflight for other sites.
-  const text = await readLimitedText(request)
-  if (text === null) return json({ error: 'too-large' }, 413) // Over 64 KB.
-  let body: unknown // The parsed body.
-  try { // Parse can throw.
-    body = JSON.parse(text) // Text to value.
-  } catch { // Not JSON.
-    return json({ error: 'invalid' }, 400) // Broken JSON.
-  }
-  const changes = parseHonorChanges(body) // Null when invalid.
+  const read = await readJsonBody(request) // The shared checks.
+  if ('refusal' in read) return read.refusal // Refused.
+  const changes = parseHonorChanges(read.body) // Null when invalid.
   if (changes === null) return json({ error: 'invalid' }, 400) // Fails validation.
-  try { // The save can throw.
-    const result = await saveHonorChanges(env.DB, changes) // The guarded save.
-    return result.kind === 'saved' // Saved or conflict.
-      ? json({ honors: result.honors }, 200) // As saved.
-      : json({ error: 'conflict', honors: result.honors }, 409) // Current rows; nothing written.
-  } catch (error) { // Failure branch.
-    if (error instanceof UnknownHonorError) return json({ error: 'invalid' }, 400) // An id that does not exist.
-    throw error // Anything else is a 500 in the router.
-  }
+  const result = await saveHonorChanges(env.DB, new Date().toISOString(), changes) // The guarded save, with one time for the request.
+  if (result.kind === 'saved') return json({ honors: result.honors }, 200) // As saved.
+  if (result.kind === 'name-taken') return json({ error: 'name-taken', ids: result.ids }, 409) // Nothing written.
+  return json({ error: 'conflict', honors: result.honors, deletedIds: result.deletedIds }, 409) // Current rows and gone ids; nothing written.
+}
+
+/**
+ * Handles `POST /api/items`: adds a Club-added honor.
+ * @param request The request.
+ * @param env The Worker bindings.
+ * @return The response.
+ */
+async function postItem(request: Request, env: Env): Promise<Response> {
+  const read = await readJsonBody(request) // The shared checks.
+  if ('refusal' in read) return read.refusal // Refused.
+  const input = parseNewItem(read.body) // Null when invalid.
+  if (input === null) return json({ error: 'invalid' }, 400) // Fails validation.
+  const result = await addHonor(env.DB, input, new Date().toISOString()) // Both times are this one.
+  if (result.kind === 'added') return json({ honor: result.honor }, 201) // Created.
+  return json({ error: result.kind }, 409) // `name-taken` or `id-taken`.
+}
+
+/**
+ * Handles `POST /api/items/delete`: deletes a Club-added honor the admin saw unchanged.
+ * @param request The request.
+ * @param env The Worker bindings.
+ * @return The response.
+ */
+async function postDelete(request: Request, env: Env): Promise<Response> {
+  const read = await readJsonBody(request) // The shared checks.
+  if ('refusal' in read) return read.refusal // Refused.
+  const input = parseDeleteRequest(read.body) // Null when invalid.
+  if (input === null) return json({ error: 'invalid' }, 400) // Fails validation.
+  const result = await deleteHonor(env.DB, input) // The guarded delete.
+  if (result.kind === 'deleted') return json({ deletedId: input.id }, 200) // Gone.
+  if (result.kind === 'built-in') return json({ error: 'built-in' }, 400) // Never deleted.
+  return json({ error: 'conflict', honors: result.honors }, 409) // Changed since viewing.
 }
 
 /**
@@ -220,13 +272,15 @@ async function postChanges(request: Request, env: Env): Promise<Response> {
  * @return The Worker's fetch handler.
  */
 export function createHandler(pages: Pages): ExportedHandlerFetchHandler<Env> {
-  // Path to [method, handler]; exact matches only.
-  const routes = new Map<string, [string, (request: Request, env: Env) => Promise<Response> | Response]>([ // Path to method and handler.
-    ['/', ['GET', () => file(pages.html, 'text/html; charset=utf-8', { 'Content-Security-Policy': CSP, 'Referrer-Policy': 'no-referrer' })]], // The page.
-    ['/admin.js', ['GET', () => file(pages.js, 'text/javascript; charset=utf-8')]], // The script.
-    ['/admin.css', ['GET', () => file(pages.css, 'text/css; charset=utf-8')]], // The styles.
-    ['/api/items', ['GET', async (_request, env) => json(await readAdminHonors(env.DB), 200)]], // Every honor.
-    ['/api/items/changes', ['POST', postChanges]], // The save.
+  // Path to its methods and their handlers; exact matches only.
+  const routes = new Map<string, Record<string, (request: Request, env: Env) => Promise<Response> | Response>>([ // Path to method and handler.
+    ['/', { GET: () => file(pages.html, 'text/html; charset=utf-8', { 'Content-Security-Policy': CSP, 'Referrer-Policy': 'no-referrer' }) }], // The page.
+    ['/admin.js', { GET: () => file(pages.js, 'text/javascript; charset=utf-8') }], // The script.
+    ['/admin.css', { GET: () => file(pages.css, 'text/css; charset=utf-8') }], // The styles.
+    ['/api/items', { GET: getItems, POST: postItem }], // A page of the list; Add.
+    ['/api/items/changes', { POST: postChanges }], // The save.
+    ['/api/items/delete', { POST: postDelete }], // Delete.
+    ['/api/meta', { GET: async (_request, env) => json(await readMeta(env.DB), 200) }], // Categories, currency, default price.
   ])
   return async (request, env, ctx) => { // The fetch handler.
     const path = new URL(request.url).pathname // The request path.
@@ -236,8 +290,8 @@ export function createHandler(pages: Pages): ExportedHandlerFetchHandler<Env> {
     }
     const route = routes.get(path) // The matching route.
     if (route === undefined) return json({ error: 'not-found' }, 404) // Unknown path.
-    const [method, run] = route // Method and handler.
-    if (request.method !== method) return json({ error: 'method-not-allowed' }, 405, { Allow: method }) // Wrong method.
+    const run = Object.hasOwn(route, request.method) ? route[request.method] : undefined // The handler of this method.
+    if (run === undefined) return json({ error: 'method-not-allowed' }, 405, { Allow: Object.keys(route).join(', ') }) // Wrong method.
     try { // Handlers can throw.
       return await run(request, env) // Run the route.
     } catch (error) { // Any thrown error.

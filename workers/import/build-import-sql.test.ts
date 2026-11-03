@@ -258,8 +258,8 @@ describe('buildImportSql text and money', () => {
       build({
         honors: [
           { ...honor, price: 4.1 }, // 410.00000000000006 unrounded
-          { ...honor, id: 'b', image: null, price: 0.29 }, // 28.999999999999996 unrounded
-          { ...honor, id: 'c', image: null, price: 0 }, // free
+          { ...honor, id: 'b', name: 'B', image: null, price: 0.29 }, // 28.999999999999996 unrounded
+          { ...honor, id: 'c', name: 'C', image: null, price: 0 }, // free
         ],
       }),
     )

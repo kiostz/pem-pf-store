@@ -1,12 +1,15 @@
 // Tests the Access gate: every path and method answers 403 unless Access signed in an allowed admin.
 
 import { describe, expect, it } from 'vitest'
-import { call, postChanges, seedHonors } from './helpers'
+import { call, postChanges, postTo, seedHonors } from './helpers'
 
 // Each request the gate must guard, as a label and a sender.
 const guarded: [string, (options?: Parameters<typeof call>[2]) => Promise<Response>][] = [
   ['GET /api/items', (o) => call('/api/items', {}, o)],
   ['POST /api/items/changes', (o) => postChanges({ changes: [] }, {}, o)],
+  ['GET /api/meta', (o) => call('/api/meta', {}, o)],
+  ['POST /api/items', (o) => postTo('/api/items', { name: 'Camp Shirt', category: 'Shirt', priceCents: 400 }, {}, o)],
+  ['POST /api/items/delete', (o) => postTo('/api/items/delete', { id: 'x' }, {}, o)],
   ['GET /api/nope', (o) => call('/api/nope', {}, o)],
 ]
 

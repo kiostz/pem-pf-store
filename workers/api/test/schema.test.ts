@@ -139,6 +139,7 @@ describe('honors', () => {
       await tryInsert('honors', {
         ...validHonor,
         id: 'other',
+        name: 'Other Knots',
         image: 'honors/other-2.webp',
         skill_level: 3,
       }),
@@ -169,7 +170,7 @@ describe('honors', () => {
   it('undoes the first update of a batch when the second one underflows stock', async () => {
     // Catches an order that is half applied: the first honor loses stock while the second fails.
     await mustInsert('honors', { ...validHonor, id: 'first', stock: 5 })
-    await mustInsert('honors', { ...validHonor, id: 'second', stock: 0 })
+    await mustInsert('honors', { ...validHonor, id: 'second', name: 'Second', stock: 0 })
     await expect(
       db.batch([
         db
@@ -193,6 +194,43 @@ describe('honors', () => {
     expect(
       await tryRun(`UPDATE honors SET stock = 'abc' WHERE id = 'knots'`),
     ).toContain(TYPE)
+  })
+})
+
+describe('honors times and unique names', () => {
+  it('backfills nothing for new rows but the constant default, as an import-style INSERT gets it', async () => {
+    // Catches an INSERT that names no time columns (the import, an old Worker) failing or leaving NULL.
+    await mustInsert('honors', validHonor) // No time columns named.
+    expect(await db.prepare('SELECT created_at, modified_at FROM honors').first()).toEqual({ created_at: '2026-11-01T00:00:00.000Z', modified_at: '2026-11-01T00:00:00.000Z' })
+  })
+
+  it('backfills rows that exist before migration 0003 with 2026-11-01 in both time columns', async () => {
+    // Catches a migration whose default text or ADD COLUMN leaves old rows NULL or on another date.
+    await db.batch(['order_lines', 'orders', 'clubs', 'settings', 'honors'].map((table) => db.prepare(`DROP TABLE ${table}`))) // Back to an empty database.
+    const migrations = [...env.TEST_MIGRATIONS].sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)) // 0001, 0002, 0003.
+    expect(migrations.map((migration: { name: string }) => migration.name.slice(0, 4))).toEqual(['0001', '0002', '0003'])
+    for (const migration of migrations.slice(0, 2)) await db.batch(migration.queries.map((query: string) => db.prepare(query))) // The schema as it was before 0003.
+    await db.prepare("INSERT INTO honors (id, name, category, issued_by, status, stock, price_cents) VALUES ('old', 'Old', 'Nature', 'GC', 'active', 1, 400)").run() // A row that exists already.
+    await db.batch(migrations[2].queries.map((query: string) => db.prepare(query))) // Migration 0003 itself.
+    expect(await db.prepare("SELECT created_at, modified_at FROM honors WHERE id = 'old'").first()).toEqual({ created_at: '2026-11-01T00:00:00.000Z', modified_at: '2026-11-01T00:00:00.000Z' })
+  })
+
+  it.each([
+    ['created_at with no milliseconds', { created_at: '2026-11-01T00:00:00Z' }],
+    ['modified_at with no milliseconds', { modified_at: '2026-11-01T00:00:00Z' }],
+    ['created_at that is not a date', { created_at: '2026-02-30T00:00:00.000Z' }],
+    ['modified_at as text', { modified_at: 'yesterday' }],
+    ['a NULL modified_at', { modified_at: null }],
+  ])('refuses %s', async (_label, change) => {
+    // Catches a time column without its CHECK, which would break the text sort.
+    expect(await tryInsert('honors', { ...validHonor, ...change })).toMatch(/CHECK constraint failed|NOT NULL constraint failed/)
+  })
+
+  it('refuses a second name that differs only in case', async () => {
+    // Catches the unique index missing or using binary collation, so "Knots" and "knots" could both exist.
+    await mustInsert('honors', validHonor)
+    expect(await tryInsert('honors', { ...validHonor, id: 'knots-2', name: 'KNOTS' })).toContain(UNIQUE)
+    expect(await tryInsert('honors', { ...validHonor, id: 'knots-3', name: 'Knots 3' })).toBeNull() // Another name is fine.
   })
 })
 

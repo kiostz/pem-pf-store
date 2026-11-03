@@ -1,11 +1,17 @@
 // Validates the body of a save where it enters: strict shape, bounded values, no surprises reach the database.
 
-import type { HonorChange, HonorStatus } from './admin-types' // The change shapes.
+import type { DeleteRequest, HonorChange, HonorStatus, NewItem } from './admin-types' // The change shapes.
+import { CATEGORIES } from './categories' // The category list.
+import { isCleanText, parseItemName } from './validate-text' // Text rules.
 
 // The most honors one save may hold.
 export const MAX_CHANGES = 500
 // The highest stock the admin may set.
 export const MAX_STOCK = 9999
+// The highest price the admin may set, in cents.
+export const MAX_PRICE_CENTS = 99999
+// ISO UTC time with milliseconds.
+const TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 // Lower-case slug parts joined by single hyphens; without the `m` flag `$` matches only at the very end, so a trailing newline fails.
 const ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/
 // The two statuses.
@@ -64,12 +70,43 @@ function validStatus(side: unknown): side is HonorStatus {
 }
 
 /**
+ * Checks a name side: `to` follows the name rules; `from` is any stored name.
+ * @param side The raw name.
+ * @param which Whether it is the seen value or the wanted one.
+ * @return True when acceptable.
+ */
+function validName(side: unknown, which: 'from' | 'to'): side is string {
+  return which === 'to' ? parseItemName(side) !== null : isCleanText(side, 1, 200) // The seen name is only compared, never stored.
+}
+
+/**
+ * Checks a category side: `to` is on the fixed list; `from` is any stored text.
+ * @param side The raw category.
+ * @param which Whether it is the seen value or the wanted one.
+ * @return True when acceptable.
+ */
+function validCategory(side: unknown, which: 'from' | 'to'): side is string {
+  return which === 'to' ? typeof side === 'string' && CATEGORIES.includes(side) : isCleanText(side, 1, 100) // Exact, case-sensitive.
+}
+
+/**
+ * Checks a price side: whole cents; `to` is also capped.
+ * @param side The raw number.
+ * @param which Whether it is the seen value or the wanted one.
+ * @return True when acceptable.
+ */
+function validPrice(side: unknown, which: 'from' | 'to'): side is number {
+  if (typeof side !== 'number' || !Number.isSafeInteger(side) || side < 0) return false // Text, fractions and negatives fail.
+  return which === 'from' || side <= MAX_PRICE_CENTS // Only the new value is capped.
+}
+
+/**
  * Parses one honor's change.
  * @param value The raw change.
  * @return The change, or null when invalid.
  */
 function parseChange(value: unknown): HonorChange | null {
-  if (!isRecord(value) || !onlyKeys(value, ['id', 'status', 'stock'])) return null // No extra keys.
+  if (!isRecord(value) || !onlyKeys(value, ['id', 'status', 'stock', 'name', 'category', 'priceCents'])) return null // No extra keys.
   const { id } = value // The honor id.
   if (typeof id !== 'string' || id.length > 100 || !ID_PATTERN.test(id)) return null // Slug only.
   const change: HonorChange = { id } // Starts with the id only.
@@ -83,7 +120,22 @@ function parseChange(value: unknown): HonorChange | null {
     if (stock === null) return null // Invalid stock.
     change.stock = stock // Keep the pair.
   }
-  return change.status === undefined && change.stock === undefined ? null : change // Something must change.
+  if (value.name !== undefined) { // A name change is present.
+    const name = parsePair(value.name, validName) // Name pair.
+    if (name === null) return null // Invalid name.
+    change.name = name // Keep the pair.
+  }
+  if (value.category !== undefined) { // A category change is present.
+    const category = parsePair(value.category, validCategory) // Category pair.
+    if (category === null) return null // Invalid category.
+    change.category = category // Keep the pair.
+  }
+  if (value.priceCents !== undefined) { // A price change is present.
+    const priceCents = parsePair(value.priceCents, validPrice) // Price pair.
+    if (priceCents === null) return null // Invalid price.
+    change.priceCents = priceCents // Keep the pair.
+  }
+  return Object.keys(change).length === 1 ? null : change // Something besides the id must change.
 }
 
 /**
@@ -102,4 +154,33 @@ export function parseHonorChanges(body: unknown): HonorChange[] | null {
     parsed.push(change) // Keep it.
   }
   return new Set(parsed.map((change) => change.id)).size === parsed.length ? parsed : null // No repeated ids.
+}
+
+/**
+ * Parses the body of an Add.
+ * @param body The JSON-parsed request body.
+ * @return The new item, or null when invalid.
+ */
+export function parseNewItem(body: unknown): NewItem | null {
+  if (!isRecord(body) || !onlyKeys(body, ['name', 'category', 'priceCents'])) return null // Exactly these three.
+  const name = parseItemName(body.name) // Name rules.
+  if (name === null || !validCategory(body.category, 'to') || !validPrice(body.priceCents, 'to')) return null // Each field checked as a `to`.
+  return { name, category: body.category, priceCents: body.priceCents } // Checked above.
+}
+
+/**
+ * Parses the body of a Delete: the id and the row as the admin saw it.
+ * @param body The JSON-parsed request body.
+ * @return The request, or null when invalid.
+ */
+export function parseDeleteRequest(body: unknown): DeleteRequest | null {
+  if (!isRecord(body) || !onlyKeys(body, ['id', 'seen'])) return null // Exactly these two.
+  const { id, seen } = body // The raw parts.
+  if (typeof id !== 'string' || id.length > 100 || !ID_PATTERN.test(id)) return null // Slug only.
+  if (!isRecord(seen) || !onlyKeys(seen, ['name', 'category', 'priceCents', 'status', 'stock', 'modifiedAt'])) return null // Exactly the guard fields.
+  const { name, category, priceCents, status, stock, modifiedAt } = seen // The raw guard.
+  if (!validName(name, 'from') || !validCategory(category, 'from') || !validPrice(priceCents, 'from')) return null // Seen values, uncapped.
+  if (!validStatus(status) || !validStock(stock, 'from')) return null // Status and stock.
+  if (typeof modifiedAt !== 'string' || !TIME_PATTERN.test(modifiedAt)) return null // A time with milliseconds.
+  return { id, seen: { name, category, priceCents, status, stock, modifiedAt } } // Checked above.
 }
