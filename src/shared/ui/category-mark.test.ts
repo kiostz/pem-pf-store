@@ -13,6 +13,8 @@ const known = {
   Outreach: ['#2a3578', '#ffffff'],
   Recreation: ['#117155', '#ffffff'],
   Vocational: ['#d0272a', '#ffffff'],
+  Shirt: ['#c3b091', '#171717'],
+  Accessories: ['#2f4858', '#ffffff'],
 } // measured patch backgrounds and the icon colour on each
 
 /**
@@ -50,10 +52,15 @@ describe('categoryMark', () => {
     }
   })
 
-  it('gives the nine categories nine different icons and backgrounds', () => {
+  it('gives the eleven categories eleven different icons and backgrounds', () => {
     const marks = Object.keys(known).map(categoryMark)
-    expect(new Set(marks.map((m) => m.icon)).size).toBe(9) // catches two categories sharing an icon
-    expect(new Set(marks.map((m) => m.background)).size).toBe(9) // catches two categories sharing a colour
+    expect(new Set(marks.map((m) => m.icon)).size).toBe(11) // catches two categories sharing an icon
+    expect(new Set(marks.map((m) => m.background)).size).toBe(11) // catches two categories sharing a colour
+  })
+
+  it('gives Shirt the Tabler shirt and Accessories the neckerchief', () => {
+    expect(categoryMark('Shirt').icon).toBe('shirt') // catches Shirt falling back to the grey award mark
+    expect(categoryMark('Accessories').icon).toBe('neckerchief') // catches Accessories falling back to the grey award mark
   })
 
   it.each(['Pioneering', '', 'constructor'])(

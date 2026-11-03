@@ -67,6 +67,19 @@ describe('CategoryTiles', () => {
     expect(recreation).toHaveClass('text-shadow-halo') // the halo token class, no literal
   })
 
+  it('gives the Shirt tile a near-black name without a halo and the Accessories tile a white name in the plain halo', () => {
+    // catches: a white name on the light khaki tile, or a missing halo on the slate one
+    render(<CategoryTiles data={ready([honor('A', 'Shirt'), honor('B', 'Accessories')])} />)
+    const shirt = screen.getByRole('link', { name: 'Shirt' })
+    const accessories = screen.getByRole('link', { name: 'Accessories' })
+    expect(shirt).toHaveStyle({ backgroundColor: '#c3b091', color: '#171717' })
+    expect(shirt).not.toHaveClass('text-shadow-halo')
+    expect(shirt).not.toHaveClass('text-shadow-halo-strong')
+    expect(accessories).toHaveStyle({ backgroundColor: '#2f4858' })
+    expect(accessories).toHaveClass('text-on-patch', 'text-shadow-halo')
+    expect(accessories).not.toHaveClass('text-shadow-halo-strong')
+  })
+
   it('shows nothing for a load that has not passed the delay, then 3 skeleton tiles, with no links', () => {
     // catches: a flash of skeleton on a fast load, or a wrong tile count
     const loading = { state: { status: 'loading' }, showSkeleton: false, retry: () => {}, applyStock: () => {} } as CatalogueLoad

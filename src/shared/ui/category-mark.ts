@@ -12,6 +12,8 @@ export type CategoryIconName =
   | 'tent' // Tabler icon name
   | 'tool' // Tabler icon name
   | 'award' // Tabler icon name
+  | 'shirt' // Tabler icon name
+  | 'neckerchief' // our own icon, drawn in Tabler's outline style
 
 type CategoryMark = {
   icon: CategoryIconName // which icon to draw
@@ -20,7 +22,7 @@ type CategoryMark = {
   strongHalo?: boolean // true when white lettering on this colour needs the stronger halo (a mid-tone patch colour)
 } // what one mark shows
 
-const iconNearBlack = '#171717' // icon colour on the two light patch backgrounds
+const iconNearBlack = '#171717' // icon colour on the light patch backgrounds
 const iconWhite = '#ffffff' // icon colour everywhere else
 
 const marks: Record<string, CategoryMark> = {
@@ -59,6 +61,13 @@ const marks: Record<string, CategoryMark> = {
   Outreach: { icon: 'world', background: '#2a3578', foreground: iconWhite }, // one-line entry
   Recreation: { icon: 'tent', background: '#117155', foreground: iconWhite }, // one-line entry
   Vocational: { icon: 'tool', background: '#d0272a', foreground: iconWhite }, // one-line entry
+  Shirt: { icon: 'shirt', background: '#c3b091', foreground: iconNearBlack }, // khaki, a light patch colour, so a near-black icon
+  Accessories: {
+    // multi-line entry
+    icon: 'neckerchief', // our own icon
+    background: '#2f4858', // slate, a dark patch colour
+    foreground: iconWhite, // a white icon reads on it
+  },
 } // measured from the patch pictures
 
 const defaultMark: CategoryMark = {

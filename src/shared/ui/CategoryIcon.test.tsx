@@ -16,7 +16,9 @@ const names: CategoryIconName[] = [
   'tent',
   'tool',
   'award',
-] // all ten names, written out
+  'shirt',
+  'neckerchief',
+] // all twelve names, written out
 
 describe('CategoryIcon', () => {
   it.each(names)('draws %s as a hidden svg', (name) => {
@@ -26,6 +28,17 @@ describe('CategoryIcon', () => {
     expect(svg).not.toBeNull()
     expect(svg).toHaveAttribute('aria-hidden', 'true')
     expect(svg?.querySelectorAll('path').length).toBeGreaterThan(0)
+  })
+
+  it('draws the neckerchief as stroked paths on the 24 px grid', () => {
+    // catches: the hand-drawn icon losing its paths or drifting from Tabler's outline style
+    const { container } = render(<CategoryIcon name="neckerchief" />)
+    const svg = container.querySelector('svg')
+    expect(svg).toHaveAttribute('viewBox', '0 0 24 24')
+    expect(svg).toHaveAttribute('stroke-width', '2')
+    expect(svg).toHaveAttribute('stroke-linecap', 'round')
+    expect(svg).toHaveAttribute('stroke-linejoin', 'round')
+    expect(svg?.querySelectorAll('path').length).toBe(4)
   })
 
   it('passes className to the svg', () => {

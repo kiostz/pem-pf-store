@@ -1,9 +1,9 @@
-// The ten category icons as inline SVG, so the category mark needs no icon package.
+// The twelve category icons as inline SVG, so the category mark needs no icon package.
 
 import type { CategoryIconName } from './category-mark.ts' // the icon names
 
 /*! @license MIT (Tabler Icons)
-Icons are copied unchanged from Tabler Icons, outline set, release v3.50.0
+Icons, except the neckerchief, are copied unchanged from Tabler Icons, outline set, release v3.50.0
 (https://github.com/tabler/tabler-icons/tree/v3.50.0/icons/outline), under the MIT licence:
 
   MIT License
@@ -92,7 +92,18 @@ const paths: Record<CategoryIconName, string[]> = {
     'M12 15l3.4 5.89l1.598 -3.233l3.598 .232l-3.4 -5.889', // path data
     'M6.802 12l-3.4 5.89l3.598 -.233l1.598 3.232l3.4 -5.889', // path data
   ],
-} // path data of each icon, from the Tabler release named above
+  shirt: [
+    // Tabler outline icon, one string per path
+    'M15 4l6 2v5h-3v8a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1v-8h-3v-5l6 -2a3 3 0 0 0 6 0', // path data
+  ],
+  neckerchief: [
+    // our own icon in Tabler's outline style: the neck loop, the slide ring and the triangle that hangs from it
+    'M3 3a9 9 0 0 0 7 7.5', // the left end rising from the ring's side to the neck
+    'M21 3a9 9 0 0 1 -7 7.5', // the right end rising from the ring's side to the neck
+    'M10 10.5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0', // the slide ring
+    'M3 13h18l-9 8z', // the triangle as wide as the loop, its top edge touching the ring, its point down
+  ],
+} // path data of each icon, from the Tabler release named above (the neckerchief is ours)
 
 /**
  * Draws one category icon in the current text colour.
