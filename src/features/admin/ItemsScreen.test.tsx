@@ -841,3 +841,159 @@ describe('Discard and Undo', () => {
     expect(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })).toHaveValue('5')
   })
 })
+
+describe('interruptions', () => {
+  it('lets the admin load the next page again after a 403 on Load more, once signed in elsewhere', async () => {
+    // Catches a Load more that stays on screen but does nothing after a 403, so the admin must reload and lose the edits.
+    let signedIn = false // the other tab has signed in
+    const spy = stubApi({
+      pages: (url) =>
+        url.includes('cursor=c1')
+          ? signedIn
+            ? pageOf(rows.slice(1))
+            : Response.json({}, { status: 403 })
+          : pageOf(rows.slice(0, 2), 'c1'),
+    })
+    render(<ItemsScreen />)
+    await screen.findByText('Africa Lore')
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    await screen.findByText(/Your sign-in has ended/)
+    signedIn = true // back from the new tab
+    const again = screen.queryByRole('button', { name: /Load more|Try again/ }) // whatever the screen offers
+    expect(again).not.toBeNull() // something to press
+    await act(async () => void fireEvent.click(again!))
+    expect(pageUrls(spy).filter((url) => url.includes('cursor=c1'))).toHaveLength(2) // it asked again
+    expect(await screen.findByText('Knot Tying')).toBeInTheDocument() // the page arrived
+  })
+
+  it('offers no Load more under rows of an old query when a search gets a 403', async () => {
+    // Catches a Load more that pairs the old query's cursor with the new search words after the session ends.
+    const spy = stubApi({
+      pages: (url) => (url.includes('q=') ? Response.json({}, { status: 403 }) : pageOf(rows, 'c1')),
+    })
+    await openScreen()
+    await search('knot')
+    await screen.findByText(/Your sign-in has ended/)
+    fireEvent.click(screen.queryByRole('button', { name: 'Load more' }) ?? document.body)
+    expect(pageUrls(spy).filter((url) => url.includes('cursor='))).toEqual([]) // no mixed request
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+  })
+
+  it('offers Sign in and dims the old rows when a search gets a 403 with no edits pending', async () => {
+    // Catches a Try again that only meets the same 403 again, and old rows that look current under new words.
+    stubApi({ pages: (url) => (url.includes('q=') ? Response.json({}, { status: 403 }) : pageOf(rows, 'c1')) })
+    await openScreen()
+    await search('knot')
+    await screen.findByText('Your sign-in has ended. Sign in again to see the items.')
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('admin-list').className).toContain('opacity-50')
+  })
+
+  it('keeps the new-tab wording and Try again, with no Sign in reload, when a search gets a 403 with edits pending', async () => {
+    // Catches a reload offered while edits are pending.
+    stubApi({ pages: (url) => (url.includes('q=') ? Response.json({}, { status: 403 }) : pageOf(rows, 'c1')) })
+    await openScreen()
+    typeKnotStock('5')
+    await search('knot')
+    await screen.findByText(/Open this page in a new tab to sign in, then try again\. Your changes are kept\./)
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('admin-list').className).toContain('opacity-50')
+  })
+
+  it('keeps pending edits and the Save pill when a search drops mid-page, and Save still sends them', async () => {
+    // Catches a failed page fetch that clears or locks the pending edits.
+    let failing = false
+    const spy = stubApi({
+      pages: () => {
+        if (failing) throw new TypeError('Failed to fetch') // the connection drops
+        return pageOf(rows)
+      },
+      changes: () => Response.json({ honors: [{ ...rows[2], stock: 5 }] }),
+    })
+    await openScreen()
+    typeKnotStock('5')
+    failing = true
+    await search('knot')
+    expect(await screen.findByText("We couldn't load the items.")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' }))
+    expect(await screen.findByText('Saved 1 change.')).toBeInTheDocument()
+    expect(postBodies(spy)).toEqual([{ changes: [{ id: 'knot-tying', stock: { from: 12, to: 5 } }] }])
+  })
+
+  it('applies a page that arrives during a save without losing or double-counting the edit', async () => {
+    // Catches a page landing mid-save that rebases the sent edit into a ghost pending change after the save answers.
+    let answer: (response: Response) => void = () => undefined // settles the save
+    let page2: (response: Response) => void = () => undefined // settles Load more
+    stubApi({
+      pages: (url) =>
+        url.includes('cursor=c1')
+          ? new Promise<Response>((resolve) => (page2 = resolve))
+          : pageOf(rows.slice(0, 3), 'c1'),
+      changes: () => new Promise<Response>((resolve) => (answer = resolve)),
+    })
+    render(<ItemsScreen />)
+    await screen.findByText('Knot Tying')
+    await act(async () => undefined)
+    typeKnotStock('5')
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    await act(async () => undefined)
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' }))
+    await act(async () => undefined)
+    await act(async () => page2(pageOf([rows[2], rows[3]]))) // the page lists Knot Tying as it was
+    await act(async () =>
+      answer(Response.json({ honors: [{ ...rows[2], stock: 5, modifiedAt: '2026-11-03T05:00:00.000Z' }] })),
+    )
+    expect(await screen.findByText('Saved 1 change.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Save \(/ })).not.toBeInTheDocument() // nothing left pending
+    expect(screen.getByText('Nature Walk')).toBeInTheDocument()
+    expect(screen.queryByText(/This item has been updated/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the Delete dialog and the row when the network drops mid-delete, and a second Delete finishes it', async () => {
+    // Catches a dropped delete that closes the dialog as if it worked, or drops the row early.
+    let attempts = 0
+    const spy = stubApi({
+      del: () => {
+        if (++attempts === 1) throw new TypeError('Failed to fetch') // the connection drops
+        return Response.json({ deletedId: 'camp-shirt' })
+      },
+    })
+    await openScreen()
+    openSheet('Camp Shirt')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete item' }))
+    await act(async () => void fireEvent.click(screen.getAllByRole('button', { name: 'Delete item' }).at(-1)!))
+    expect(screen.getByRole('heading', { name: 'Delete Camp Shirt?' })).toBeInTheDocument() // still asking
+    expect(screen.getByText('Camp Shirt', { selector: 'button, a, span, p, h3' })).toBeInTheDocument() // the row is still listed
+    await act(async () => void fireEvent.click(screen.getAllByRole('button', { name: 'Delete item' }).at(-1)!))
+    expect(postBodies(spy, '/api/items/delete')).toHaveLength(2) // one per press, no more
+    expect(screen.queryByText('Camp Shirt')).not.toBeInTheDocument() // gone after the second
+  })
+
+  it('removes the leave warning when the screen goes away with changes pending', async () => {
+    // Catches a beforeunload listener that outlives the screen and nags on every later page.
+    stubApi()
+    const view = await openScreen()
+    typeKnotStock('5')
+    const before = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(before)
+    expect(before.defaultPrevented).toBe(true) // warns while pending
+    view.unmount()
+    const after = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(after)
+    expect(after.defaultPrevented).toBe(false) // silent once gone
+  })
+
+  it('starts a reload with no edits: the pending list does not survive a remount', async () => {
+    // Catches edits that quietly come back from storage after a reload and are sent without the admin seeing them.
+    const spy = stubApi()
+    const view = await openScreen()
+    typeKnotStock('5')
+    view.unmount() // the reload
+    await openScreen()
+    expect(screen.queryByRole('button', { name: /^Save \(/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })).toHaveValue('12')
+    expect(postBodies(spy)).toEqual([])
+  })
+})

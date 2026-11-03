@@ -104,3 +104,12 @@ describe('the delete statement\'s own guard', () => {
     expect(result).toEqual({ kind: 'deleted' })
   })
 })
+
+describe('interruptions', () => {
+  it('answers 200 to both of two parallel deletes of one item', async () => {
+    // Catches a double click or two tabs where the loser gets an error for a delete that happened.
+    const [a, b] = await Promise.all([del('camp-shirt'), del('camp-shirt')])
+    expect([a.status, b.status]).toEqual([200, 200])
+    expect(await fullRowOf('camp-shirt')).toBeNull() // Gone once.
+  })
+})

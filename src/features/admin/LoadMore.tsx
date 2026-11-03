@@ -22,6 +22,15 @@ export function LoadMore({ state, hasMore, onLoad }: { state: PageState; hasMore
         </button>
       </div>
     )
+  if (state === 'more-signed-out')
+    return (
+      // The session ended: the page's note says so; pressing Try again asks for the same page once signed in elsewhere.
+      <div className="flex justify-center py-2">
+        <button type="button" onClick={onLoad} className={SOFT_BUTTON}>
+          Try again
+        </button>
+      </div>
+    )
   const loading = state === 'more' // a request is running
   return (
     // A 44 px button that goes quiet while loading; aria-disabled keeps focus.

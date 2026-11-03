@@ -10,7 +10,13 @@ const MAX_WORDS = 5 // the Worker's limit on search words
 
 // Where a page fetch stands.
 export type PageState =
-  'idle' | 'loading' | 'more' | 'error' | 'more-error' | 'signed-out'
+  | 'idle'
+  | 'loading'
+  | 'more'
+  | 'error'
+  | 'more-error'
+  | 'signed-out'
+  | 'more-signed-out'
 // What the Worker is asked: the applied search, category and sort.
 type Filters = { q: string; category: string | null; sort: ItemSort }
 
@@ -163,7 +169,9 @@ export function useItemPages(
   const loadMore = async () => {
     if (
       nextCursor === null ||
-      (pageState !== 'idle' && pageState !== 'more-error')
+      (pageState !== 'idle' &&
+        pageState !== 'more-error' &&
+        pageState !== 'more-signed-out')
     )
       return // nothing to load, or busy
     const controller = new AbortController() // this request
@@ -176,7 +184,9 @@ export function useItemPages(
     }) // the next page
     if (controller.signal.aborted) return // the list changed meanwhile
     if (result.kind !== 'ok')
-      return setPageState(result.kind === 'error' ? 'more-error' : 'signed-out') // the rows stay
+      return setPageState(
+        result.kind === 'error' ? 'more-error' : 'more-signed-out',
+      ) // the rows stay, and Load more can ask again once signed in elsewhere
     setRows((current) => {
       const listed = new Set(current.map((row) => row.id)) // ids already shown
       return [...current, ...result.honors.filter((row) => !listed.has(row.id))] // no repeats when the list moved between pages

@@ -34,6 +34,7 @@ export function ItemsScreen() {
   const saving = saveState === 'saving' // a save is running
   const hasRows = rows.length > 0 // something is listed
   const failedFirst = (pageState === 'error' || pageState === 'signed-out') && !hasRows // the first page never came
+  const reloadToSignIn = pageState === 'signed-out' && count === 0 // a reload loses nothing when no edits are pending, rows or not
   const currency = meta?.currency ?? 'MYR' // the shop's currency until /api/meta answers
   const now = new Date() // the "changed" dates' year
   const shown = changesView ? Object.values(pending).map((entry) => entry.seen) : rows // the pending rows, or the list
@@ -170,7 +171,7 @@ export function ItemsScreen() {
           </p>
         )}
         {pageState === 'error' && <p className={`${COUNT_BOX} text-danger`}>We couldn&apos;t load the items.</p>}
-        {pageState === 'signed-out' && (
+        {(pageState === 'signed-out' || pageState === 'more-signed-out') && (
           <p className={COUNT_BOX}>
             {count > 0
               ? 'Your sign-in has ended. Open this page in a new tab to sign in, then try again. Your changes are kept.' // a reload would lose the edits
@@ -179,13 +180,13 @@ export function ItemsScreen() {
         )}
       </div>
       {/* The one action of a failed or signed-out load. */}
-      {pageState === 'error' || (pageState === 'signed-out' && count === 0) ? (
+      {pageState === 'error' || pageState === 'signed-out' ? (
         <button
           type="button" // not a form submit
-          onClick={pageState === 'signed-out' ? () => window.location.reload() : items.retry} // a new sign-in, or a new load
+          onClick={reloadToSignIn ? () => window.location.reload() : items.retry} // a new sign-in when nothing can be lost, else the same load again
           className={`${PILL_ACTION} mt-4 w-auto px-6`} // the oxblood pill
         >
-          {pageState === 'signed-out' ? 'Sign in' : 'Try again'}
+          {reloadToSignIn ? 'Sign in' : 'Try again'}
         </button>
       ) : null}
       {/* Show changes: the pending rows only, with no fetch. */}
@@ -206,7 +207,7 @@ export function ItemsScreen() {
           data-testid="admin-list" // for the tests
           inert={saving} // locked while saving
           aria-busy={pageState === 'loading'} // a new query is loading
-          className={`mt-3 flex flex-col gap-3 transition-opacity duration-(--duration-fast) ${(pageState === 'loading' || pageState === 'error') && !changesView ? 'opacity-50' : ''}`} // dimmed until the new rows land, and after a failed fetch they are the old list
+          className={`mt-3 flex flex-col gap-3 transition-opacity duration-(--duration-fast) ${(pageState === 'loading' || pageState === 'error' || pageState === 'signed-out') && !changesView ? 'opacity-50' : ''}`} // dimmed until the new rows land, and after a failed fetch they are the old list
         >
           {shown.map((row) => (
             <AdminHonorRow
@@ -224,7 +225,7 @@ export function ItemsScreen() {
         </ul>
       )}
       {/* The end of the list. */}
-      {hasRows && !changesView && pageState !== 'error' && (
+      {hasRows && !changesView && pageState !== 'error' && pageState !== 'signed-out' && (
         <LoadMore state={pageState} hasMore={pages.hasMore} onLoad={() => void pages.loadMore()} />
       )}
       {/* The dock: the note stacked 12 px over the pill; the note's region stays mounted so screen readers hear it appear. */}

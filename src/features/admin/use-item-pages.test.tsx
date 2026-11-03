@@ -144,14 +144,21 @@ describe('useItemPages', () => {
     expect(result.current.rows).toHaveLength(1)
   })
 
-  it('gives signed-out on a 403 and keeps the rows it has', async () => {
-    // Catches an expired session that empties the list.
-    stubPages((url) => (url.includes('cursor=') ? Response.json({}, { status: 403 }) : page(['a'], 'c1')))
+  it('gives more-signed-out on a 403 on Load more, keeps the rows, and loads again once signed in', async () => {
+    // Catches an expired session that empties the list, or a Load more that stays dead after the admin signs in elsewhere.
+    let signedIn = false
+    stubPages((url) =>
+      url.includes('cursor=') ? (signedIn ? page(['b']) : Response.json({}, { status: 403 })) : page(['a'], 'c1'),
+    )
     const { result } = renderHook(() => useItemPages())
     await act(async () => undefined)
     await act(async () => result.current.loadMore())
-    expect(result.current.pageState).toBe('signed-out')
+    expect(result.current.pageState).toBe('more-signed-out')
     expect(result.current.rows).toHaveLength(1)
+    signedIn = true
+    await act(async () => result.current.loadMore())
+    expect(result.current.rows.map((row) => row.id)).toEqual(['a', 'b'])
+    expect(result.current.pageState).toBe('idle')
   })
 
   it('collapses the search to five words', async () => {

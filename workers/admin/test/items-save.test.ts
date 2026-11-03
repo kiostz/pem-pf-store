@@ -4,7 +4,7 @@ import { env } from 'cloudflare:workers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHandler } from '../src/handler'
 import { saveHonorChanges } from '../src/honors'
-import { BACKFILL_TIME, call, fullRowOf, pages, postChanges, rowOf, seedHonors, wire } from './helpers'
+import { BACKFILL_TIME, call, fullRowOf, insertHonors, pages, postChanges, postTo, rowOf, seedHonors, wire } from './helpers'
 
 beforeEach(async () => {
   await seedHonors([
@@ -404,5 +404,38 @@ describe('what leaves modified_at alone', () => {
     await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 12, to: 14 } }] })
     expect((await fullRowOf('knot-tying'))!.modified_at).toBe(NOW)
     expect((await fullRowOf('africa-lore'))!.modified_at).toBe(BACKFILL_TIME) // Not in the save.
+  })
+})
+
+describe('interruptions', () => {
+  it('writes the value once and answers both 200 when the same save arrives twice at once', async () => {
+    // Catches a double submit (two tabs, a retry racing its own first try) that applies a stock change twice, or shows the second as a conflict for an edit that did land.
+    const body = { changes: [{ id: 'knot-tying', stock: { from: 12, to: 13 } }] }
+    const [a, b] = await Promise.all([postChanges(body), postChanges(body)])
+    expect([a.status, b.status]).toEqual([200, 200])
+    expect((await rowOf('knot-tying')).stock).toBe(13) // 13, never 14
+  })
+
+  it('keeps the first admin\'s name and takes the second admin\'s price, then refuses the second admin\'s stale rename with nothing written', async () => {
+    // Catches per-field guards that fail together or not at all: A renames, B (old view) sets a price, then B (old view) renames.
+    expect((await postChanges({ changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots A' } }] })).status).toBe(200) // Tab A.
+    const price = await postChanges({ changes: [{ id: 'knot-tying', priceCents: { from: 400, to: 650 } }] }) // Tab B, old view of the name, which it does not send.
+    expect(price.status).toBe(200)
+    expect(await fullRowOf('knot-tying')).toMatchObject({ name: 'Knots A', price_cents: 650 }) // Both survive.
+    const stamped = (await fullRowOf('knot-tying'))!.modified_at
+    const rename = await postChanges({ changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots B' } }] }) // Tab B, still the old name.
+    expect(rename.status).toBe(409)
+    expect(((await rename.json()) as { honors: { name: string }[] }).honors[0].name).toBe('Knots A') // The latest values for the flag.
+    expect(await fullRowOf('knot-tying')).toMatchObject({ name: 'Knots A', modified_at: stamped }) // Nothing written, time unmoved.
+  })
+
+  it('answers 409 with deletedIds and writes nothing else when another admin deleted one of the rows', async () => {
+    // Catches a save that applies the live rows and skips the deleted one, leaving the admin to think all saved.
+    await insertHonors([{ id: 'camp-shirt', name: 'Camp Shirt', issuedBy: 'Club', stock: 0 }])
+    expect((await postTo('/api/items/delete', { id: 'camp-shirt', seen: { name: 'Camp Shirt', category: 'Nature', priceCents: 400, status: 'active', stock: 0, modifiedAt: BACKFILL_TIME } })).status).toBe(200) // Tab A deletes.
+    const res = await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 12, to: 13 } }, { id: 'camp-shirt', stock: { from: 0, to: 5 } }] }) // Tab B, old view.
+    expect(res.status).toBe(409)
+    expect(((await res.json()) as { deletedIds: string[] }).deletedIds).toEqual(['camp-shirt'])
+    expect((await rowOf('knot-tying')).stock).toBe(12) // The live row was not written either.
   })
 })
