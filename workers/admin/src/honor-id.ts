@@ -5,7 +5,7 @@ const MAX_ID_LENGTH = 90
 
 /**
  * Makes the id of an item from its name: accents and apostrophes dropped, lower case, every other run of
- * non-letters/digits one dash, no leading or trailing dash. Same rule as the shop's seed (`src/shared/data/slug.ts`).
+ * non-letters/digits one dash, no leading or trailing dash.
  * @param name The item's display name.
  * @return The slug, for example "paper-mache"; "item" when the name has no letters or digits.
  */

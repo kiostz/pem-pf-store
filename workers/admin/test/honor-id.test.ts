@@ -5,7 +5,7 @@ import { honorId } from '../src/honor-id'
 
 describe('honorId', () => {
   it('makes the same slug as the shop for names with accents, apostrophes and symbols', () => {
-    // Catches an id rule that differs from the seed's, so Club-added and built-in ids would follow two rules.
+    // Catches an id rule that differs from the ids the existing items carry, so Club-added and built-in ids would follow two rules.
     expect(honorId('Papier-Mâché & Co.')).toBe('papier-mache-co')
     expect(honorId("Scout's Honor")).toBe('scouts-honor')
   })

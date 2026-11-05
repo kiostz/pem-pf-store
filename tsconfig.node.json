@@ -1,4 +1,4 @@
-// TypeScript project config for Node-context files: tool configs and the seed scripts.
+// TypeScript project config for Node-context files: tool configs and the build and package-script checks.
 {
   "compilerOptions": {
     // Cache incremental build info outside src so it never gets linted or committed accidentally.

@@ -13,7 +13,7 @@ Open the address Vite prints. For the production build: `npm run build && npm ru
 
 ## Where the shop gets its data
 
-The shop reads its items, clubs and settings from the API Worker's `/shop`, one request per load, with a 30 second limit. `VITE_API_URL` holds the Worker's address: the live Worker in `.env`, and `/api` in `.env.development`. `npm run dev` proxies `/api` to the local API Worker on http://localhost:8787, so start that first (`npm run dev` in `workers/`, see "Workers"); with it stopped the shop shows "We couldn't load the shop." `npm run preview` serves the production build, which asks the live Worker, and the Worker allows only the live site's address, so the shop can't load from `localhost` there. The files in `public/data/` stay for the seed and the import but the shop no longer reads them.
+The shop reads its items, clubs and settings from the API Worker's `/shop`, one request per load, with a 30 second limit. `VITE_API_URL` holds the Worker's address: the live Worker in `.env`, and `/api` in `.env.development`. `npm run dev` proxies `/api` to the local API Worker on http://localhost:8787, so start that first (`npm run dev` in `workers/`, see "Workers"); with it stopped the shop shows "We couldn't load the shop." `npm run preview` serves the production build, which asks the live Worker, and the Worker allows only the live site's address, so the shop can't load from `localhost` there.
 
 ### Stock on screen, and the order of the first pushes
 
@@ -35,14 +35,6 @@ The order form reads two keys from the committed `.env` files, which are public 
 - `VITE_API_URL`: where `POST /orders` goes, the same address the shop reads from.
 
 To try the whole order flow locally, start the API Worker (`npm run dev` in `workers/`, with `api/.dev.vars` copied from the example) and the shop (`npm run dev`). Send order then goes through the Vite proxy to the local Worker, which checks the captcha with Cloudflare's test secret, saves the order in the local D1, lowers stock and writes the order email to a file whose path it prints. Use made-up buyer details. For a failed-captcha check, put Cloudflare's always-fail test secret `2x0000000000000000000000000000000AA` in `api/.dev.vars` and restart the Worker.
-
-`public/data/clubs.json` (read by the import, not by the shop) is a list of clubs: `name` plus `area`, `language`, `location` and `churchName` (each text or `null`). The seed's `--force` still writes `[]`, which is valid.
-
-## Seed the data
-
-`npm run seed` writes `public/data/honors.json`, `clubs.json` and `settings.json` from `scripts/seed/adventist-honors.csv`. It refuses to overwrite existing files. To overwrite them, run:
-
-    npm run seed -- --force
 
 ## Pictures
 
@@ -77,20 +69,15 @@ Before `npm run dev`, copy `api/.dev.vars.example` to `api/.dev.vars` (git-ignor
 
 Tests run inside workerd with the migrations applied. After changing `api/wrangler.jsonc`, run `npm run types` and commit `api/worker-configuration.d.ts`.
 
-### One-time import
+### Fill a fresh local database
 
-D1 starts empty. `npm run db:import:local` (in `workers/`, after `npm run db:migrate:local`) reads `public/data/honors.json`, `clubs.json` and `settings.json`, checks all three, and writes `workers/import/out/import.sql` (git-ignored) before running it on the local database. It creates every honor with stock 0 (`active` when `enabled` is true, otherwise `hidden`), price in whole cents (RM 4.00 becomes 400), the clubs at positions 1 to n, and the settings with the order email On. A bad file stops it before anything is written and the message names the file and entry.
+A new local D1 starts empty. To fill it with the live shop's items, clubs and settings, run these from `workers/`. The first one reads the real database with your wrangler login, so only the owner runs it:
 
-The settings row goes in first, so a second run fails at once with `UNIQUE constraint failed: settings.id` and changes nothing; the import can never overwrite stock the admin has set. To start over locally, delete `workers/api/.wrangler/` and run `db:migrate:local` again. `db:import:remote` is the same against the real database and is run by the owner only, after the first deploy steps.
+    npm run db:migrate:local
+    npm run db:export:remote
+    npm run db:fill:local
 
-If a remote import stops part-way (for example the network drops), the settings row is already in and every re-run is refused. While the shop has no real stock or orders, empty the three import tables and run it again; run these from `workers/`, as the owner:
-
-    npx wrangler d1 execute pem-pathfinder-store --remote --config api/wrangler.jsonc --command "DELETE FROM honors; DELETE FROM clubs; DELETE FROM settings;"
-    npm run db:import:remote
-
-Never do this once an admin has set stock or an order has arrived: it wipes the stock. The `orders` and `order_lines` tables are not touched by it, and Task 11 or later may keep them.
-
-After the import, D1 is the source of truth. Do not edit the three JSON files in the meantime: a change there never reaches D1. The files stay until the shop reads from the Worker.
+`db:export:remote` writes `api/.wrangler/fill.sql` (git-ignored; the script creates the folder if it is missing). It names three tables only, `honors`, `clubs` and `settings`, so no order or buyer data is exported. The export briefly blocks other requests to the database, so run it when the shop is quiet. `db:fill:local` runs that file on the local database. Run it on a fresh database only, never on one that already has rows: it fails on the first duplicate. To start over, delete `api/.wrangler/state` and run `db:migrate:local` again.
 
 ### Endpoints
 
@@ -112,7 +99,7 @@ Paths match exactly, so `/items/` is 404. Errors are a short code only: 404 `not
     ACCESS_AUD=local-dev
     ADMIN_EMAILS=admin@example.test, second@example.test
 
-Then, with the API Worker's database migrated and imported, from `workers/`:
+Then, with the API Worker's database migrated and filled, from `workers/`:
 
     npm run dev:admin
 
@@ -125,13 +112,13 @@ From `workers/`, in this order:
 1. `npx wrangler login`.
 2. `npx wrangler d1 create pem-pathfinder-store --location apac`.
 3. Paste the printed `database_id` into `api/wrangler.jsonc` and commit it (it is not a secret).
-4. `npm run db:migrate:remote`, then `npm run db:import:remote`. These use your wrangler login, never the CI token.
+4. `npm run db:migrate:remote`. It uses your wrangler login, never the CI token.
 5. Make a Cloudflare API token for this one account with Workers Scripts: Edit only (no D1 permission; CI never touches the database) and save it as the repository secret `CLOUDFLARE_API_TOKEN`. The account ID is not a secret: it sits in `api/wrangler.jsonc` as `account_id`. If the first deploy says a permission is missing, add only what it names.
 6. In the Actions tab, run "Deploy API Worker" by hand once (Run workflow on `main`).
 
-After that, a push to `main` that touches `workers/`, `public/data/` or `.nvmrc` runs `.github/workflows/deploy-workers.yml`. A test job with no secrets runs `npm ci`, typecheck and tests; only if they pass, a deploy job installs with `npm ci --ignore-scripts` (no package script ever runs next to the token) and `cloudflare/wrangler-action` deploys. A failing test stops the deploy and the live Worker stays as it was. Only `main` deploys, even from the Run workflow button. Until the token secret exists the deploy job skips with a notice. Remote migrations stay manual (step 4), never in CI. After each deploy, open `https://pem-pathfinder-store-api.<account>.workers.dev/items`: 200 with a JSON list.
+After that, a push to `main` that touches `workers/` or `.nvmrc` runs `.github/workflows/deploy-workers.yml`. A test job with no secrets runs `npm ci`, typecheck and tests; only if they pass, a deploy job installs with `npm ci --ignore-scripts` (no package script ever runs next to the token) and `cloudflare/wrangler-action` deploys. A failing test stops the deploy and the live Worker stays as it was. Only `main` deploys, even from the Run workflow button. Until the token secret exists the deploy job skips with a notice. Remote migrations stay manual (step 4), never in CI. After each deploy, open `https://pem-pathfinder-store-api.<account>.workers.dev/items`: 200 with a JSON list.
 
-To undo a bad deploy: run `npx wrangler rollback --config api/wrangler.jsonc` from `workers/` on the Mac, then revert the bad commit and push, or the next push deploys it again. A rollback restores the Worker code only; it never undoes a database migration or the import.
+To undo a bad deploy: run `npx wrangler rollback --config api/wrangler.jsonc` from `workers/` on the Mac, then revert the bad commit and push, or the next push deploys it again. A rollback restores the Worker code only; it never undoes a database migration.
 
 ### Deploying the Admin Worker
 

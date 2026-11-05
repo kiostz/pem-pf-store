@@ -49,10 +49,10 @@ jobs: # the jobs of this workflow
         run: npm ci # clean install
       - name: Typecheck # types
         working-directory: workers # the Workers npm project
-        run: npm run typecheck # tsc on the Workers, tests and import
-      - name: Test # Worker and import tests
+        run: npm run typecheck # tsc on the Workers and tests
+      - name: Test # Worker tests
         working-directory: workers # the Workers npm project
-        run: npm test # vitest and the writer check
+        run: npm test # vitest
       - name: Upload the admin page # hand the built page to the deploy job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: # action inputs

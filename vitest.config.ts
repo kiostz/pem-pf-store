@@ -1,4 +1,4 @@
-// Vitest config for unit and component tests, in src and in the seed scripts.
+// Vitest config for unit and component tests, in src and in the build and package-script checks.
 
 // React plugin so component tests can render TSX.
 import react from '@vitejs/plugin-react'
@@ -20,7 +20,7 @@ export default defineConfig({
     environment: 'jsdom',
     // Runs before each test file (jest-dom matchers, RTL cleanup).
     setupFiles: ['./src/test/setup.ts'],
-    // Test files in src and in the seed scripts.
+    // Test files in src and in the build and package-script checks.
     include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.ts'],
   },
 })

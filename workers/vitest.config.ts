@@ -37,7 +37,7 @@ export default defineConfig(async () => {
   return {
     test: {
       projects: [
-        project('api', './api/wrangler.jsonc', './api/test/apply-migrations.ts', ['api/test/**/*.test.ts', 'import/**/*.test.ts']),
+        project('api', './api/wrangler.jsonc', './api/test/apply-migrations.ts', ['api/test/**/*.test.ts']),
         // The admin tests import handler.ts and run on a stub entry, so they never need the built ui-dist.
         project('admin', './admin/wrangler.jsonc', './admin/test/apply-migrations.ts', ['admin/test/**/*.test.ts'], './admin/test/entry.ts'),
       ],

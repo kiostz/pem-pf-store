@@ -1,24 +1,4 @@
-// Data shapes: the honors.json record the seed and patch import write, and what the shop reads from the API Worker.
-
-// One honor as honors.json holds it (the seed, the patch import and the file checks use this shape).
-export type HonorRecord = {
-  // Slug of the name; never changes once created.
-  id: string
-  // Display name, e.g. "Knot Tying".
-  name: string
-  // Category it belongs to, e.g. "Nature".
-  category: string
-  // Skill level 1 to 3, or null when the source list gives none.
-  skillLevel: 1 | 2 | 3 | null
-  // Who issued it: "General Conference", ..., or "Club" for a club-added honor.
-  issuedBy: string
-  // True when switched on (shown in the catalogue).
-  enabled: boolean
-  // Price in Settings.currency.
-  price: number
-  // "patches/<id>.webp" relative to the base, or null until a patch picture exists.
-  image: string | null
-}
+// Data shapes: what the shop reads from the API Worker.
 
 // One honor as the shop shows it, from the API Worker's /shop.
 export type Honor = {
@@ -42,15 +22,7 @@ export type ShopSettings = {
   currency: string
 }
 
-// The currency and default price, in settings.json.
-export type Settings = {
-  // ISO currency code, e.g. "MYR".
-  currency: string
-  // Price given to every honor at seed time.
-  defaultPrice: number
-}
-
-// One Pathfinder club offered in the order form, as clubs.json and /shop hold it; the four optional fields tell similar clubs apart and are null when unknown.
+// One Pathfinder club offered in the order form, as /shop holds it; the four optional fields tell similar clubs apart and are null when unknown.
 export type Club = {
   // Shown in the dropdown and sent in the order; non-empty and unique.
   name: string

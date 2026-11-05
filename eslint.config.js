@@ -36,11 +36,10 @@ export default defineConfig([
     languageOptions: { globals: globals.serviceworker },
   },
   {
-    // Config files and seed scripts run in Node, not the browser.
+    // Config files and build scripts run in Node, not the browser.
     files: [
       '*.config.{ts,js}',
       'workers/*.config.ts',
-      'workers/import/write-import-sql.ts',
       'scripts/**/*.ts',
     ],
     languageOptions: { globals: globals.node },

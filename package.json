@@ -15,8 +15,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "seed": "node scripts/seed/seed-data.ts"
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@marsidev/react-turnstile": "1.6.3",

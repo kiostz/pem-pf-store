@@ -1,4 +1,4 @@
-# Deploys the API Worker to Cloudflare when its code or data changes on main; a test job without secrets gates a deploy job whose install runs no package scripts, so install scripts never hold the Cloudflare token.
+# Deploys the API Worker to Cloudflare when its code changes on main; a test job without secrets gates a deploy job whose install runs no package scripts, so install scripts never hold the Cloudflare token.
 name: Deploy API Worker # name shown in the Actions tab
 
 on: # when the workflow runs
@@ -6,7 +6,6 @@ on: # when the workflow runs
     branches: ['main'] # only the main branch
     paths: # only when one of these changes
       - 'workers/**' # Worker code
-      - 'public/data/**' # the data the import tests read
       - '.nvmrc' # the Node version
       - '.github/workflows/deploy-workers.yml' # this file
   workflow_dispatch: # also from the Actions tab by hand; the deploy job still runs only on main
@@ -39,9 +38,9 @@ jobs: # the jobs of this workflow
       - name: Install dependencies # exact versions from the lockfile, install scripts on (workerd for the tests)
         run: npm ci # clean install
       - name: Typecheck # types
-        run: npm run typecheck # tsc on the Worker, tests and import
-      - name: Test # Worker and import tests
-        run: npm test # vitest and the writer check
+        run: npm run typecheck # tsc on the Worker and tests
+      - name: Test # Worker tests
+        run: npm test # vitest
   deploy: # publish the API Worker once the tests pass; remote migrations stay manual
     needs: test # runs only if typecheck and tests passed
     if: github.ref == 'refs/heads/main' # never from another branch, even by hand
