@@ -91,6 +91,7 @@ export interface SeedHonor {
   issuedBy?: string
   createdAt?: string
   modifiedAt?: string
+  image?: string | null // The picture key, if any.
 }
 
 /**
@@ -113,7 +114,7 @@ export async function insertHonors(honors: SeedHonor[]): Promise<void> {
   await env.DB.batch(
     honors.map((honor) =>
       env.DB.prepare(
-        'INSERT INTO honors (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO honors (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       ).bind(
         honor.id,
         honor.name ?? honor.id,
@@ -124,6 +125,7 @@ export async function insertHonors(honors: SeedHonor[]): Promise<void> {
         honor.priceCents ?? 400,
         honor.createdAt ?? BACKFILL_TIME,
         honor.modifiedAt ?? BACKFILL_TIME,
+        honor.image ?? null,
       ),
     ),
   ) // One transaction.
@@ -155,5 +157,15 @@ export async function fullRowOf(id: string): Promise<{ name: string; category: s
  * @return The expected honor.
  */
 export function wire(over: Record<string, unknown> & { id: string }): Record<string, unknown> {
-  return { name: over.id, category: 'Nature', status: 'active', stock: 0, priceCents: 400, clubAdded: false, createdAt: BACKFILL_TIME, modifiedAt: BACKFILL_TIME, ...over } // Seed defaults plus overrides.
+  return { name: over.id, category: 'Nature', status: 'active', stock: 0, priceCents: 400, clubAdded: false, createdAt: BACKFILL_TIME, modifiedAt: BACKFILL_TIME, image: null, ...over } // Seed defaults plus overrides.
+}
+
+/**
+ * Reads one honor's stored picture key straight from the database.
+ * @param id The honor id.
+ * @return The key, or null when it has none or the row is gone.
+ */
+export async function imageOf(id: string): Promise<string | null> {
+  const row = await env.DB.prepare('SELECT image FROM honors WHERE id = ?').bind(id).first<{ image: string | null }>() // One row.
+  return row?.image ?? null // No row or no picture.
 }

@@ -11,7 +11,7 @@ describe('page routes', () => {
     expect(await res.text()).toBe(pages.html) // The page text.
     expect(res.headers.get('Content-Type')).toBe('text/html; charset=utf-8')
     expect(res.headers.get('Content-Security-Policy')).toBe(
-      "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+      "default-src 'self'; img-src 'self' data: blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
     )
     expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff')
     expect(res.headers.get('Referrer-Policy')).toBe('no-referrer')

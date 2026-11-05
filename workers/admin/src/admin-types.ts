@@ -11,6 +11,7 @@ export interface AdminHonor {
   status: HonorStatus // Active or Hidden.
   stock: number // Units on hand.
   priceCents: number // Whole cents.
+  image: string | null // The R2 key of the picture, or null for none.
   clubAdded: boolean // True for a Club-added honor, the only kind that can be deleted.
   createdAt: string // ISO UTC time with milliseconds.
   modifiedAt: string // ISO UTC time of the last admin edit; an order never changes it.

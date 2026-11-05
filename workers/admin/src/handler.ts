@@ -2,9 +2,11 @@
 
 import { addHonor } from './add-honor' // The Add.
 import { deleteHonor } from './delete-honor' // The Delete.
+import { isItemId } from './item-id' // The item id check.
 import { readAdminPage, readMeta, saveHonorChanges } from './honors' // The reads and the guarded save.
 import { parseItemQuery } from './item-query' // The list query validator.
-import { readPicture } from './pictures' // The picture read.
+import { hasSignature, MAX_PICTURE_BYTES, type PictureType, uploadPicture } from './picture-upload' // The picture upload.
+import { PICTURE_KEY, readPicture } from './pictures' // The key pattern and the picture read.
 import { parseDeleteRequest, parseHonorChanges, parseNewItem } from './validate-changes' // The body validators.
 
 // The built admin page files, handed in by index.ts (tests pass stand-ins).
@@ -19,7 +21,7 @@ const PLACEHOLDER_AUD = 'set-after-access'
 // Largest accepted request body, in bytes.
 const MAX_BODY_BYTES = 64 * 1024
 // What the page may load and do; scripts and styles come from the same origin only.
-const CSP = "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+const CSP = "default-src 'self'; img-src 'self' data: blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 
 // Where "Browse more" leads.
 const SHOP_URL = 'https://kiostz.github.io/pem-pf-store/'
@@ -157,14 +159,15 @@ async function isAllowed(ctx: ExecutionContext, env: Env): Promise<boolean> {
 }
 
 /**
- * Reads a request body up to the size limit.
+ * Reads a request body up to a size limit.
  * @param request The request.
- * @return The text, or null when it is over the limit.
+ * @param limit The most bytes accepted.
+ * @return The bytes, or null when it is over the limit.
  */
-async function readLimitedText(request: Request): Promise<string | null> {
+async function readLimitedBytes(request: Request, limit: number): Promise<Uint8Array | null> {
   const declared = Number(request.headers.get('Content-Length')) // NaN when absent.
-  if (declared > MAX_BODY_BYTES) return null // Refused before reading.
-  if (request.body === null) return '' // No body.
+  if (declared > limit) return null // Refused before reading.
+  if (request.body === null) return new Uint8Array() // No body.
   const reader = request.body.getReader() // A stream to read in chunks.
   const chunks: Uint8Array[] = [] // Chunks read so far.
   let size = 0 // Bytes read so far.
@@ -172,7 +175,7 @@ async function readLimitedText(request: Request): Promise<string | null> {
     const { done, value } = await reader.read() // Next chunk.
     if (done) break // Stream ended.
     size += value.byteLength // Count the bytes.
-    if (size > MAX_BODY_BYTES) { // Over the limit.
+    if (size > limit) { // Over the limit.
       await reader.cancel() // Stop reading a body that lied about its length.
       return null // Refused.
     }
@@ -184,7 +187,26 @@ async function readLimitedText(request: Request): Promise<string | null> {
     bytes.set(chunk, offset) // Join the chunks.
     offset += chunk.byteLength // Advance.
   }
-  return new TextDecoder().decode(bytes) // UTF-8 text.
+  return bytes // The whole body.
+}
+
+/**
+ * Reads a JSON request body up to the size limit.
+ * @param request The request.
+ * @return The text, or null when it is over the limit.
+ */
+async function readLimitedText(request: Request): Promise<string | null> {
+  const bytes = await readLimitedBytes(request, MAX_BODY_BYTES) // Limited read.
+  return bytes === null ? null : new TextDecoder().decode(bytes) // UTF-8 text.
+}
+
+/**
+ * Tells whether a request comes from the Worker's own origin.
+ * @param request The request.
+ * @return True only for an Origin header equal to the Worker's origin.
+ */
+function isOwnOrigin(request: Request): boolean {
+  return request.headers.get('Origin') === new URL(request.url).origin // Exact compare.
 }
 
 /**
@@ -193,7 +215,7 @@ async function readLimitedText(request: Request): Promise<string | null> {
  * @return The parsed body, or the response to send instead.
  */
 async function readJsonBody(request: Request): Promise<{ body: unknown } | { refusal: Response }> {
-  if (request.headers.get('Origin') !== new URL(request.url).origin) return { refusal: json({ error: 'forbidden' }, 403) } // Own origin only.
+  if (!isOwnOrigin(request)) return { refusal: json({ error: 'forbidden' }, 403) } // Own origin only.
   const type = (request.headers.get('Content-Type') ?? '').split(';')[0].trim().toLowerCase() // The media type without parameters.
   if (type !== 'application/json') return { refusal: json({ error: 'json-only' }, 415) } // Forces a CORS preflight for other sites.
   const text = await readLimitedText(request)
@@ -261,10 +283,32 @@ async function postDelete(request: Request, env: Env): Promise<Response> {
   if ('refusal' in read) return read.refusal // Refused.
   const input = parseDeleteRequest(read.body) // Null when invalid.
   if (input === null) return json({ error: 'invalid' }, 400) // Fails validation.
-  const result = await deleteHonor(env.DB, input) // The guarded delete.
+  const result = await deleteHonor(env.DB, env.PICTURES, input) // The guarded delete.
   if (result.kind === 'deleted') return json({ deletedId: input.id }, 200) // Gone.
   if (result.kind === 'built-in') return json({ error: 'built-in' }, 400) // Never deleted.
   return json({ error: 'conflict', honors: result.honors }, 409) // Changed since viewing.
+}
+
+/**
+ * Handles `POST /api/items/picture?id=&seen=`: stores a picture under the guard of the key the admin saw.
+ * @param request The request.
+ * @param env The Worker bindings.
+ * @return The response.
+ */
+async function postPicture(request: Request, env: Env): Promise<Response> {
+  if (!isOwnOrigin(request)) return json({ error: 'forbidden' }, 403) // Own origin only.
+  const type = (request.headers.get('Content-Type') ?? '').split(';')[0].trim().toLowerCase() // The media type without parameters.
+  if (type !== 'image/webp' && type !== 'image/png') return json({ error: 'picture-only' }, 415) // Forces a CORS preflight for other sites.
+  const { searchParams } = new URL(request.url) // The id and the key seen.
+  const id = searchParams.get('id') // The honor.
+  const seen = searchParams.get('seen') // The key the admin saw; empty for none.
+  if (id === null || !isItemId(id) || seen === null || (seen !== '' && !PICTURE_KEY.test(seen))) return json({ error: 'invalid' }, 400) // Bad or missing values.
+  const bytes = await readLimitedBytes(request, MAX_PICTURE_BYTES) // Capped read.
+  if (bytes === null) return json({ error: 'too-large' }, 413) // Over 256 KB.
+  if (bytes.byteLength === 0 || !hasSignature(bytes, type as PictureType)) return json({ error: 'invalid' }, 400) // Empty, or not the claimed picture type.
+  const result = await uploadPicture(env, { id, seen: seen === '' ? null : seen, type: type as PictureType, bytes }, new Date().toISOString()) // The guarded store.
+  if (result.kind === 'saved') return json({ honor: result.honor }, 200) // Stored.
+  return json({ error: 'conflict', honors: result.honors, deletedIds: result.deletedIds }, 409) // Current row or deleted id; nothing stored.
 }
 
 /**
@@ -298,6 +342,7 @@ export function createHandler(pages: Pages): ExportedHandlerFetchHandler<Env> {
     ['/api/items', { GET: getItems, POST: postItem }], // A page of the list; Add.
     ['/api/items/changes', { POST: postChanges }], // The save.
     ['/api/items/delete', { POST: postDelete }], // Delete.
+    ['/api/items/picture', { POST: postPicture }], // The picture upload.
     ['/api/meta', { GET: async (_request, env) => json(await readMeta(env.DB), 200) }], // Categories, currency, default price.
   ])
   return async (request, env, ctx) => { // The fetch handler.

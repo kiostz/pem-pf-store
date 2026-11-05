@@ -188,7 +188,7 @@ describe('filters', () => {
     const res = await call('/api/items?sort=name')
     const body = (await res.json()) as Record<string, unknown> & { honors: Record<string, unknown>[] }
     expect(Object.keys(body).sort()).toEqual(['honors', 'nextCursor'])
-    expect(body.honors[0]).toEqual({ id: 'item-001', name: 'Item 001', category: 'Outreach', status: 'active', stock: 0, priceCents: 400, clubAdded: false, createdAt: at(1), modifiedAt: at(1) })
+    expect(body.honors[0]).toEqual({ id: 'item-001', name: 'Item 001', category: 'Outreach', status: 'active', stock: 0, priceCents: 400, image: null, clubAdded: false, createdAt: at(1), modifiedAt: at(1) })
   })
 
   it('marks a Club-added honor with clubAdded', async () => {

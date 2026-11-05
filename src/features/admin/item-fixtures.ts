@@ -18,6 +18,7 @@ export const makeItem = (
   status: 'active', // shown to buyers
   stock: 3, // a little stock
   priceCents: 400, // RM 4.00
+  image: null, // no picture yet
   clubAdded: false, // built in
   createdAt: '2026-11-01T00:00:00.000Z', // the import day
   modifiedAt: '2026-11-03T02:00:00.000Z', // 3 Nov, 10:00 am in Malaysia

@@ -1,7 +1,7 @@
 // Tests POST /api/items/delete: Club-added items only, guarded by the row as the admin saw it.
 
 import { env } from 'cloudflare:workers'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { deleteHonor } from '../src/delete-honor'
 import { fullRowOf, postTo, seedHonors, wire } from './helpers'
 
@@ -24,6 +24,36 @@ beforeEach(() =>
 const del = (id: string, over: Record<string, unknown> = {}) => postTo('/api/items/delete', { id, seen: { ...seen, ...over } })
 
 describe('POST /api/items/delete', () => {
+  it('removes the picture object of a deleted Club-added item', async () => {
+    // Catches orphaned picture objects piling up in R2 after deletes.
+    await env.DB.prepare("UPDATE honors SET image = 'items/camp-shirt-0a1b2c3d.webp' WHERE id = 'camp-shirt'").run()
+    await env.PICTURES.put('items/camp-shirt-0a1b2c3d.webp', new Uint8Array([1]))
+    expect((await del('camp-shirt')).status).toBe(200)
+    expect(await env.PICTURES.head('items/camp-shirt-0a1b2c3d.webp')).toBeNull()
+  })
+
+  it('answers 200 with the row gone when deleting the picture object fails, logging only the class', async () => {
+    // Catches a failed cleanup turning a finished delete into a 500, or the error text reaching the log.
+    await env.DB.prepare("UPDATE honors SET image = 'items/camp-shirt-0a1b2c3d.webp' WHERE id = 'camp-shirt'").run()
+    const spy = vi.spyOn(env.PICTURES, 'delete').mockRejectedValue(new TypeError('secret detail'))
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await del('camp-shirt')
+    spy.mockRestore()
+    const calls = log.mock.calls
+    log.mockRestore()
+    expect(res.status).toBe(200)
+    expect(await fullRowOf('camp-shirt')).toBeNull()
+    expect(calls).toEqual([['picture cleanup failed', 'TypeError']])
+  })
+
+  it('keeps the picture object when the delete conflicts', async () => {
+    // Catches deleting the picture of an item that survived the guard.
+    await env.DB.prepare("UPDATE honors SET image = 'items/camp-shirt-0a1b2c3d.webp', stock = 3 WHERE id = 'camp-shirt'").run()
+    await env.PICTURES.put('items/camp-shirt-0a1b2c3d.webp', new Uint8Array([1]))
+    expect((await del('camp-shirt')).status).toBe(409)
+    expect(await env.PICTURES.head('items/camp-shirt-0a1b2c3d.webp')).not.toBeNull()
+  })
+
   it('deletes a Club-added item the admin saw as it is', async () => {
     // Catches a delete that does nothing, or answers with the wrong id.
     const res = await del('camp-shirt')
@@ -93,14 +123,14 @@ function racing(race: () => Promise<unknown>): D1Database {
 describe('the delete statement\'s own guard', () => {
   it('answers conflict with the current row and keeps the item when a sale lands just before the DELETE', async () => {
     // Catches a guard column dropped from the DELETE's WHERE: an item sold a second earlier would be deleted unseen.
-    const result = await deleteHonor(racing(() => env.DB.prepare('UPDATE honors SET stock = 3 WHERE id = ?').bind('camp-shirt').run()), { id: 'camp-shirt', seen: seen as never })
+    const result = await deleteHonor(racing(() => env.DB.prepare('UPDATE honors SET stock = 3 WHERE id = ?').bind('camp-shirt').run()), env.PICTURES, { id: 'camp-shirt', seen: seen as never })
     expect(result).toEqual({ kind: 'conflict', honors: [wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', status: 'hidden', stock: 3, priceCents: 1500, clubAdded: true, createdAt: seen.modifiedAt, modifiedAt: seen.modifiedAt })] })
     expect(await fullRowOf('camp-shirt')).not.toBeNull()
   })
 
   it('answers deleted when another admin deletes the row in that gap', async () => {
     // Catches a 409 or 500 for an item that is gone, which is the outcome the admin wanted.
-    const result = await deleteHonor(racing(() => env.DB.prepare('DELETE FROM honors WHERE id = ?').bind('camp-shirt').run()), { id: 'camp-shirt', seen: seen as never })
+    const result = await deleteHonor(racing(() => env.DB.prepare('DELETE FROM honors WHERE id = ?').bind('camp-shirt').run()), env.PICTURES, { id: 'camp-shirt', seen: seen as never })
     expect(result).toEqual({ kind: 'deleted' })
   })
 })

@@ -101,6 +101,7 @@ describe('the other write routes', () => {
       ['/api/items', 'PUT', 'GET, POST'],
       ['/api/items', 'DELETE', 'GET, POST'],
       ['/api/items/delete', 'GET', 'POST'],
+      ['/api/items/picture', 'GET', 'POST'],
       ['/api/meta', 'POST', 'GET'],
     ]
     for (const [path, method, allow] of cases) {

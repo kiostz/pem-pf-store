@@ -7,7 +7,7 @@ import { encodeCursor, type ItemQuery } from './item-query' // The checked query
 // Rows per page; one more is read to know whether another page exists.
 const PAGE_SIZE = 50
 // The columns the admin sees, in the shape of a raw row.
-const COLUMNS = "id, name, category, status, stock, price_cents AS priceCents, issued_by = 'Club' AS clubAdded, created_at AS createdAt, modified_at AS modifiedAt"
+const COLUMNS = "id, name, category, status, stock, price_cents AS priceCents, image, issued_by = 'Club' AS clubAdded, created_at AS createdAt, modified_at AS modifiedAt"
 // The order of a list of named ids (the rows of a save).
 const ORDER = 'ORDER BY name COLLATE NOCASE, id'
 // A statement that raises "integer overflow" (the only way a batch statement can abort the batch) when its honor no longer exists.

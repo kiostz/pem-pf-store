@@ -29,10 +29,11 @@ function matches(honor: AdminHonor, seen: DeleteRequest['seen']): boolean {
 /**
  * Deletes a Club-added honor guarded by the row as seen.
  * @param db The D1 database.
+ * @param bucket The picture bucket; the deleted honor's picture object is removed from it.
  * @param request The checked request.
  * @return `deleted` (also when already gone), `built-in`, or `conflict` with the current row.
  */
-export async function deleteHonor(db: D1Database, request: DeleteRequest): Promise<DeleteResult> {
+export async function deleteHonor(db: D1Database, bucket: R2Bucket, request: DeleteRequest): Promise<DeleteResult> {
   const [current] = await readAdminHonors(db, [request.id]) // The stored row, if any.
   if (current === undefined) return { kind: 'deleted' } // Already gone: the goal is met.
   if (!current.clubAdded) return { kind: 'built-in' } // Never deleted.
@@ -42,7 +43,10 @@ export async function deleteHonor(db: D1Database, request: DeleteRequest): Promi
     .prepare("DELETE FROM honors WHERE id = ? AND issued_by = 'Club' AND name = ? AND category = ? AND price_cents = ? AND status = ? AND stock = ? AND modified_at = ?")
     .bind(request.id, seen.name, seen.category, seen.priceCents, seen.status, seen.stock, seen.modifiedAt)
     .run() // The same guard again, in the statement itself, so a change after the read still stops it.
-  if (result.meta.changes === 1) return { kind: 'deleted' } // Deleted.
+  if (result.meta.changes === 1) { // Deleted.
+    if (current.image !== null) await bucket.delete(current.image).catch((error: unknown) => console.error('picture cleanup failed', error instanceof Error ? error.name : 'unknown')) // Best effort; an orphan is harmless, and only the class is logged.
+    return { kind: 'deleted' } // Done.
+  }
   const [after] = await readAdminHonors(db, [request.id]) // Why not: gone, or changed just now.
   return after === undefined ? { kind: 'deleted' } : { kind: 'conflict', honors: [after] } // Gone is fine.
 }

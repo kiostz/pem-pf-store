@@ -1,6 +1,7 @@
 // Parses the item list's query string and its cursor where they enter: a closed set of sorts and categories, bounded text, nothing else.
 
 import { CATEGORIES } from './categories' // The category list.
+import { isItemId } from './item-id' // The item id check.
 import { hasControlCharacter, isCleanText } from './validate-text' // Text rules.
 
 // The three sorts: Recently changed, Newest and Name A-Z.
@@ -29,8 +30,6 @@ const MAX_SEARCH_WORDS = 5
 const MAX_CURSOR_CHARS = 1024
 // ISO UTC time with milliseconds.
 const TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
-// Lower-case slug parts joined by single hyphens, 1-100 characters.
-const ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/
 // base64url alphabet.
 const BASE64URL = /^[A-Za-z0-9_-]+$/
 
@@ -41,15 +40,6 @@ const BASE64URL = /^[A-Za-z0-9_-]+$/
  */
 function isTime(value: unknown): value is string {
   return typeof value === 'string' && TIME_PATTERN.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString() === value // Pattern, and no 30 February.
-}
-
-/**
- * Tells whether a value is a slug id.
- * @param value Anything.
- * @return True for a slug of up to 100 characters.
- */
-function isId(value: unknown): value is string {
-  return typeof value === 'string' && value.length <= 100 && ID_PATTERN.test(value) // No padding, no capitals.
 }
 
 /**
@@ -85,7 +75,7 @@ export function decodeCursor(sort: ItemSort, text: string): ItemCursor | null {
   if (rest.length !== 2) return null // Name and id remain.
   const [name, id] = rest // The last two.
   if (sort !== 'name' && !isTime(time)) return null // A time with milliseconds.
-  if (!isCleanText(name, 1, 200) || !isId(id)) return null // A clean name and a slug.
+  if (!isCleanText(name, 1, 200) || !isItemId(id)) return null // A clean name and a slug.
   return time === undefined ? { name, id } : { time: time as string, name, id } // Checked above.
 }
 

@@ -39,7 +39,7 @@ describe('GET /pictures/<key>', () => {
     expect(await res.json()).toEqual({ error: 'not-found' })
   })
 
-  it.each(['patches/x.webp', 'items/..%2Fx.webp', 'items%2Fx.webp', 'items/X.webp', 'items/x.svg'])('answers 404 for %s without reading R2', async (key) => {
+  it.each(['patches/x.webp', 'items/..%2Fx.webp', 'items/..%2fx.webp', 'items%2Fx.webp', 'items/X.webp', 'items/x.svg'])('answers 404 for %s without reading R2', async (key) => {
     // catches: a key outside the pattern reaching the bucket
     const get = vi.spyOn(env.PICTURES, 'get') // Counts reads.
     const res = await call(`/pictures/${key}`)

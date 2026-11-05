@@ -2,6 +2,7 @@
 
 import type { DeleteRequest, HonorChange, HonorStatus, NewItem } from './admin-types' // The change shapes.
 import { CATEGORIES } from './categories' // The category list.
+import { isItemId } from './item-id' // The item id check.
 import { isCleanText, parseItemName } from './validate-text' // Text rules.
 
 // The most honors one save may hold.
@@ -12,8 +13,6 @@ export const MAX_STOCK = 9999
 export const MAX_PRICE_CENTS = 99999
 // ISO UTC time with milliseconds.
 const TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
-// Lower-case slug parts joined by single hyphens; without the `m` flag `$` matches only at the very end, so a trailing newline fails.
-const ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/
 // The two statuses.
 const STATUSES: readonly unknown[] = ['active', 'hidden']
 
@@ -108,7 +107,7 @@ function validPrice(side: unknown, which: 'from' | 'to'): side is number {
 function parseChange(value: unknown): HonorChange | null {
   if (!isRecord(value) || !onlyKeys(value, ['id', 'status', 'stock', 'name', 'category', 'priceCents'])) return null // No extra keys.
   const { id } = value // The honor id.
-  if (typeof id !== 'string' || id.length > 100 || !ID_PATTERN.test(id)) return null // Slug only.
+  if (!isItemId(id)) return null // Slug only.
   const change: HonorChange = { id } // Starts with the id only.
   if (value.status !== undefined) { // A status change is present.
     const status = parsePair(value.status, validStatus) // Status pair.
@@ -176,7 +175,7 @@ export function parseNewItem(body: unknown): NewItem | null {
 export function parseDeleteRequest(body: unknown): DeleteRequest | null {
   if (!isRecord(body) || !onlyKeys(body, ['id', 'seen'])) return null // Exactly these two.
   const { id, seen } = body // The raw parts.
-  if (typeof id !== 'string' || id.length > 100 || !ID_PATTERN.test(id)) return null // Slug only.
+  if (!isItemId(id)) return null // Slug only.
   if (!isRecord(seen) || !onlyKeys(seen, ['name', 'category', 'priceCents', 'status', 'stock', 'modifiedAt'])) return null // Exactly the guard fields.
   const { name, category, priceCents, status, stock, modifiedAt } = seen // The raw guard.
   if (!validName(name, 'from') || !validCategory(category, 'from') || !validPrice(priceCents, 'from')) return null // Seen values, uncapped.
