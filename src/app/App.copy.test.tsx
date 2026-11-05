@@ -64,10 +64,9 @@ describe('buyer copy', () => {
       currency: 'MYR',
       lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 2, priceCents: 400 }],
       totalCents: 800,
-      name: 'J. Cruz',
-      email: 'jc@mail.com',
-      phone: '+60 12-345 6789',
+      contact: { name: 'J. Cruz', email: 'jc@mail.com', phone: '+60 12-345 6789' },
       club: { subject: 'Eagles', email: 'Eagles' },
+      changesNotSent: false,
     }) // so the confirmation has an order and one order line to show
     window.location.hash = hash // opened by address
     render(<App />)

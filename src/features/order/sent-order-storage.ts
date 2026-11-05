@@ -3,9 +3,21 @@
 import type { SentOrder } from './order-email.ts' // the stored shape
 
 export const SENT_ORDER_STORAGE_KEY = 'pem-pf-store:sent-order' // repo name in the key: the site origin is shared by the account's other sites
-const SENT_ORDER_VERSION = 1 // the stored format
+const SENT_ORDER_VERSION = 2 // the stored format; version 1 is still read
 
 let heldOrder: SentOrder | null = null // the order of this tab when sessionStorage could not take it
+
+/**
+ * Tells whether a stored value is a whole contact or null.
+ * @param value whatever the storage held under the contact
+ * @return true for null, or for a name, email and phone that are all text
+ */
+function isContactOrNull(value: unknown): boolean {
+  if (value === null) return true // the contact-free order
+  if (typeof value !== 'object') return false // not a contact
+  const contact = value as Record<string, unknown> // for reading parts
+  return typeof contact.name === 'string' && typeof contact.email === 'string' && typeof contact.phone === 'string' // every part is text
+}
 
 /**
  * Tells whether a stored value is a whole order, so the confirmation page never reads a missing part.
@@ -23,9 +35,8 @@ function isSentOrder(value: unknown): value is SentOrder {
     typeof order.currency === 'string' && // the currency code
     typeof order.totalCents === 'number' && // the total
     Number.isFinite(order.totalCents) && // not NaN or infinite
-    typeof order.name === 'string' && // the buyer's name
-    typeof order.email === 'string' && // the buyer's email
-    typeof order.phone === 'string' && // the buyer's phone
+    isContactOrNull(order.contact) && // the buyer's contact, or none
+    typeof order.changesNotSent === 'boolean' && // whether the note shows
     typeof club === 'object' && // the club part exists
     club !== null && // and is not null
     typeof club.subject === 'string' && // the club's name
@@ -44,6 +55,17 @@ function isSentOrder(value: unknown): value is SentOrder {
       )
     }) // every order line whole
   )
+}
+
+/**
+ * Lifts a version 1 order to version 2: its three flat fields become the contact, and no note shows.
+ * @param value whatever a version 1 value held under the order
+ * @return the lifted value, or the input when it is not an object
+ */
+function fromVersionOne(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null) return value // left for the check to refuse
+  const { name, email, phone, ...rest } = value as Record<string, unknown> // the flat contact fields
+  return { ...rest, contact: { name, email, phone }, changesNotSent: false } // version 2 shape; a bad part fails the check
 }
 
 /**
@@ -69,16 +91,17 @@ export function readSentOrder(storage?: Storage): SentOrder | null {
     return null
   }
   const stored = parsed as { version?: unknown; order?: unknown } | null // the wrapper, its parts checked below
+  const order = stored?.version === 1 ? fromVersionOne(stored.order) : stored?.order // a version 1 value is lifted to version 2
   if (
     typeof parsed !== 'object' || // not an object
     stored === null || // JSON null
-    stored.version !== SENT_ORDER_VERSION || // another format
-    !isSentOrder(stored.order) // not a whole order
+    (stored.version !== SENT_ORDER_VERSION && stored.version !== 1) || // another format
+    !isSentOrder(order) // not a whole order
   ) {
     console.warn('Stored sent order has an unknown format.') // no content in the warning
     return null
   }
-  return stored.order // the order as written, now known to be whole
+  return order // the order as written, now known to be whole
 }
 
 /**

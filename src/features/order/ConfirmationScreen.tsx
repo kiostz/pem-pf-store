@@ -53,6 +53,13 @@ export function ConfirmationScreen({ onBack }: { onBack: () => void }) {
       <h2 ref={headingRef} tabIndex={-1} className="sm:text-title mt-2 text-xl font-bold outline-none">
         Order sent
       </h2>
+      {/* Says why the page shows an earlier order than the one the buyer just tried to send. */}
+      {order.changesNotSent && (
+        <p role="note" className="bg-bg-app border-border-subtle rounded-card mt-3 border px-3 py-2 text-sm wrap-break-word">
+          This order reached us before your changes, so your changes were not sent. Anything still in your cart can go
+          in a new order.
+        </p>
+      )}
       {/* The buyer's only record of the order: the page's one large element, with the day it was sent. */}
       <div className={`${CARD_BOX} px-2 py-5 text-center print:break-inside-avoid`}>
         {/* what the number is */}
@@ -66,10 +73,16 @@ export function ConfirmationScreen({ onBack }: { onBack: () => void }) {
       </div>
       {/* What happens next, with the contact details so a typo shows. */}
       <p className="mt-4 wrap-break-word">
-        {`Keep this number. We'll review your order and contact you at ${order.email} or `}
-        {/* the number stays on one line */}
-        <span className="whitespace-nowrap">{order.phone}</span>
-        {' to confirm it. Thank you!'}
+        {order.contact === null ? (
+          "Keep this number. We'll review your order and contact you to confirm it. Thank you!" // no contact the order is sure to hold
+        ) : (
+          <>
+            {`Keep this number. We'll review your order and contact you at ${order.contact.email} or `}
+            {/* the number stays on one line */}
+            <span className="whitespace-nowrap">{order.contact.phone}</span>
+            {' to confirm it. Thank you!'}
+          </>
+        )}
       </p>
       {/* The order lines as sent, at the prices of that moment, in one card. */}
       <ul className={`${CARD_BOX} overflow-hidden`}>
@@ -101,14 +114,19 @@ export function ConfirmationScreen({ onBack }: { onBack: () => void }) {
       </p>
       {/* Who the order is for. */}
       <dl className={`${CARD_BOX} grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 px-4 py-3 print:break-inside-avoid`}>
-        {/* label */}
-        <dt className="text-text-muted">Name</dt>
-        {/* the buyer */}
-        <dd className="wrap-break-word">{order.name}</dd>
-        {/* label */}
-        <dt className="text-text-muted">Phone</dt>
-        {/* the buyer's number */}
-        <dd className="wrap-break-word">{order.phone}</dd>
+        {/* The contact rows, only when every send carried the same contact. */}
+        {order.contact !== null && (
+          <>
+            {/* label */}
+            <dt className="text-text-muted">Name</dt>
+            {/* the buyer */}
+            <dd className="wrap-break-word">{order.contact.name}</dd>
+            {/* label */}
+            <dt className="text-text-muted">Phone</dt>
+            {/* the buyer's number */}
+            <dd className="wrap-break-word">{order.contact.phone}</dd>
+          </>
+        )}
         {/* label */}
         <dt className="text-text-muted">Club</dt>
         {/* the club */}

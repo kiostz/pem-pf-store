@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import type { OrderLine } from '@/features/cart/cart.ts' // an order line
 import { EMPTY_ORDER_FORM } from './order-form.ts' // the form values
-import { OrderSendError, OrderStockError, sendOrder, toOrderRequest, type OrderRequest } from './send-order.ts' // code under test
+import { lookupOrder, OrderSendError, OrderStockError, sendOrder, toOrderRequest, type OrderRequest } from './send-order.ts' // code under test
 
 const request: OrderRequest = {
   requestId: '3f0c1d5e-8a43-4c1e-9d0e-5b7a2f6c9e10',
@@ -20,8 +20,9 @@ const saved = {
   createdAt: '2026-11-01T17:00:00.000Z',
   currency: 'MYR',
   totalCents: 900,
+  club: 'Eagles',
   lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }],
-} // what the Worker answers for it
+} // what the Worker answers for it, without the kept flag
 
 afterEach(() => {
   vi.unstubAllEnvs() // env back to what the files say
@@ -53,9 +54,37 @@ describe('sendOrder', () => {
     expect(JSON.parse(init.body as string)).toEqual(request)
   })
 
-  it.each([201, 200])('returns the saved order for HTTP %i', async (status) => {
+  it.each([
+    [201, 'this-send'],
+    [200, 'earlier-send'],
+  ])('returns the saved order and its kept flag for HTTP %i', async (status, kept) => {
     // catches: a repeat send (200) treated as a failure, so a lost reply makes the buyer think the order is lost
-    await expect(sendOrder(request, fetchAnswering(status, saved))).resolves.toEqual(saved)
+    await expect(sendOrder(request, fetchAnswering(status, { ...saved, kept }))).resolves.toEqual({ order: saved, kept })
+  })
+
+  it.each([
+    [201, 'this-send'],
+    [200, 'earlier-send'],
+  ])('reads the kept flag from HTTP %i when the Worker sends none (an older Worker)', async (status, kept) => {
+    // catches: a saved order shown as failed while the Worker deploys after the site
+    await expect(sendOrder(request, fetchAnswering(status, saved))).resolves.toEqual({ order: saved, kept })
+  })
+
+  it('returns an order without a club when the Worker sends none', async () => {
+    // catches: an older Worker's good answer refused for lacking the new club field
+    const older = { ...saved, club: undefined } // the answer an older Worker gives
+    const result = await sendOrder(request, fetchAnswering(201, older))
+    expect(result.order.club).toBeUndefined() // the form's club is used instead
+    expect(result.order.number).toBe(saved.number) // the order itself is intact
+  })
+
+  it.each([
+    ['201 holding earlier-send', 201, 'earlier-send'],
+    ['200 holding this-send', 200, 'this-send'],
+    ['an unknown value', 201, 'both'],
+  ])('rejects %s', async (_label, status, kept) => {
+    // catches: a flag that contradicts the status picking the wrong confirmation page
+    await expect(sendOrder(request, fetchAnswering(status, { ...saved, kept }))).rejects.toMatchObject({ kind: 'rejected' })
   })
 
   it.each([
@@ -181,6 +210,59 @@ describe('sendOrder', () => {
     // catches: a name, email or phone inside an error that reaches a log
     const error = (await sendOrder(request, fetchAnswering(500, '')).catch((caught: unknown) => caught)) as Error // the thrown error
     for (const secret of ['J. Cruz', 'jc@mail.com', '6789']) expect(error.message).not.toContain(secret)
+  })
+})
+
+describe('lookupOrder', () => {
+  const id = '3f0c1d5e-8a43-4c1e-9d0e-5b7a2f6c9e10' // a request id
+
+  it('does a body-less GET of /orders/status/<id> with no buyer data in the address', async () => {
+    // catches: a POST, a body, or buyer details put in the address
+    vi.stubEnv('VITE_API_URL', '/api')
+    const fetchFn = fetchAnswering(200, { found: false })
+    await lookupOrder(id, fetchFn)
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe(`/api/orders/status/${id}`)
+    expect(init.method ?? 'GET').toBe('GET')
+    expect(init.body).toBeUndefined() // no body
+    expect(url).not.toMatch(/Cruz|jc@mail|6789/) // no buyer data
+  })
+
+  it('gives null for found false and the order for found true', async () => {
+    // catches: a not-found read as an order, or a found order dropped
+    await expect(lookupOrder(id, fetchAnswering(200, { found: false }))).resolves.toBeNull()
+    await expect(lookupOrder(id, fetchAnswering(200, { found: true, order: saved }))).resolves.toEqual(saved)
+  })
+
+  it('names a thrown fetch as network and a timeout as timeout', async () => {
+    // catches: an offline lookup not failing cleanly
+    const down = vi.fn(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    await expect(lookupOrder(id, down)).rejects.toMatchObject({ name: 'OrderSendError', kind: 'network' })
+    const slow = vi.fn(async () => {
+      throw new DOMException('signal timed out', 'TimeoutError')
+    })
+    await expect(lookupOrder(id, slow)).rejects.toMatchObject({ kind: 'timeout' })
+  })
+
+  it('gives the request a 10 second timeout signal', async () => {
+    // catches: a lookup that waits 20 s or forever before the resend
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    await lookupOrder(id, fetchAnswering(200, { found: false }))
+    expect(timeout).toHaveBeenCalledWith(10_000)
+  })
+
+  it.each([
+    ['a missing route (404)', 404, { error: 'not-found' }],
+    ['a 500', 500, { error: 'server' }],
+    ['non-JSON', 200, '<html>'],
+    ['a bad shape', 200, { found: true, order: { ...saved, number: 5 } }],
+    ['a found order without a club', 200, { found: true, order: { ...saved, club: undefined } }],
+    ['found as text', 200, { found: 'yes' }],
+  ])('rejects %s', async (_label, status, body) => {
+    // catches: a broken or not-yet-deployed route read as an order or as not found
+    await expect(lookupOrder(id, fetchAnswering(status, body))).rejects.toMatchObject({ kind: 'rejected' })
   })
 })
 

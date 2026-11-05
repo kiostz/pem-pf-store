@@ -375,10 +375,9 @@ describe('App', () => {
       currency: 'MYR',
       lines: [],
       totalCents: 0,
-      name: 'J. Cruz',
-      email: 'jc@mail.com',
-      phone: '+60 12-345 6789',
+      contact: { name: 'J. Cruz', email: 'jc@mail.com', phone: '+60 12-345 6789' },
       club: { subject: 'Eagles', email: 'Eagles' },
+      changesNotSent: false,
     })
     window.location.hash = '#/order-sent'
     render(<App />)

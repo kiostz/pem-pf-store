@@ -1,23 +1,36 @@
 // Keeps the send in flight (request id, cart lines sent, form fields) in sessionStorage, so a reload before the Worker's answer reuses the request id and never makes a second order.
 
+import { formContact, type Contact } from './order-email.ts' // one send's contact, and the form's own folding of it
 import type { OrderFormValues } from './order-form.ts' // the form fields kept
 
 export type PendingSend = {
   requestId: string // the id the Worker keys the order on
   lines: Array<[string, number]> // the cart lines sent: honor id and quantity
   values: OrderFormValues // the form as sent
+  contacts: Contact[] // every distinct contact sent under this id, in send order
 } // one send in flight
 
 export const PENDING_SEND_STORAGE_KEY = 'pem-pf-store:pending-send' // repo name in the key: the site origin is shared by the account's other sites
-const PENDING_SEND_VERSION = 1 // the stored format
+const PENDING_SEND_VERSION = 2 // the stored format; version 1 is still read
 const FORM_FIELDS = ['name', 'email', 'phone', 'club', 'otherClub'] as const // every field of the form
+
+/**
+ * Tells whether a stored value is a whole contact.
+ * @param value one stored contact
+ * @return true when name, email and phone are all text
+ */
+function isContact(value: unknown): value is Contact {
+  if (typeof value !== 'object' || value === null) return false // not a contact
+  const contact = value as Record<string, unknown> // for reading parts
+  return typeof contact.name === 'string' && typeof contact.email === 'string' && typeof contact.phone === 'string' // every part is text
+}
 
 /**
  * Tells whether a stored value is a whole pending send.
  * @param value whatever the storage held, parsed
- * @return true when every part is there with the right kind of value
+ * @return true when every part but the contacts is there with the right kind of value
  */
-function isPendingSend(value: unknown): value is PendingSend {
+function isPendingSend(value: unknown): value is Omit<PendingSend, 'contacts'> {
   if (typeof value !== 'object' || value === null) return false // not a pending send
   const pending = value as Record<string, unknown> // for reading parts
   const values = pending.values as Record<string, unknown> | null | undefined // the form part
@@ -40,6 +53,15 @@ function isPendingSend(value: unknown): value is PendingSend {
 }
 
 /**
+ * Takes the contact from a form, folded as the form's own send folds it.
+ * @param values the form as sent
+ * @return name, email and phone
+ */
+function contactOf(values: OrderFormValues): Contact {
+  return formContact(values) // trimmed and on one line, as a send's contact is
+}
+
+/**
  * Reads the pending send; a malformed or foreign value is removed.
  * @param storage where to read; the browser's sessionStorage by default
  * @return the pending send, or null when there is none, the storage is blocked, or the value is unusable
@@ -56,13 +78,15 @@ export function readPendingSend(storage?: Storage): PendingSend | null {
       // falls through to the removal below
     }
     const stored = parsed as { version?: unknown; pending?: unknown } | null // the wrapper, its parts checked below
-    if (
-      typeof parsed === 'object' &&
-      stored !== null &&
-      stored.version === PENDING_SEND_VERSION &&
-      isPendingSend(stored.pending)
-    )
-      return stored.pending // whole and of this format
+    if (typeof parsed === 'object' && stored !== null && (stored.version === PENDING_SEND_VERSION || stored.version === 1) && isPendingSend(stored.pending)) {
+      const kept = stored.pending as Omit<PendingSend, 'contacts'> & { contacts?: unknown } // the parts, contacts unchecked
+      if (stored.version === 1) return { ...kept, contacts: [contactOf(kept.values)] } // one contact, from its values
+      if (Array.isArray(kept.contacts)) {
+        const contacts = kept.contacts.filter(isContact) // whole contacts only
+        if (contacts.length !== kept.contacts.length) console.warn('Stored pending send had unusable contacts, which were removed.') // no content in the warning
+        return { ...kept, contacts } // whole and of this format
+      }
+    }
     target.removeItem(PENDING_SEND_STORAGE_KEY) // never read again
     console.warn('Stored pending send is unusable and was removed.') // no content in the warning
     return null // unusable: the form starts empty

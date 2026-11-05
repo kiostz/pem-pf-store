@@ -1,6 +1,7 @@
 // The order form's context and its hook, in their own file so OrderFormProvider.tsx exports only a component.
 
 import { createContext, useContext, type RefObject } from 'react' // context, its reader and the ref type
+import type { Contact } from './order-email.ts' // one send's contact
 import type { OrderField, OrderFormValues } from './order-form.ts' // the form's shapes
 
 // What every reader of the form gets.
@@ -18,7 +19,7 @@ export type OrderFormValue = {
   setFailure: (failure: { text: string } | null) => void // shows or clears the alert
   refused: boolean // the Worker refused the last order for stock or availability, until the cart changes
   setRefused: (refused: boolean) => void // sets or clears it
-  requestRef: RefObject<{ signature: string; requestId: string } | null> // the request id kept for retries of the same order
+  requestRef: RefObject<{ requestId: string; contacts: Contact[] } | null> // the request id kept until an order comes back, with every contact sent under it
 }
 
 export const OrderFormContext = createContext<OrderFormValue | null>(null) // null outside an OrderFormProvider

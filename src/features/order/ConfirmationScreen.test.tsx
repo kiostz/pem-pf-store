@@ -15,10 +15,9 @@ const order: SentOrder = {
     { honorId: 'first-aid', name: 'First Aid', quantity: 1, priceCents: 350 },
   ],
   totalCents: 1250,
-  name: 'J. Cruz',
-  email: 'jc@mail.com',
-  phone: '+60 12-345 6789',
+  contact: { name: 'J. Cruz', email: 'jc@mail.com', phone: '+60 12-345 6789' },
   club: { subject: 'Eagles', email: 'Eagles' },
+  changesNotSent: false,
 } // an order as sent
 
 afterEach(() => {
@@ -181,7 +180,7 @@ describe('ConfirmationScreen', () => {
   it('shows the newest order after a second send in the same tab', () => {
     // catches: the page keeping the first order's number, lines or contact line
     writeSentOrder(order)
-    writeSentOrder({ ...order, number: 'PF-20261029-ABCD', email: 'new@mail.com' })
+    writeSentOrder({ ...order, number: 'PF-20261029-ABCD', contact: { ...order.contact!, email: 'new@mail.com' } })
     render(<ConfirmationScreen onBack={() => {}} />)
     expect(screen.getByText('PF-20261029-ABCD')).toBeInTheDocument()
     expect(screen.queryByText('PF-20261028-4K7Q')).not.toBeInTheDocument()
@@ -200,9 +199,53 @@ describe('ConfirmationScreen', () => {
 
   it('shows text typed by the buyer as text, not as markup', () => {
     // catches: a name or club injected as HTML into the page
-    writeSentOrder({ ...order, name: '<img src=x onerror=alert(1)>' })
+    writeSentOrder({ ...order, contact: { ...order.contact!, name: '<img src=x onerror=alert(1)>' } })
     const { container } = render(<ConfirmationScreen onBack={() => {}} />)
     expect(container.querySelector('img')).toBeNull()
     expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeInTheDocument()
+  })
+})
+
+describe('ConfirmationScreen earlier order', () => {
+  const NOTE = 'This order reached us before your changes, so your changes were not sent. Anything still in your cart can go in a new order.' // the note's text
+
+  it('shows the Earlier order note under the heading and above the number card only with changesNotSent', () => {
+    // catches: a note on an ordinary order, or one that is missing when the changes were not sent
+    writeSentOrder({ ...order, changesNotSent: true })
+    const { unmount } = render(<ConfirmationScreen onBack={() => {}} />)
+    const note = screen.getByText(NOTE)
+    const heading = screen.getByRole('heading', { name: 'Order sent' })
+    const card = screen.getByText('Order number')
+    expect(heading.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy() // after the heading
+    expect(note.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy() // before the number card
+    unmount()
+    writeSentOrder(order)
+    render(<ConfirmationScreen onBack={() => {}} />)
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument() // none for a plain order
+  })
+
+  it('names no honors and no email in the note', () => {
+    // catches: the word honor on screen, or a claim that the buyer gets an email
+    writeSentOrder({ ...order, changesNotSent: true })
+    render(<ConfirmationScreen onBack={() => {}} />)
+    expect(screen.getByText(NOTE).textContent).not.toMatch(/honou?r|e-?mail/i)
+  })
+
+  it('shows the contact-free line and no Name or Phone rows when the contact is null', () => {
+    // catches: a contact printed that the order may not hold
+    writeSentOrder({ ...order, contact: null, changesNotSent: true })
+    render(<ConfirmationScreen onBack={() => {}} />)
+    expect(screen.getByText(/Keep this number/)).toHaveTextContent("Keep this number. We'll review your order and contact you to confirm it. Thank you!")
+    expect(screen.queryByText('Name')).not.toBeInTheDocument()
+    expect(screen.queryByText('Phone')).not.toBeInTheDocument()
+    expect(screen.getByText('Club')).toBeInTheDocument() // the club row stays
+    expect(screen.getByText('Eagles')).toBeInTheDocument()
+  })
+
+  it('still focuses the heading on arrival with the note showing', () => {
+    // catches: the added note stealing or losing the arrival focus
+    writeSentOrder({ ...order, contact: null, changesNotSent: true })
+    render(<ConfirmationScreen onBack={() => {}} />)
+    expect(screen.getByRole('heading', { name: 'Order sent' })).toHaveFocus()
   })
 })

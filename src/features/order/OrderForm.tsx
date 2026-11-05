@@ -11,9 +11,9 @@ import { PILL_ACTION, PILL_DOCK, PILL_NOTE, PILL_SURFACE } from '@/shared/ui/flo
 import { Captcha, type CaptchaHandle } from './Captcha.tsx' // the Turnstile widget
 import { ClubSelect } from './ClubSelect.tsx' // the club field
 import { FIELD_BOX, FIELD_ERROR, FIELD_LABEL } from './field-box.ts' // the shared field look
-import { toSentOrder, type SentOrder } from './order-email.ts' // the stored order
+import { formContact, toEarlierSentOrder, toSentOrder, type SentOrder } from './order-email.ts' // the stored order
 import { missingText, validateOrderForm, type OrderField } from './order-form.ts' // the form's rules
-import { OrderSendError, OrderStockError, sendOrder, toOrderRequest } from './send-order.ts' // the send and its failures
+import { lookupOrder, OrderSendError, OrderStockError, sendOrder, toOrderRequest } from './send-order.ts' // the send, the lookup and their failures
 import { clearPendingSend, writePendingSend } from './pending-send-storage.ts' // keeps the send for a reload
 import { writeSentOrder } from './sent-order-storage.ts' // keeps the order for the confirmation
 import { useOrderForm } from './use-order-form.ts' // the form's values
@@ -130,16 +130,30 @@ export function OrderForm({
       return
     }
     sendRef.current?.focus() // focus stays on Send order, which sits outside the inert fields, so it is not lost to the page
-    setSending(true) // no second press, "Sending…", and the screen freezes
+    setSending(true) // no second press, "Sending…", and the screen freezes; it also covers the lookup, so a double click does nothing
     setFailure(null) // the last failure is old news
-    const signature = JSON.stringify([lines.map((line) => [line.honor.id, line.quantity]), values]) // what the order is: what the Worker would save
-    if (requestRef.current?.signature !== signature) requestRef.current = { signature, requestId: crypto.randomUUID() } // a retry keeps its request id, so a lost reply never makes a second order; an edit gets a new one
-    const requestId = requestRef.current.requestId // for the log and the send
-    writePendingSend({ requestId, lines: lines.map((line) => [line.honor.id, line.quantity]), values }) // a reload before the answer reuses this id
+    const contact = formContact(values) // what this send carries
     let order: SentOrder // what the confirmation keeps, once the Worker has saved it
     try {
-      const saved = await sendOrder(toOrderRequest(requestId, token, lines, values)) // the Worker checks, saves and numbers it
-      order = toSentOrder(saved, values) // the Worker's names, prices and number
+      let earlierOrder: SentOrder | null = null // the order an earlier send saved, when the lookup finds it
+      if (requestRef.current !== null) {
+        try {
+          const saved = await lookupOrder(requestRef.current.requestId) // an id is kept: the Worker may already hold the order
+          if (saved !== null) earlierOrder = toEarlierSentOrder(saved, requestRef.current.contacts, values, lines) // the earlier order, never this send's content
+        } catch {
+          // a failed lookup only adds no information: the send goes on under the same id, and the answer's kept flag chooses the page
+        }
+      } else requestRef.current = { requestId: crypto.randomUUID(), contacts: [] } // a new order gets a new id, kept until an order comes back
+      const request = requestRef.current // the id and its contacts
+      if (earlierOrder !== null) order = earlierOrder // found: nothing is sent
+      else {
+        // a contact already sent under this id is not added twice, so a resend of the same fields keeps one entry
+        if (!request.contacts.some((known) => known.name === contact.name && known.email === contact.email && known.phone === contact.phone))
+          request.contacts.push(contact) // each distinct contact sent under this id, in send order
+        writePendingSend({ requestId: request.requestId, lines: lines.map((line) => [line.honor.id, line.quantity]), values, contacts: request.contacts }) // a reload before the answer reuses this id
+        const { order: saved, kept } = await sendOrder(toOrderRequest(request.requestId, token, lines, values)) // the Worker checks, saves and numbers it
+        order = kept === 'this-send' ? toSentOrder(saved, values) : toEarlierSentOrder(saved, request.contacts, values, lines) // an earlier send's order shows as it was saved
+      }
     } catch (error) {
       const kind = // what the log and the note go by
         error instanceof OrderSendError
@@ -151,8 +165,7 @@ export function OrderForm({
         error instanceof Error // only an Error has a name and a stack
           ? { name: error.name, stack: (error.stack ?? '').split(`${error.name}: ${error.message}`).join('') } // the stack without the message, which could hold typed text
           : {} // not an Error: nothing safe to add
-      console.error('Order send failed', { kind, requestId, ...(kind === 'unexpected' ? detail : {}) }) // no buyer data
-      if (kind !== 'network' && kind !== 'timeout' && kind !== 'unexpected') clearPendingSend() // the Worker answered for good: the id is spent; an unknown outcome keeps it
+      console.error('Order send failed', { kind, requestId: requestRef.current?.requestId, ...(kind === 'unexpected' ? detail : {}) }) // no buyer data
       captchaRef.current?.reset() // the spent token cannot be used again
       setToken(null) // Send is incomplete until solved again
       if (

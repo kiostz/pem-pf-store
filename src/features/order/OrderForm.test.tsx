@@ -39,6 +39,7 @@ vi.mock('./Captcha.tsx', () => ({
 
 beforeEach(() => {
   captcha.reset.mockClear() // no earlier resets
+  lookupAnswers.length = 0 // no earlier lookup answers
 })
 
 afterEach(() => {
@@ -216,24 +217,53 @@ describe('OrderForm', () => {
  * @return the stub, to read its calls
  */
 function stubFetch(...answers: Array<Response | (() => Promise<Response>)>) {
-  const fetchFn = vi.fn(async () => {
+  const fetchFn = vi.fn<(url?: string, init?: RequestInit) => Promise<Response>>(async () => {
     const answer = answers.shift() ?? new Response('{}', { status: 500 }) // 500 when the test gave no more
     return typeof answer === 'function' ? answer() : answer
   })
-  vi.stubGlobal('fetch', fetchFn)
+  lookupFn.mockClear() // no earlier lookups
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (String(url).includes('/orders/status/') ? lookupFn(url, init) : fetchFn(url, init)))
   return fetchFn
 }
+
+/** @return a lookup answer saying no order was saved under the id */
+const notFound = () => new Response(JSON.stringify({ found: false }), { status: 200 })
+
+/**
+ * Makes the lookup answer found.
+ * @param order fields to replace in the saved order
+ * @return the response
+ */
+const found = (order: Record<string, unknown> = {}) => new Response(JSON.stringify({ found: true, order: { ...savedOrder, ...order } }), { status: 200 })
+
+const lookupAnswers: Array<Response | (() => Promise<Response>)> = [] // what the next lookups give, one each; not found when empty
+const lookupFn = vi.fn<(url?: string, init?: RequestInit) => Promise<Response>>(async () => {
+  const answer = lookupAnswers.shift() ?? notFound() // not found unless the test said otherwise
+  return typeof answer === 'function' ? answer() : answer
+}) // the stand-in for GET /orders/status/<id>; its calls are the lookups
 
 const savedOrder = {
   number: 'PF-20261102-4K7Q',
   createdAt: '2026-11-01T17:00:00.000Z',
   currency: 'MYR',
   totalCents: 900,
+  club: 'Eagles',
   lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }],
 } // what the Worker saved
 
-/** @return a response of the Worker's 201 for the saved order */
-const sent = () => new Response(JSON.stringify(savedOrder), { status: 201 })
+/**
+ * Makes the Worker's 201 for the saved order.
+ * @param order fields to replace in the saved order
+ * @return the response, flagged as this send's
+ */
+const sent = (order: Record<string, unknown> = {}) => new Response(JSON.stringify({ ...savedOrder, ...order, kept: 'this-send' }), { status: 201 })
+
+/**
+ * Makes the Worker's 200 for an order an earlier send saved.
+ * @param order fields to replace in the saved order
+ * @return the response, flagged as an earlier send's
+ */
+const earlier = (order: Record<string, unknown> = {}) => new Response(JSON.stringify({ ...savedOrder, ...order, kept: 'earlier-send' }), { status: 200 })
 
 /**
  * Makes a refusal response from the Worker.
@@ -438,7 +468,7 @@ describe('OrderForm sending', () => {
   it('does not say the order was not sent when work after a successful send throws', async () => {
     // catches: a sent order shown as failed, which the buyer would send again as a duplicate
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    stubFetch(sent())
+    const fetchFn = stubFetch(sent())
     const replace = vi.fn(() => {
       throw new Error('blocked') // the address cannot be replaced
     })
@@ -451,7 +481,7 @@ describe('OrderForm sending', () => {
     expect(captcha.reset).not.toHaveBeenCalled()
     expect(screen.getByRole('status')).toHaveTextContent(/Order sent\. Your order number is PF-\d{8}-[A-Z0-9]{4}\./) // the buyer is told
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
-    expect(fetch).toHaveBeenCalledTimes(1) // and cannot send it twice
+    expect(fetchFn).toHaveBeenCalledTimes(1) // and cannot send it twice
   })
 
   it('words a rate limit differently', async () => {
@@ -545,8 +575,8 @@ describe('OrderForm sending', () => {
     for (const secret of ['Jo Tan', 'jc@mail.com', '6789']) expect(logged).not.toContain(secret)
   })
 
-  it('keeps the request id for a retry and makes a new one after an edit', async () => {
-    // catches: a retry that gives the Worker two request ids for one order, so a lost reply makes a double order, or an edited order reusing the old id
+  it('keeps the request id for a retry and after an edit', async () => {
+    // catches: a retry or an edited resend that gives the Worker a second request id, so a late first send makes a second order
     vi.spyOn(console, 'error').mockImplementation(() => {})
     let next = 0 // a counter that stands in for randomness
     vi.spyOn(crypto, 'randomUUID').mockImplementation(
@@ -569,7 +599,7 @@ describe('OrderForm sending', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(3))
-    expect(requestOfCall(fetchFn, 2)).not.toBe(requestOfCall(fetchFn, 0))
+    expect(requestOfCall(fetchFn, 2)).toBe(requestOfCall(fetchFn, 0)) // still the first id: no answer has come back
   })
 
   it('sends once when Send order is pressed twice, and shows the sending state', async () => {
@@ -780,8 +810,8 @@ describe('OrderForm sending', () => {
     expect(stored.order.number).toBe('PF-20261102-4K7Q') // the confirmation shows the Worker's number
   })
 
-  it('makes a new request id when the club changes after a failure', async () => {
-    // catches: a signature that ignores the club, so a different order reuses the old request id
+  it('keeps the request id when the club changes after a failure', async () => {
+    // catches: a changed resend under a new id while the first send may still land, which makes a second order
     vi.spyOn(console, 'error').mockImplementation(() => {}) // the failure log
     const two: Club[] = [...clubs, { name: 'Falcons', area: null, language: null, location: null, churchName: null }] // a second club
     let next = 0 // stands in for randomness
@@ -796,7 +826,7 @@ describe('OrderForm sending', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' })) // tick
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ })) // press again
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2)) // sent again
-    expect(requestOfCall(fetchFn, 1)).not.toBe(requestOfCall(fetchFn, 0)) // a new request id
+    expect(requestOfCall(fetchFn, 1)).toBe(requestOfCall(fetchFn, 0)) // the same request id
   })
 
   it('keeps club detail fields out of the whole request body', async () => {
@@ -1109,8 +1139,8 @@ describe('OrderForm reload mid-send', () => {
     expect(fetchFn).not.toHaveBeenCalled() // nothing sent
   })
 
-  it('makes a new request id when a form field is changed after the reload', async () => {
-    // catches: a changed order that reuses the old id and gets the old saved order back
+  it('keeps the request id when a form field is changed after the reload', async () => {
+    // catches: a changed order under a new id after a reload, while the cut-off send may still land
     const { firstId } = await sendThenReload()
     const fetchFn = stubFetch(sent())
     renderForm()
@@ -1118,21 +1148,22 @@ describe('OrderForm reload mid-send', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1))
-    expect(requestOfCall(fetchFn, 0)).not.toBe(firstId) // a new order
+    expect(lookupFn).toHaveBeenCalledTimes(1) // the kept id is looked up first
+    expect(requestOfCall(fetchFn, 0)).toBe(firstId) // the same order id
   })
 
-  it('makes a new request id and an empty form when the cart changed before the reload came back', async () => {
-    // catches: a stored send refilled over a cart that is no longer the one sent
+  it('keeps the pending send, refills the form and reuses the request id when the cart changed before the reload came back', async () => {
+    // catches: a sent line lowered before the reload dropping the request id, so a late first send meets a second id
     const { firstId } = await sendThenReload()
     const fetchFn = stubFetch(sent())
     renderForm(clubs, () => {}, 2) // the cart now holds two
-    expect(screen.getByLabelText('Name')).toHaveValue('') // not refilled
-    expect(window.sessionStorage.getItem(PENDING_KEY)).toBeNull() // dropped
-    fillValid()
+    expect(screen.getByLabelText('Name')).toHaveValue('Jo Tan') // refilled
+    expect(window.sessionStorage.getItem(PENDING_KEY)).not.toBeNull() // kept
     fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1))
-    expect(requestOfCall(fetchFn, 0)).not.toBe(firstId)
+    expect(lookupFn).toHaveBeenCalledTimes(1) // looked up first
+    expect(requestOfCall(fetchFn, 0)).toBe(firstId) // the same id
   })
 
   it('keeps the pending send while the answer is awaited and clears it once the order is stored', async () => {
@@ -1190,14 +1221,14 @@ describe('OrderForm reload mid-send', () => {
       () => refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }),
     ],
     ['a stock refusal with nothing to patch', () => refused(409, { error: 'stock', lines: [] })],
-  ])('clears the pending send after %s', async (_name, answer) => {
-    // catches: a definite answer that leaves the pending send behind, so a reload refills a refused order
+  ])('keeps the pending send after %s', async (_name, answer) => {
+    // catches: a refusal that drops the id while an earlier send may still land, so the next Send makes a second order
     vi.spyOn(console, 'error').mockImplementation(() => {})
     stubFetch(answer())
     renderForm()
     fillTickAndSend()
     await waitFor(() => expect(captcha.reset).toHaveBeenCalledTimes(1)) // the answer came
-    expect(window.sessionStorage.getItem(PENDING_KEY)).toBeNull() // spent
+    expect(window.sessionStorage.getItem(PENDING_KEY)).not.toBeNull() // kept until an order comes back
   })
 
   it.each([
@@ -1253,5 +1284,356 @@ describe('OrderForm reload mid-send', () => {
     renderForm()
     fillTickAndSend()
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1)) // sent regardless
+  })
+})
+
+describe('OrderForm lookup after a lost send', () => {
+  const two: Club[] = [...clubs, { name: 'Falcons', area: null, language: null, location: null, churchName: null }] // a second club to change to
+  const drop = () => Promise.reject(new TypeError('Failed to fetch')) // a send that gets no answer
+
+  /** @return the sent order the confirmation page will read */
+  function storedOrder() {
+    return (JSON.parse(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY) ?? 'null') as {
+      order: { number: string; club: { subject: string }; contact: { name: string; phone: string } | null; changesNotSent: boolean }
+    } | null)?.order
+  }
+
+  /** Ticks the captcha and presses Send order. */
+  function tickAndSend() {
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
+  }
+
+  /**
+   * Picks another club.
+   * @param name the club's name
+   */
+  function pickClub(name: string) {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Club' }), { target: { value: name } }) // the change
+  }
+
+  /**
+   * Sends into a dropped connection and waits for the failure note.
+   * @param answers what the next POSTs give after the drop
+   * @return the fetch stub
+   */
+  async function sendThenDrop(...answers: Array<Response | (() => Promise<Response>)>) {
+    vi.spyOn(console, 'error').mockImplementation(() => {}) // the failure log
+    const fetchFn = stubFetch(drop, ...answers) // a drop, then the rest
+    renderForm(two)
+    fillTickAndSend()
+    await screen.findByRole('alert') // no answer came
+    return fetchFn
+  }
+
+  it('makes no lookup for a first send', async () => {
+    // catches: an extra GET on every ordinary send
+    stubFetch(sent())
+    renderForm()
+    fillTickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(lookupFn).not.toHaveBeenCalled() // no lookup
+  })
+
+  it('looks up once after a drop and, when the order is found, sends nothing and shows the plain confirmation', async () => {
+    // catches: an unchanged resend that posts again, or a found order shown with a note or left in the cart
+    lookupAnswers.push(found())
+    const fetchFn = await sendThenDrop()
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(lookupFn).toHaveBeenCalledTimes(1) // one GET
+    expect(fetchFn).toHaveBeenCalledTimes(1) // only the dropped POST
+    expect(storedOrder()).toMatchObject({ number: 'PF-20261102-4K7Q', changesNotSent: false }) // plain
+    expect(screen.getByTestId('cart')).toHaveTextContent('{}') // the order's lines left the cart
+    expect(window.sessionStorage.getItem(PENDING_KEY)).toBeNull() // spent
+  })
+
+  it("shows the Worker's club and lines with the note, and posts nothing, when a changed resend finds the order", async () => {
+    // catches: a confirmation for content that was never saved
+    lookupAnswers.push(found({ club: 'Eagles' }))
+    const fetchFn = await sendThenDrop()
+    pickClub('Falcons') // a changed order
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(fetchFn).toHaveBeenCalledTimes(1) // no second POST
+    expect(storedOrder()).toMatchObject({ club: { subject: 'Eagles' }, changesNotSent: true }) // the first club
+  })
+
+  it('posts the changed body under the same id when nothing was found, and shows the plain page for this send', async () => {
+    // catches: a not-found lookup that makes a new id, or a this-send page that shows the old club
+    const fetchFn = await sendThenDrop(sent({ club: 'Falcons' }))
+    pickClub('Falcons')
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(requestOfCall(fetchFn, 1)).toBe(requestOfCall(fetchFn, 0)) // one id
+    expect(JSON.parse((fetchFn.mock.calls[1] as unknown as [string, RequestInit])[1].body as string).club).toEqual({ name: 'Falcons', typed: false }) // the changed body
+    expect(storedOrder()).toMatchObject({ club: { subject: 'Falcons' }, changesNotSent: false }) // plain
+  })
+
+  it('shows the earlier order with the note when the first send landed between the lookup and the resend', async () => {
+    // catches: a confirmation for the changed lines when the Worker kept the earlier send's
+    await sendThenDrop(earlier({ club: 'Eagles', lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }] }))
+    pickClub('Falcons')
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(storedOrder()).toMatchObject({ club: { subject: 'Eagles' }, changesNotSent: true }) // the earlier order, flagged
+  })
+
+  it("removes only the earlier order's lines from the cart", async () => {
+    // catches: the changed cart's quantities removed for an order that holds fewer
+    vi.spyOn(console, 'error').mockImplementation(() => {}) // the failure log
+    stubFetch(drop, earlier()) // a drop, then the earlier order
+    renderForm(clubs, () => {}, 5, [{ honor, quantity: 5 }]) // five in the cart and in the order
+    fillTickAndSend()
+    await screen.findByRole('alert')
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(screen.getByTestId('cart')).toHaveTextContent('{"knot-tying":2}') // 5 - the 3 the earlier order holds
+    expect(storedOrder()?.changesNotSent).toBe(true) // five differs from three
+  })
+
+  it.each([
+    ['a network failure', () => Promise.reject(new TypeError('Failed to fetch'))],
+    ['a timeout', () => Promise.reject(new DOMException('timed out', 'TimeoutError'))],
+    ['a 500', () => Promise.resolve(new Response('{}', { status: 500 }))],
+    ['a 404 (the route is not deployed yet)', () => Promise.resolve(new Response('{}', { status: 404 }))],
+  ])('goes on to post under the same id when the lookup fails with %s, with no dialog', async (_name, answer) => {
+    // catches: a failed lookup that blocks the resend, asks the buyer, or makes a second id
+    lookupAnswers.push(answer)
+    const fetchFn = await sendThenDrop(sent())
+    pickClub('Falcons')
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument() // no notice
+    expect(requestOfCall(fetchFn, 1)).toBe(requestOfCall(fetchFn, 0)) // one id
+  })
+
+  it('keeps the pending send and the id when the lookup and the POST both fail, and looks up again on the next Send', async () => {
+    // catches: a double failure that drops the id, so the next Send makes a second order
+    const fetchFn = await sendThenDrop(drop, sent())
+    lookupAnswers.push(() => Promise.reject(new TypeError('Failed to fetch'))) // the lookup fails too
+    tickAndSend()
+    await waitFor(() => expect(captcha.reset).toHaveBeenCalledTimes(2)) // failed again
+    expect(window.sessionStorage.getItem(PENDING_KEY)).not.toBeNull() // kept
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(lookupFn).toHaveBeenCalledTimes(2) // looked up again
+    expect(requestOfCall(fetchFn, 2)).toBe(requestOfCall(fetchFn, 0)) // one id
+  })
+
+  it.each([
+    ['a stock refusal', () => refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] })],
+    ['a failed captcha', () => refused(403, { error: 'captcha' })],
+    ['a 400', () => refused(400, { error: 'invalid' })],
+    ['a rate limit', () => new Response('{}', { status: 429 })],
+  ])('keeps the id after %s on a resend, and the next Send looks up first', async (_name, answer) => {
+    // catches: a refusal that drops the id while the first send may still land
+    const fetchFn = await sendThenDrop(answer(), sent())
+    tickAndSend()
+    await waitFor(() => expect(captcha.reset).toHaveBeenCalledTimes(2)) // the refusal came
+    expect(window.sessionStorage.getItem(PENDING_KEY)).not.toBeNull() // kept
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Solve captcha' })).toBeInTheDocument())
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(lookupFn).toHaveBeenCalledTimes(2) // looked up before each reuse
+    expect(requestOfCall(fetchFn, 2)).toBe(requestOfCall(fetchFn, 0)) // one id
+  })
+
+  it('does one lookup and at most one POST for a double click during the lookup', async () => {
+    // catches: a double click that makes two lookups or two POSTs
+    let release: (response: Response) => void = () => {} // ends the lookup
+    const fetchFn = await sendThenDrop(sent())
+    lookupAnswers.push(() => new Promise<Response>((resolve) => (release = resolve)))
+    fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
+    const send = screen.getByRole('button', { name: /^Send order/ })
+    fireEvent.click(send)
+    fireEvent.click(send)
+    expect(lookupFn).toHaveBeenCalledTimes(1) // one GET
+    await act(async () => release(notFound()))
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(fetchFn).toHaveBeenCalledTimes(2) // the drop and one resend
+  })
+
+  it('keeps the pending send over a reload during the lookup, and the next Send looks up', async () => {
+    // catches: a reload mid-lookup that forgets the id
+    const fetchFn = await sendThenDrop(sent())
+    const firstId = requestOfCall(fetchFn, 0)
+    lookupAnswers.push(() => new Promise<Response>(() => {})) // the lookup never answers
+    tickAndSend()
+    await waitFor(() => expect(lookupFn).toHaveBeenCalledTimes(1))
+    cleanup() // the reload
+    expect(window.sessionStorage.getItem(PENDING_KEY)).not.toBeNull() // still there
+    renderForm(two)
+    expect(screen.getByLabelText('Name')).toHaveValue('Jo Tan') // refilled
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(lookupFn).toHaveBeenCalledTimes(2) // looked up again
+    expect(requestOfCall(fetchFn, 1)).toBe(firstId) // the same id
+  })
+
+  it('shows no contact when the phone changed between two unanswered sends and the earlier order is found', async () => {
+    // catches: a phone number shown that the saved order may not hold
+    await sendThenDrop(drop)
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '+60 11-000 0000' } })
+    tickAndSend() // lookup says not found, the POST drops with the second phone
+    await waitFor(() => expect(captcha.reset).toHaveBeenCalledTimes(2))
+    lookupAnswers.push(found())
+    tickAndSend() // now the first send turns up
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(storedOrder()).toMatchObject({ contact: null, changesNotSent: true }) // no contact, note shown
+  })
+
+  it('shows the sent contact with the note when the phone was changed but never sent', async () => {
+    // catches: the unsent phone shown as the order's
+    lookupAnswers.push(found())
+    await sendThenDrop()
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '+60 11-000 0000' } })
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(storedOrder()).toMatchObject({ contact: { phone: '+60 12-345 6789' }, changesNotSent: true })
+  })
+
+  it('gives the next order a new id and makes no lookup after a success', async () => {
+    // catches: an id that outlives its order, so the next order is looked up and shown as the old one
+    let next = 0 // stands in for randomness
+    vi.spyOn(crypto, 'randomUUID').mockImplementation(() => `00000000-0000-4000-8000-${String(next++).padStart(12, '0')}`) // every call differs
+    const fetchFn = stubFetch(sent(), sent())
+    renderForm(two)
+    fillTickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    fillValid()
+    tickAndSend()
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2))
+    expect(lookupFn).not.toHaveBeenCalled() // no lookup
+    expect(requestOfCall(fetchFn, 1)).not.toBe(requestOfCall(fetchFn, 0)) // a new id
+  })
+
+  it('keeps one id across a change when sessionStorage is blocked', async () => {
+    // catches: an id that lives only in storage, so blocked storage makes a second id
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const realGet = Storage.prototype.getItem // the working read, for the cart
+    const realSet = Storage.prototype.setItem // the working save, for the cart
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (this: Storage, key: string) {
+      if (this === window.sessionStorage) throw new Error('blocked')
+      return realGet.call(this, key)
+    })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+      if (this === window.sessionStorage) throw new Error('blocked')
+      realSet.call(this, key, value)
+    })
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(function (this: Storage) {
+      if (this === window.sessionStorage) throw new Error('blocked')
+    })
+    const fetchFn = await sendThenDrop(sent())
+    pickClub('Falcons')
+    tickAndSend()
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2))
+    expect(requestOfCall(fetchFn, 1)).toBe(requestOfCall(fetchFn, 0)) // one id
+  })
+
+  it('puts no buyer data in any console call or address on the lookup paths', async () => {
+    // catches: a name, email or phone in a log or in the lookup address
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    lookupAnswers.push(() => Promise.reject(new TypeError('Failed to fetch for jc@mail.com')))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubFetch(drop, sent())
+    renderForm(two)
+    fillTickAndSend()
+    await screen.findByRole('alert')
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    const printed = JSON.stringify([...warn.mock.calls, ...log.mock.calls, ...error.mock.calls]) // everything printed
+    const addresses = JSON.stringify(lookupFn.mock.calls.map((call) => call[0])) // every lookup address
+    for (const secret of ['Jo Tan', 'jc@mail.com', '6789']) {
+      expect(printed).not.toContain(secret)
+      expect(addresses).not.toContain(secret)
+    }
+  })
+
+  it('does one lookup and one POST for presses made while the resend POST is still out', async () => {
+    // catches: Send freed after the lookup, so a press during the POST starts a second send
+    let release: (response: Response) => void = () => {} // ends the resend POST
+    const fetchFn = await sendThenDrop(() => new Promise<Response>((resolve) => (release = resolve))) // the drop, then a held POST
+    tickAndSend() // lookup says not found, the POST goes out and waits
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2)) // the held POST is out
+    const send = screen.getByRole('button', { name: /^Sending/ }) // the pill reads Sending… while the POST is out
+    fireEvent.click(send) // a second press
+    fireEvent.click(send) // and a third
+    expect(lookupFn).toHaveBeenCalledTimes(1) // no second GET
+    expect(fetchFn).toHaveBeenCalledTimes(2) // no second POST
+    await act(async () => release(sent()))
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(fetchFn).toHaveBeenCalledTimes(2) // still the drop and one resend
+  })
+
+  it.each([
+    ['a changed phone shows no contact and the note', '+60 11-000 0000', null, true],
+    ['an unchanged resend shows the sent contact and no note', '+60 12-345 6789', { phone: '+60 12-345 6789' }, false],
+  ])('reads an old Worker (no lookup route, no kept, no club) on a resend: %s', async (_name, phone, contact, note) => {
+    // catches: a bare 200 taken as this send, which would show a phone the saved order may not hold
+    const bare: Record<string, unknown> = { ...savedOrder } // the old reply: five fields
+    delete bare.club // no club
+    lookupAnswers.push(new Response('{"error":"not-found"}', { status: 404 })) // the route is not deployed
+    const fetchFn = await sendThenDrop(new Response(JSON.stringify(bare), { status: 200 })) // a drop, then the old Worker's repeat answer
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: phone } })
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(requestOfCall(fetchFn, 1)).toBe(requestOfCall(fetchFn, 0)) // one id
+    expect(storedOrder()).toMatchObject({ contact, changesNotSent: note, club: { subject: 'Eagles' } }) // the form's club stands in
+  })
+
+  it.each([
+    ['a 403 (the shop is the same origin and sends no Origin)', () => Promise.resolve(new Response('{"error":"forbidden-origin"}', { status: 403 }))],
+    ['a 429', () => Promise.resolve(new Response('{"error":"rate-limited"}', { status: 429 }))],
+    ['a found order with no club', () => Promise.resolve(new Response(JSON.stringify({ found: true, order: { ...savedOrder, club: undefined } }), { status: 200 }))],
+    ['an answer that is not JSON', () => Promise.resolve(new Response('<html>', { status: 200 }))],
+  ])('posts under the same id when the lookup gets %s', async (_name, answer) => {
+    // catches: a lookup refusal or bad shape that blocks the resend or makes a second id
+    lookupAnswers.push(answer)
+    const fetchFn = await sendThenDrop(sent())
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(requestOfCall(fetchFn, 1)).toBe(requestOfCall(fetchFn, 0)) // one id
+    expect(fetchFn).toHaveBeenCalledTimes(2) // the drop and one resend
+  })
+
+  it('finds the earlier order after a reload with the sent line lowered in the cart, and takes the line out', async () => {
+    // catches: a reload that drops the id because the cart changed, or a confirmation of the lowered cart
+    const fetchFn = await sendThenDrop() // three sent, the answer lost
+    fireEvent.click(screen.getByRole('button', { name: 'Lower Knot Tying to one' })) // the buyer lowers the line
+    cleanup() // the reload
+    renderForm(two, () => {}, 1, [{ honor, quantity: 1 }]) // the cart now holds one
+    expect(screen.getByLabelText('Name')).toHaveValue('Jo Tan') // refilled from the pending send
+    lookupAnswers.push(found()) // the first send had landed
+    tickAndSend()
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(fetchFn).toHaveBeenCalledTimes(1) // no second POST
+    expect(storedOrder()).toMatchObject({ number: 'PF-20261102-4K7Q', changesNotSent: true }) // the saved order, flagged
+    expect(JSON.parse(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY) ?? '{}').order.lines).toEqual([{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }]) // three, not the lowered one
+    expect(screen.getByTestId('cart')).toHaveTextContent('{}') // the line is out of the cart
+    expect(window.sessionStorage.getItem(PENDING_KEY)).toBeNull() // spent
+  })
+
+  it('looks up before the next send after a stock refusal and shows the order when the first send had landed', async () => {
+    // catches: a refusal that skips the lookup, so the late first send is followed by a second order
+    lookupAnswers.push(notFound(), found()) // not yet landed at the refused resend, landed by the next
+    const fetchFn = await sendThenDrop(refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }))
+    tickAndSend() // refused for stock
+    await waitFor(() => expect(captcha.reset).toHaveBeenCalledTimes(2))
+    tickAndSend() // the cart is unchanged, the first send has since landed
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
+    expect(lookupFn).toHaveBeenCalledTimes(2) // looked up before each reuse
+    expect(fetchFn).toHaveBeenCalledTimes(2) // the drop and the refused POST only
+    expect(storedOrder()).toMatchObject({ number: 'PF-20261102-4K7Q' }) // the earlier order
+  })
+
+  it('shows no dialog anywhere on the resend paths', async () => {
+    // catches: the plain resend notice coming back
+    await sendThenDrop(sent())
+    pickClub('Falcons')
+    tickAndSend()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument() // the notice is gone for good
+    await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
   })
 })

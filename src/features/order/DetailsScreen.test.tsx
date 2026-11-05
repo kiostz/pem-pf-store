@@ -32,6 +32,7 @@ const ready: CatalogueLoad = {
 
 afterEach(() => {
   vi.unstubAllGlobals() // fetch back
+  window.sessionStorage.clear() // no pending send left: a kept request id would make the next send look the order up first
   window.location.hash = '' // back to the catalogue address
 })
 

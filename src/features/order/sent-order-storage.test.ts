@@ -16,11 +16,12 @@ const order: SentOrder = {
     { honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 },
   ],
   totalCents: 900,
-  name: 'J. Cruz',
-  email: 'jc@mail.com',
-  phone: '+60 12-345 6789',
+  contact: { name: 'J. Cruz', email: 'jc@mail.com', phone: '+60 12-345 6789' },
   club: { subject: 'Eagles', email: 'Eagles' },
+  changesNotSent: false,
 } // an order as sent
+
+const versionOneOrder = { number: order.number, sentAt: order.sentAt, currency: order.currency, lines: order.lines, totalCents: order.totalCents, club: order.club, name: 'J. Cruz', email: 'jc@mail.com', phone: '+60 12-345 6789' } // an order as the first format stored it
 
 const blocked = {
   getItem: () => {
@@ -43,14 +44,14 @@ describe('sent order storage', () => {
     writeSentOrder(order)
     expect(
       JSON.parse(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY) ?? ''),
-    ).toEqual({ version: 1, order: order })
+    ).toEqual({ version: 2, order: order })
     expect(readSentOrder()).toEqual(order)
   })
 
   it("keeps the buyer's email with the order", () => {
     // catches: the email lost between the send and the confirmation page
     writeSentOrder(order)
-    expect(readSentOrder()?.email).toBe('jc@mail.com')
+    expect(readSentOrder()?.contact?.email).toBe('jc@mail.com')
   })
 
   it('still gives the order back in this tab when storage cannot be written', () => {
@@ -108,7 +109,7 @@ describe('sent order storage', () => {
 
   it.each([
     ['bad JSON', 'not json'],
-    ['version 2', '{"version":2,"order":{"number":"PF-20261028-4K7Q"}}'],
+    ['version 3', '{"version":3,"order":{"number":"PF-20261028-4K7Q"}}'],
     ['JSON null', 'null'],
     ['no order', '{"version":1}'],
   ])('reads null with one warning for %s', (_label, text) => {
@@ -128,21 +129,46 @@ describe('sent order storage', () => {
   })
   it.each([
     ['an order with no lines', { number: 'PF-20261028-4K7Q' }],
-    ['lines that are not a list', { ...order, lines: 'Knot Tying' }],
+    ['lines that are not a list', { ...versionOneOrder, lines: 'Knot Tying' }],
     [
       'a line with no price',
-      { ...order, lines: [{ honorId: 'a', name: 'A', quantity: 1 }] },
+      { ...versionOneOrder, lines: [{ honorId: 'a', name: 'A', quantity: 1 }] },
     ],
-    ['a total that is text', { ...order, totalCents: '900' }],
-    ['no club', { ...order, club: undefined }],
-    ['a phone that is a number', { ...order, phone: 123 }],
-    ['a send time that is not text', { ...order, sentAt: 5 }],
+    ['a total that is text', { ...versionOneOrder, totalCents: '900' }],
+    ['no club', { ...versionOneOrder, club: undefined }],
+    ['a phone that is a number', { ...versionOneOrder, phone: 123 }],
+    ['a send time that is not text', { ...versionOneOrder, sentAt: 5 }],
   ])('reads null for a version 1 value holding %s', (_label, bad) => {
     // catches: a foreign or hand-edited value that passes the check on the number alone and then crashes the confirmation page
     window.sessionStorage.setItem(
       SENT_ORDER_STORAGE_KEY,
       JSON.stringify({ version: 1, order: bad }),
     )
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(readSentOrder()).toBeNull()
+  })
+
+  it('reads a version 1 value as version 2, with its contact and no changes flag', () => {
+    // catches: an order sent before the update losing its confirmation after a reload
+    window.sessionStorage.setItem(SENT_ORDER_STORAGE_KEY, JSON.stringify({ version: 1, order: versionOneOrder }))
+    expect(readSentOrder()).toEqual(order)
+  })
+
+  it('reads a version 2 order whose contact is null', () => {
+    // catches: the contact-free confirmation lost on reload
+    const noContact = { ...order, contact: null, changesNotSent: true }
+    writeSentOrder(noContact)
+    expect(readSentOrder()).toEqual(noContact)
+  })
+
+  it.each([
+    ['a contact missing its phone', { ...order, contact: { name: 'J. Cruz', email: 'jc@mail.com' } }],
+    ['a contact with a number for a name', { ...order, contact: { ...order.contact, name: 5 } }],
+    ['a changes flag that is text', { ...order, changesNotSent: 'yes' }],
+    ['no changes flag', { ...order, changesNotSent: undefined }],
+  ])('reads null for a version 2 value holding %s', (_label, bad) => {
+    // catches: a half-filled contact reaching the confirmation page
+    window.sessionStorage.setItem(SENT_ORDER_STORAGE_KEY, JSON.stringify({ version: 2, order: bad }))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     expect(readSentOrder()).toBeNull()
   })
