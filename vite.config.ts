@@ -21,10 +21,13 @@ export default defineConfig(({ command, mode }) => {
     plugins: [react(), tailwindcss()],
     // Keep `/*! */` licence comments (Tabler's MIT notice) in the built JS.
     build: { rolldownOptions: { output: { comments: { legal: true } } } },
-    // Dev only: `/api/...` goes to the local API Worker (`npm run dev` in workers/, port 8787), so the shop is same-origin and the Worker's CORS stays untouched.
+    // Dev only: `/api/...` goes to the local API Worker (`npm run dev` in workers/, port 8787), so the shop is same-origin and the Worker's CORS stays untouched; `/pictures/...` goes to the local Admin Worker (port 8788).
     server: {
       watch: { ignored: ['**/.wrangler/**'] }, // guard: keeps local wrangler writes under .wrangler/ from ever reaching the dev watcher
       proxy: {
+        '/pictures': {
+          target: 'http://localhost:8788', // the local Admin Worker (`npm run dev:admin` in workers/), which serves the local R2
+        },
         '/api': {
           target: 'http://localhost:8787', // the local API Worker
           rewrite: (path) => path.replace(/^\/api/, ''), // the Worker has no /api prefix

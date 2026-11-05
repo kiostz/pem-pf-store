@@ -8,4 +8,6 @@ interface ImportMetaEnv {
   readonly VITE_TURNSTILE_SITEKEY: string // set in .env and .env.development
   // The API Worker's address, no trailing slash: the live Worker in .env, '/api' (the Vite proxy) in .env.development.
   readonly VITE_API_URL: string // set in .env and .env.development
+  // Where pictures load from, no trailing slash: the R2 custom domain in .env, '/pictures' (the Vite proxy to the local Admin Worker) in .env.development.
+  readonly VITE_PICTURE_URL: string // set in .env and .env.development
 }

@@ -4,6 +4,7 @@ import { addHonor } from './add-honor' // The Add.
 import { deleteHonor } from './delete-honor' // The Delete.
 import { readAdminPage, readMeta, saveHonorChanges } from './honors' // The reads and the guarded save.
 import { parseItemQuery } from './item-query' // The list query validator.
+import { readPicture } from './pictures' // The picture read.
 import { parseDeleteRequest, parseHonorChanges, parseNewItem } from './validate-changes' // The body validators.
 
 // The built admin page files, handed in by index.ts (tests pass stand-ins).
@@ -267,6 +268,23 @@ async function postDelete(request: Request, env: Env): Promise<Response> {
 }
 
 /**
+ * Handles `GET|HEAD /pictures/<key>`: serves one stored picture.
+ * @param request The request.
+ * @param env The Worker bindings.
+ * @return The response.
+ */
+async function getPicture(request: Request, env: Env): Promise<Response> {
+  const key = new URL(request.url).pathname.slice('/pictures/'.length) // Everything after the prefix, still percent-encoded.
+  const headOnly = request.method === 'HEAD' // HEAD needs the headers only.
+  const picture = await readPicture(env.PICTURES, key, headOnly) // Null for a bad or missing key.
+  if (picture === null) return json({ error: 'not-found' }, 404) // Nothing to serve.
+  return new Response(headOnly ? null : (picture as R2ObjectBody).body, { // HEAD gets the headers only; a non-HEAD read always carries a body.
+    status: 200, // Found.
+    headers: { 'Cache-Control': 'no-store', 'Content-Type': picture.httpMetadata?.contentType ?? 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' }, // The stored type; nosniff keeps it honest.
+  })
+}
+
+/**
  * Builds the fetch handler around the built page files.
  * @param pages The page, script and styles as text.
  * @return The Worker's fetch handler.
@@ -288,7 +306,7 @@ export function createHandler(pages: Pages): ExportedHandlerFetchHandler<Env> {
       const isPageRequest = (request.method === 'GET' || request.method === 'HEAD') && !path.startsWith('/api/') // A browser asking for a page.
       return isPageRequest ? notAllowedPage(request.method) : json({ error: 'forbidden' }, 403) // Page for people, JSON for the admin page's calls.
     }
-    const route = routes.get(path) // The matching route.
+    const route = path.startsWith('/pictures/') ? { GET: getPicture, HEAD: getPicture } : routes.get(path) // The pictures prefix, else an exact route.
     if (route === undefined) return json({ error: 'not-found' }, 404) // Unknown path.
     const run = Object.hasOwn(route, request.method) ? route[request.method] : undefined // The handler of this method.
     if (run === undefined) return json({ error: 'method-not-allowed' }, 405, { Allow: Object.keys(route).join(', ') }) // Wrong method.

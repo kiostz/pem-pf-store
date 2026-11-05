@@ -64,6 +64,9 @@ function isCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 // no fractions, no negatives, no strings
 }
 
+// The shape of an R2 picture key; the Admin Worker uses the same pattern.
+const PICTURE_KEY = /^items\/[a-z0-9]+(-[a-z0-9]+)*\.(webp|png)$/
+
 /**
  * Checks one item of the answer and turns it into an honor.
  * @param entry one item of the parsed answer
@@ -87,7 +90,7 @@ function toHonor(entry: unknown): Honor {
     category: entry.category, // checked above
     price: entry.priceCents / 100, // major units, as the cart and the order email expect until they move to cents
     stock: entry.stock, // checked above
-    image: entry.image, // checked above
+    image: entry.image !== null && PICTURE_KEY.test(entry.image) ? entry.image : null, // a bad key shows the category mark; it never blanks the shop
   }
 }
 

@@ -38,7 +38,21 @@ To try the whole order flow locally, start the API Worker (`npm run dev` in `wor
 
 ## Pictures
 
-GitHub Pages serves `public/patches/` to the site. The upload step copies each picture to the R2 bucket `pem-pathfinder-store-pictures` under `items/<id>.webp`. The site switches to R2 later.
+Pictures live in the R2 bucket `pem-pathfinder-store-pictures` under `items/<id>.webp`. The database column `image` holds that key, never a full address. Buyers load each picture from the bucket's custom domain, `https://pictures.stardew.win/`, which the shop builds from `VITE_PICTURE_URL` in `.env`. The shop shows the Category mark for an `image` that is not an `items/<id>.webp` or `.png` key.
+
+Locally, `.env.development` sets `VITE_PICTURE_URL=/pictures`, and Vite sends `/pictures` to the local Admin Worker (`npm run dev:admin` in `workers/`, port 8788), which serves the local R2 in `workers/api/.wrangler/state`. With `dev:admin` stopped, the local shop shows Category marks. A fresh clone has an empty local R2, so its shop shows Category marks until a picture is uploaded locally.
+
+### Switch pictures to R2 (the owner, once)
+
+1. In the Cloudflare dashboard open R2, the bucket `pem-pathfinder-store-pictures`, Settings, Custom Domains, and add `pictures.stardew.win`. Wait until its status is Active.
+2. Check `https://pictures.stardew.win/items/knot-tying.webp` opens in a browser.
+3. Commit and push. The push deploys the Pages site, the API Worker and the Admin Worker, which gets its R2 binding. Then check the "Deploy Admin Worker" run; if it names a missing R2 permission on the CI token, add only that one.
+4. Right after the push finishes, in `workers/` run the rewrite on the live database:
+   `npx wrangler d1 execute pem-pathfinder-store --remote --config api/wrangler.jsonc --command "UPDATE honors SET image = 'items/' || substr(image, 9) WHERE image LIKE 'patches/%'"`.
+   It is safe to run twice, and it leaves `modified_at` alone. Until it runs, the shop shows Category marks.
+5. Check the count: `npx wrangler d1 execute pem-pathfinder-store --remote --config api/wrangler.jsonc --command "SELECT count(*) AS n FROM honors WHERE image LIKE 'items/%'"` answers 401, and the same query for `'patches/%'` answers 0.
+6. Open the live shop and check the pictures load from `pictures.stardew.win` (browser network list).
+7. Once the live shop shows the pictures, the move is done. `public/patches/` is already gone from the repo.
 
 ## Test
 
@@ -77,7 +91,7 @@ A new local D1 starts empty. To fill it with the live shop's items, clubs and se
     npm run db:export:remote
     npm run db:fill:local
 
-`db:export:remote` writes `api/.wrangler/fill.sql` (git-ignored; the script creates the folder if it is missing). It names three tables only, `honors`, `clubs` and `settings`, so no order or buyer data is exported. The export briefly blocks other requests to the database, so run it when the shop is quiet. `db:fill:local` runs that file on the local database. Run it on a fresh database only, never on one that already has rows: it fails on the first duplicate. To start over, delete `api/.wrangler/state` and run `db:migrate:local` again.
+`db:export:remote` writes `api/.wrangler/fill.sql` (git-ignored; the script creates the folder if it is missing). It names three tables only, `honors`, `clubs` and `settings`, so no order or buyer data is exported. The export briefly blocks other requests to the database, so run it when the shop is quiet. `db:fill:local` runs that file on the local database. The export carries `items/` keys, so the local shop shows pictures once the local R2 holds them. Run it on a fresh database only, never on one that already has rows: it fails on the first duplicate. To start over, delete `api/.wrangler/state` and run `db:migrate:local` again.
 
 ### Endpoints
 

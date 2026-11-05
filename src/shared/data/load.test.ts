@@ -78,13 +78,28 @@ describe('loadShop', () => {
     // catches: stock 0 or an empty shop treated as broken, or a later Worker field blanking the shop
     const loaded = await loadShop(
       fakeFetch({
-        items: [{ ...orderable, stock: 0, image: 'patches/knot-tying.webp', status: 'active' }],
+        items: [{ ...orderable, stock: 0, image: 'items/knot-tying.webp', status: 'active' }],
         clubs: [],
         settings: { currency: 'MYR', defaultPrice: 400 },
       }),
     )
-    expect(loaded.honors[0]).toEqual({ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', price: 4, stock: 0, image: 'patches/knot-tying.webp' })
+    expect(loaded.honors[0]).toEqual({ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', price: 4, stock: 0, image: 'items/knot-tying.webp' })
     expect(loaded.settings).toEqual({ currency: 'MYR' })
+  })
+
+  it('keeps R2 picture keys and turns anything else into no picture without failing the load', async () => {
+    // catches: a stale patches/ path, a URL or a crafted key reaching an img src, or a bad key blanking the shop
+    const keys = ['items/knot-tying.webp', 'items/camp-shirt-0a1b2c3d.png'] // valid
+    const bad = ['patches/knot-tying.webp', 'https://x.test/a.webp', 'items/../a.webp', 'items/A.webp', 'items/a.gif', 'items/'] // invalid
+    const loaded = await loadShop(
+      fakeFetch({ items: [...keys, ...bad, null].map((image, n) => ({ ...orderable, id: `row-${n}`, image })), clubs: [], settings: { currency: 'MYR' } }),
+    )
+    expect(loaded.honors.map((honor) => honor.image)).toEqual([...keys, ...bad.map(() => null), null])
+  })
+
+  it('is failed for an image that is not a string', async () => {
+    // catches: a number or object in image slipping through the key check
+    await expect(loadShop(fakeFetch({ ...good, items: [{ ...orderable, image: 5 }] }))).rejects.toBeInstanceOf(ShopLoadError)
   })
 
   it.each([

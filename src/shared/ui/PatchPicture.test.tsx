@@ -1,7 +1,7 @@
 // Tests for PatchPicture: the patch picture when there is one, the category mark when there is none or it fails to load.
 
 import { fireEvent, render, screen } from '@testing-library/react' // render and poke the picture
-import { describe, expect, it } from 'vitest' // test API
+import { afterEach, describe, expect, it, vi } from 'vitest' // test API
 import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
 import { PatchPicture } from './PatchPicture.tsx' // code under test
 
@@ -22,11 +22,25 @@ function honor(image: string | null): Honor {
 }
 
 describe('PatchPicture', () => {
-  it('shows the picture under the base path, as decoration', () => {
-    // catches: a wrong picture URL, or a picture read out twice beside the name
-    const { container } = render(<PatchPicture honor={honor('patches/knot-tying.webp')} />)
+  afterEach(() => vi.unstubAllEnvs()) // the env stub never leaks to another test
+
+  it('builds the picture URL from VITE_PICTURE_URL', () => {
+    // catches: a picture still loaded from the site's own base path instead of the picture domain
+    vi.stubEnv('VITE_PICTURE_URL', 'https://pictures.example.test')
+    const { container } = render(<PatchPicture honor={honor('items/knot-tying.webp')} />)
+    expect(container.querySelector('img')).toHaveAttribute('src', 'https://pictures.example.test/items/knot-tying.webp')
+  })
+
+  it('uses pictureBase over the env, and accepts a bare image and category', () => {
+    // catches: the admin page unable to point pictures at its own origin, or a prop type too wide for AdminHonor
+    const { container } = render(<PatchPicture honor={{ image: 'items/knot-tying.webp', category: 'Nature' }} pictureBase="/pictures" />)
+    expect(container.querySelector('img')).toHaveAttribute('src', '/pictures/items/knot-tying.webp')
+  })
+
+  it('shows the picture as decoration', () => {
+    // catches: a picture read out twice beside the name
+    const { container } = render(<PatchPicture honor={honor('items/knot-tying.webp')} pictureBase="/pictures" />)
     const img = container.querySelector('img')
-    expect(img).toHaveAttribute('src', '/patches/knot-tying.webp')
     expect(img).toHaveAttribute('alt', '')
     expect(img).toHaveAttribute('loading', 'lazy')
     expect(img).toHaveAttribute('width', '56')
@@ -45,7 +59,7 @@ describe('PatchPicture', () => {
 
   it('swaps a picture that fails to load for the category mark', () => {
     // catches: a broken-image icon when a picture 404s or the buyer is offline
-    const { container } = render(<PatchPicture honor={honor('patches/knot-tying.webp')} />)
+    const { container } = render(<PatchPicture honor={honor('items/knot-tying.webp')} />)
     fireEvent.error(container.querySelector('img')!) // the browser could not load it
     expect(container.querySelector('img')).toBeNull()
     expect(screen.getByTestId('category-mark')).toBeInTheDocument()

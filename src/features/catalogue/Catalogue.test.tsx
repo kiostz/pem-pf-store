@@ -163,7 +163,7 @@ describe('Catalogue', () => {
 
   it('renders all 299 honors at once, with no Load more and lazy pictures', async () => {
     // catches: pagination or a Load more button creeping back, rows dropped at full size, or pictures that load eagerly
-    serve(Array.from({ length: 299 }, (_, i) => honor(`Honor ${i}`, 'Nature', `patches/${i}.png`)))
+    serve(Array.from({ length: 299 }, (_, i) => honor(`Honor ${i}`, 'Nature', `items/honor-${i}.png`))) // 299 honors with R2 keys
     render(<CatalogueWithCart />)
     expect(await screen.findByText('299 items')).toBeInTheDocument()
     expect(screen.getAllByRole('listitem')).toHaveLength(299)

@@ -12,7 +12,7 @@ export type Honor = {
   price: number
   // Units on hand, a whole number of 0 or more.
   stock: number
-  // "patches/<id>.webp" relative to the base, or null until a patch picture exists.
+  // An R2 key such as "items/<id>.webp", or null until a patch picture exists.
   image: string | null
 }
 

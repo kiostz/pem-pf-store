@@ -13,7 +13,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   // The Admin Worker serves the page at its root.
   base: '/',
-  // The shop's public folder (patch pictures) is not part of the admin page.
+  // The shop's public folder is not part of the admin page.
   publicDir: false,
   // React first, then Tailwind's CSS plugin.
   plugins: [react(), tailwindcss()],
