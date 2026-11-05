@@ -1145,3 +1145,107 @@ describe('picture upload', () => {
     expect(document.querySelector('dialog img')).toHaveAttribute('src', '/pictures/items/knot-tying-1a2b3c4d.webp')
   })
 })
+
+describe('picture upload interruptions', () => {
+  const resized = new Blob(['small'], { type: 'image/webp' }) // what the fake resize hands back
+  const deps: ResizeDeps = {
+    decode: () => Promise.resolve({ width: 10, height: 10, close: () => undefined } as unknown as ImageBitmap),
+    makeCanvas: () =>
+      ({
+        getContext: () => ({ drawImage: () => undefined }),
+        toBlob: (done: (blob: Blob | null) => void) => done(resized),
+      }) as unknown as HTMLCanvasElement,
+  } // browser pieces jsdom lacks, passed in
+  const stored = { ...rows[2], image: 'items/knot-tying-1a2b3c4d.webp', modifiedAt: '2026-11-03T03:00:00.000Z' } // the row once the Worker has stored the picture
+
+  beforeEach(() => {
+    URL.createObjectURL = vi.fn(() => 'blob:preview') // jsdom has no object URLs
+    URL.revokeObjectURL = vi.fn()
+  })
+
+  /** Opens Knot Tying's sheet and chooses a file, leaving the preview up. */
+  async function chooseForKnot() {
+    openSheet('Knot Tying')
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement // the hidden input
+    fireEvent.change(input, { target: { files: [new File(['x'], 'photo.png', { type: 'image/png' })] } })
+    await screen.findByRole('button', { name: 'Save picture' })
+  }
+
+  /**
+   * Counts the uploads sent so far.
+   * @param spy the fetch spy
+   * @return the number of POSTs to the picture route
+   */
+  const uploads = (spy: ReturnType<typeof stubApi>) => spy.mock.calls.filter(([url]) => String(url).startsWith('/api/items/picture')).length
+
+  it('keeps the list and the pending edit when the network drops mid-upload, and Try again saves the same picture', async () => {
+    // Catches a dropped upload that loses the picture, shows it as saved, or clears the admin's unsaved edit.
+    let online = false // the network is down first
+    const spy = stubApi({
+      picture: () => {
+        if (!online) throw new TypeError('Failed to fetch') // the connection drops
+        return Response.json({ honor: stored })
+      },
+    })
+    await openScreen(deps)
+    hideKnot() // an unsaved edit on the same item
+    await chooseForKnot()
+    fireEvent.click(screen.getByRole('button', { name: 'Save picture' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent("The picture wasn't saved.")
+    expect(screen.queryByText('Picture saved.')).not.toBeInTheDocument()
+    expect(screen.getByAltText('The new picture')).toBeInTheDocument() // the preview stays for Try again, and no stored picture appears
+    expect(document.querySelector('dialog img[src^="/pictures/"]')).toBeNull() // the row did not change
+    online = true // the connection is back
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('Picture saved.')).toBeInTheDocument()
+    expect(uploads(spy)).toBe(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.getByRole('button', { name: 'Save (1 change)' })).toBeInTheDocument() // the hidden status is still pending
+  })
+
+  it('answers a lost reply with the safe conflict: Try again shows the item was updated and the stored picture', async () => {
+    // Catches a retry after a lost reply that overwrites the stored picture or shows the admin a blank sheet.
+    let sent = 0 // how many uploads reached the Worker
+    const spy = stubApi({
+      picture: () => {
+        sent += 1
+        if (sent === 1) throw new TypeError('Failed to fetch') // the Worker stored it, but the reply never came
+        return Response.json({ error: 'conflict', honors: [stored], deletedIds: [] }, { status: 409 }) // the second sees a new key
+      },
+    })
+    await openScreen(deps)
+    await chooseForKnot()
+    fireEvent.click(screen.getByRole('button', { name: 'Save picture' }))
+    await screen.findByRole('alert')
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('This item has been updated.')).toBeInTheDocument()
+    expect(document.querySelector('dialog img')).toHaveAttribute('src', '/pictures/items/knot-tying-1a2b3c4d.webp')
+    expect(String((spy.mock.calls.filter(([url]) => String(url).startsWith('/api/items/picture')).at(-1) as unknown[])[0])).toBe('/api/items/picture?id=knot-tying&seen=') // the retry still names the key the admin saw
+  })
+
+  it('sends one upload for a double click on Save picture through the real hook', async () => {
+    // Catches a double click that sends two uploads and leaves an orphan object.
+    const spy = stubApi({ picture: () => Response.json({ honor: stored }) })
+    await openScreen(deps)
+    await chooseForKnot()
+    const save = screen.getByRole('button', { name: 'Save picture' })
+    fireEvent.click(save)
+    fireEvent.click(save)
+    await screen.findByText('Picture saved.')
+    expect(uploads(spy)).toBe(1)
+  })
+
+  it.fails('clears the sign-in note once Try again saves after an ended session (known gap: the note stays)', async () => {
+    // Catches a stale "Your sign-in has ended ... save here. Your changes are kept." banner beside a saved picture, with no changes pending.
+    let signedIn = false // the first request is refused
+    stubApi({ picture: () => (signedIn ? Response.json({ honor: stored }) : Response.json({}, { status: 403 })) })
+    await openScreen(deps)
+    await chooseForKnot()
+    fireEvent.click(screen.getByRole('button', { name: 'Save picture' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your sign-in has ended.')
+    signedIn = true // the admin signed in again in another tab
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('Picture saved.')).toBeInTheDocument()
+    expect(screen.queryByText(/Your sign-in has ended/)).not.toBeInTheDocument() // no stale sign-in line beside a saved picture
+  })
+})

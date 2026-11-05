@@ -342,6 +342,20 @@ describe('Picture section', () => {
     expect(spies.onPicture).not.toHaveBeenCalled()
   })
 
+  it('ignores Cancel while Saving… so the picture in flight is not dropped', async () => {
+    // Catches a Cancel that frees the preview mid-save, leaving a request running with no preview to retry from.
+    let finish: (outcome: PictureOutcome) => void = () => undefined
+    const onPicture = vi.fn(() => new Promise<PictureOutcome>((resolve) => (finish = resolve)))
+    openSheet({ pictureDeps, onPicture })
+    await choose()
+    fireEvent.click(screen.getByRole('button', { name: 'Save picture' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeInTheDocument()
+    await act(async () => finish('error'))
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument() // the preview survived for the retry
+  })
+
   it('survives the sheet closing mid-save', async () => {
     // Catches a state update or thrown error after unmount, and a leaked object URL.
     let finish: (outcome: PictureOutcome) => void = () => undefined

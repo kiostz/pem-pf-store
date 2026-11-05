@@ -311,4 +311,18 @@ describe('uploadPicture', () => {
     stubFetch(new TypeError('Failed to fetch'))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
   })
+
+  it('maps an answer that is not the Worker\'s shape to error', async () => {
+    // Catches a proxy page or a half-formed body (200 with no row, 409 with no list) taken for a saved picture or a conflict.
+    stubFetch(new Response('<html>sign in</html>', { status: 200 }))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
+    stubFetch(Response.json({}, { status: 200 }))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ error: 'conflict', honors: [withPicture] }, { status: 409 }))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ error: 'conflict', honors: [{ ...knot, image: 7 }], deletedIds: [] }, { status: 409 }))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ honor: withPicture }, { status: 400 }))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
+  })
 })
