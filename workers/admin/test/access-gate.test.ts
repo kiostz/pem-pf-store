@@ -17,6 +17,7 @@ const guarded: [string, (options?: Parameters<typeof call>[2]) => Promise<Respon
   ['POST /api/orders/step', (o) => postTo('/api/orders/step', { number: 'PF-20261105-ABCD', from: 'new', to: 'paid', restock: false }, {}, o)],
   ['GET /api/settings', (o) => call('/api/settings', {}, o)],
   ['POST /api/settings', (o) => postTo('/api/settings', { orderEmailOn: { from: true, to: false } }, {}, o)],
+  ['POST /api/settings/prices', (o) => postTo('/api/settings/prices', { currency: { from: 'MYR', to: 'SGD' } }, {}, o)],
   ['GET /api/clubs', (o) => call('/api/clubs', {}, o)],
   ['POST /api/clubs', (o) => postTo('/api/clubs', { name: 'Lions', area: null, language: null, location: null, churchName: null }, {}, o)],
   ['POST /api/clubs/edit', (o) => postTo('/api/clubs/edit', { id: 1, from: CLUB, to: { ...CLUB, name: 'Leos' } }, {}, o)],

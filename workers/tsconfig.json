@@ -16,6 +16,8 @@
     "moduleDetection": "force",
     // Type-check only.
     "noEmit": true,
+    // The shop's shared money files import each other with a .ts ending.
+    "allowImportingTsExtensions": true,
     // All strict flags.
     "strict": true,
     // Unused locals and parameters are errors.

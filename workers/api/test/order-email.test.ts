@@ -54,6 +54,36 @@ describe('orderEmail', () => {
   })
 })
 
+describe('orderEmail money symbols', () => {
+  it('writes SGD with $ and CNY with the yen sign, MYR with RM and a plain space', async () => {
+    // Catches an email that keeps the Intl symbols or a code outside the site's table.
+    const buyer = { name: 'Ana', email: 'a@b.co', phone: '1234567', club: { name: 'Gilead', typed: false } } // Any buyer.
+    const textFor = (currency: string) => orderEmail({ ...saved, currency }, buyer, 'https://admin.example.test').text // The text in one currency.
+    expect(textFor('SGD')).toContain('2 × Knot Tying @ $3.00 = $6.00') // Dollar.
+    expect(textFor('SGD')).toContain('Estimated total: $10.50') // Total.
+    expect(textFor('CNY')).toContain('2 × Knot Tying @ \u00a53.00 = \u00a56.00') // Yen sign.
+    expect(textFor('MYR')).toContain('2 × Knot Tying @ RM 3.00 = RM 6.00') // Ringgit, plain space.
+  })
+})
+
+describe('orderEmail money formatting', () => {
+  const buyer = { name: 'Ana', email: 'a@b.co', phone: '1234567', club: { name: 'Gilead', typed: false } } // Any buyer.
+
+  it('groups thousands in a line and in the total', async () => {
+    // Catches an email that prints "RM 1200.00" after the shop prints "RM 1,200.00".
+    const big = { ...saved, totalCents: 120000, lines: [{ honorId: 'knots', name: 'Knot Tying', quantity: 30, priceCents: 4000 }] } // 30 x 40.00.
+    const text = orderEmail(big, buyer, 'https://admin.example.test').text // The email text.
+    expect(text).toContain('30 × Knot Tying @ RM 40.00 = RM 1,200.00') // Line total grouped.
+    expect(text).toContain('Estimated total: RM 1,200.00') // Total grouped.
+  })
+
+  it('prints a currency outside the list as its code', async () => {
+    // Catches Intl's "$" for BND coming back.
+    const bnd = { ...saved, currency: 'BND', totalCents: 300, lines: [{ honorId: 'knots', name: 'Knot Tying', quantity: 1, priceCents: 300 }] } // One line in BND.
+    expect(orderEmail(bnd, buyer, 'https://admin.example.test').text).toContain('Estimated total: BND 3.00') // Code, not a sign.
+  })
+})
+
 describe('order email on POST /orders', () => {
   beforeEach(async () => {
     await seedShop() // Honors and settings.
@@ -79,6 +109,19 @@ describe('order email on POST /orders', () => {
     expect(message.text).toContain('2 × Knot Tying @ RM 3.00 = RM 6.00') // Line.
     expect(message.text.split('\n').at(-1)).toBe(`Open this order: ${env.ADMIN_URL}/#/orders/${message.subject.match(/PF-\d{8}-[A-Z0-9]{4}/)![0]}`) // Last line.
     expect(ordersWhenSent).toBe(1) // Already saved.
+  })
+
+  it('words the sent email in the currency set in settings', async () => {
+    // Catches an email that keeps RM after the shop's currency changed.
+    await env.DB.exec("UPDATE settings SET currency = 'CNY'") // The admin's change.
+    const email = fakeEmail() // Fake.
+    const { res, ctx } = await postOrder(validOrder(), { overrides: { ORDER_EMAIL: email } }) // Send.
+    const { waitOnExecutionContext } = await import('cloudflare:test') // Finish.
+    await waitOnExecutionContext(ctx) // Done.
+    expect(res.status).toBe(201) // Saved.
+    const message = email.send.mock.calls[0][0] as { text: string } // What was sent.
+    expect(message.text).toContain('2 × Knot Tying @ \u00a53.00 = \u00a56.00') // Yen sign.
+    expect(message.text).not.toContain('RM') // No old symbol.
   })
 
   it('sends nothing when the switch is off, still answering 201', async () => {

@@ -7,12 +7,12 @@ import { isItemId } from './item-id' // The item id check.
 import { readAdminPage, readMeta, saveHonorChanges } from './honors' // The reads and the guarded save.
 import { changeOrderStep, readOrderPage } from './orders' // The order reads and the step change.
 import { parseOrderQuery } from './order-query' // The order list query validator.
-import { readAdminSettings, saveAdminSettings } from './settings' // The settings read and guarded save.
+import { readAdminSettings, saveAdminPrices, saveAdminSettings } from './settings' // The settings read and guarded save.
 import { parseItemQuery } from './item-query' // The list query validator.
 import { hasSignature, MAX_PICTURE_BYTES, type PictureType, uploadPicture } from './picture-upload' // The picture upload.
 import { PICTURE_KEY, readPicture } from './pictures' // The key pattern and the picture read.
 import { parseDeleteRequest, parseHonorChanges, parseNewItem } from './validate-changes' // The body validators.
-import { parseSettingsChange, parseStepChange } from './validate-orders' // The order and settings body validators.
+import { parsePricesChange, parseSettingsChange, parseStepChange } from './validate-orders' // The order and settings body validators.
 import { parseClubEdit, parseClubFields, parseClubOrder, parseClubRemove } from './validate-clubs' // The club body validators.
 import type { ClubResult } from './admin-types' // The club write outcome.
 
@@ -292,6 +292,22 @@ async function postSettings(request: Request, env: Env): Promise<Response> {
 }
 
 /**
+ * Handles `POST /api/settings/prices`: CSRF checks, validation and the guarded save of the currency and default price.
+ * @param request The request.
+ * @param env The Worker bindings.
+ * @return The response.
+ */
+async function postPrices(request: Request, env: Env): Promise<Response> {
+  const read = await readJsonBody(request) // The shared checks.
+  if ('refusal' in read) return read.refusal // Refused.
+  const change = parsePricesChange(read.body) // Null when invalid.
+  if (change === null) return json({ error: 'invalid' }, 400) // Fails validation.
+  const result = await saveAdminPrices(env.DB, change) // The guarded write.
+  if (result.kind === 'saved') return json(result.prices, 200) // As saved.
+  return json({ error: 'conflict', ...result.prices }, 409) // Changed since viewing; nothing written.
+}
+
+/**
  * Builds the handler of one club write: CSRF checks, validation, the guarded write and the answer.
  * @param parse The body validator; null when invalid.
  * @param write The guarded write.
@@ -418,6 +434,7 @@ export function createHandler(pages: Pages): ExportedHandlerFetchHandler<Env> {
     ['/api/orders', { GET: getOrders }], // A page of orders, or one by number.
     ['/api/orders/step', { POST: postOrderStep }], // A step change or cancel.
     ['/api/settings', { GET: async (_request, env) => json(await readAdminSettings(env.DB), 200), POST: postSettings }], // The order email switch.
+    ['/api/settings/prices', { POST: postPrices }], // The currency and default price.
     ['/api/clubs', { GET: async (_request, env) => json({ clubs: await readAdminClubs(env.DB) }, 200), POST: clubWrite(parseClubFields, addClub, 201) }], // The club list; Add.
     ['/api/clubs/edit', { POST: clubWrite(parseClubEdit, editClub, 200) }], // A rename or details change.
     ['/api/clubs/remove', { POST: clubWrite(parseClubRemove, removeClub, 200) }], // Remove.

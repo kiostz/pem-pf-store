@@ -13,6 +13,8 @@ import type {
   HonorChange,
   NewItem,
   OrderStep,
+  PriceSettings,
+  PricesChange,
   StepChange,
 } from '../../../workers/admin/src/admin-types.ts' // the shared shapes
 
@@ -150,20 +152,20 @@ const post = (path: string, body: unknown, signal?: AbortSignal) =>
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal, // only a club write sets one
+    signal, // only a write through postWithLimit sets one
   }) // the Worker refuses anything but JSON
 
-const CLUB_WRITE_TIMEOUT_MS = 15_000 // how long a club write may wait for its answer
+const WRITE_TIMEOUT_MS = 15_000 // how long a club or settings write may wait for its answer
 
 /**
- * Sends a club write that gives up after 15 s, so the sheet that waits for it can close again.
+ * Sends a write that gives up after 15 s, so the sheet or form that waits for it can close again.
  * @param path the Worker route
  * @param body the JSON body
  * @return as `call`; null (the failure line) when the time ran out
  */
-async function postClub(path: string, body: unknown) {
+async function postWithLimit(path: string, body: unknown) {
   const controller = new AbortController() // stops the request
-  const timer = setTimeout(() => controller.abort(), CLUB_WRITE_TIMEOUT_MS) // the limit
+  const timer = setTimeout(() => controller.abort(), WRITE_TIMEOUT_MS) // the limit
   try {
     return await post(path, body, controller.signal) // the request
   } finally {
@@ -521,7 +523,7 @@ export async function loadClubs(): Promise<ClubCallResult> {
  * @return the list, a taken name, signed-out, or error
  */
 export async function addClub(fields: ClubFields): Promise<ClubCallResult> {
-  return readClubAnswer(await postClub('/api/clubs', fields), 201) // the request
+  return readClubAnswer(await postWithLimit('/api/clubs', fields), 201) // the request
 }
 
 /**
@@ -530,7 +532,7 @@ export async function addClub(fields: ClubFields): Promise<ClubCallResult> {
  * @return the list, a conflict with the latest list, a taken name, signed-out, or error
  */
 export async function editClub(edit: ClubEdit): Promise<ClubCallResult> {
-  return readClubAnswer(await postClub('/api/clubs/edit', edit), 200) // the request
+  return readClubAnswer(await postWithLimit('/api/clubs/edit', edit), 200) // the request
 }
 
 /**
@@ -539,7 +541,7 @@ export async function editClub(edit: ClubEdit): Promise<ClubCallResult> {
  * @return the list, a conflict with the latest list, signed-out, or error
  */
 export async function removeClub(remove: ClubRemove): Promise<ClubCallResult> {
-  return readClubAnswer(await postClub('/api/clubs/remove', remove), 200) // the request
+  return readClubAnswer(await postWithLimit('/api/clubs/remove', remove), 200) // the request
 }
 
 /**
@@ -548,5 +550,28 @@ export async function removeClub(remove: ClubRemove): Promise<ClubCallResult> {
  * @return the list, a conflict with the latest list, signed-out, or error
  */
 export async function moveClubs(order: ClubOrder): Promise<ClubCallResult> {
-  return readClubAnswer(await postClub('/api/clubs/order', order), 200) // the request
+  return readClubAnswer(await postWithLimit('/api/clubs/order', order), 200) // the request
+}
+
+// The result of saving the currency and default price.
+export type PricesCallResult =
+  | { kind: 'ok' | 'conflict'; prices: PriceSettings }
+  | { kind: 'signed-out' | 'error' }
+
+/**
+ * Saves the currency and default price; stored item prices and past orders are not rewritten.
+ * @param change the changed fields, each with the value seen and the value wanted
+ * @return the stored values after a save, a conflict with the stored values, signed-out, or error
+ */
+export async function savePrices(change: PricesChange): Promise<PricesCallResult> {
+  const answer = await postWithLimit('/api/settings/prices', change) // the request, with the 15 s limit
+  if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
+  if (answer === null) return { kind: 'error' } // the network failed or the time ran out
+  const currency = field(answer.body, 'currency') // the stored currency
+  const defaultPriceCents = field(answer.body, 'defaultPriceCents') // the stored price
+  if (typeof currency !== 'string' || !Number.isInteger(defaultPriceCents)) return { kind: 'error' } // a wrong shape
+  const prices = { currency, defaultPriceCents: defaultPriceCents as number } // checked above
+  if (answer.status === 200) return { kind: 'ok', prices } // written
+  if (answer.status === 409) return { kind: 'conflict', prices } // nothing written
+  return { kind: 'error' } // anything else
 }

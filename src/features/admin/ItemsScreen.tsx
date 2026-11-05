@@ -1,6 +1,7 @@
 // The admin Items screen: Add item, search, category and sort over D1 in pages, one row each with its status and stock, Load more, the Item sheet, and the Save pill and notes at the bottom, with its loading, error, empty and signed-out states.
 
 import { useEffect, useState } from 'react' // which sheet is open, and the pending count report
+import type { PriceSettings } from '../../../workers/admin/src/admin-types.ts' // the saved currency and price
 import { PILL_ACTION, PILL_DOCK, PILL_NOTE } from '@/shared/ui/floating-pill-box.ts' // the floating pill's dock and note shapes
 import { AdminHonorRow } from './AdminHonorRow.tsx' // one row
 import { FIELD_BOX, NOTE_BUTTON, SOFT_BUTTON } from './admin-boxes.ts' // shared shapes
@@ -27,17 +28,21 @@ type Sheet = { mode: 'add' } | { mode: 'edit'; id: string }
  * The Items screen.
  * @param pictureDeps the decoder and canvas factory a picture resize uses; the browser's own when omitted
  * @param onPendingCount told how many edited fields wait, each time that changes (the tab bar's dot)
+ * @param prices the currency and default price just saved on Settings, laid over what /api/meta gave
  * @return the toolbar, the rows with Load more, the sheet, and the Save pill with its notes
  */
 export function ItemsScreen({
   pictureDeps,
   onPendingCount,
+  prices,
 }: {
   pictureDeps?: ResizeDeps
   onPendingCount?: (count: number) => void
+  prices?: PriceSettings | null
 }) {
   const items = useAdminHonors() // the screen's state
-  const { pages, meta, pending, conflicts, count, saveState, discarded, changesView } = items // read often
+  const meta = items.meta === null || !prices ? items.meta : { ...items.meta, ...prices } // a Settings save wins over the first read
+  const { pages, pending, conflicts, count, saveState, discarded, changesView } = items // read often
   const [sheet, setSheet] = useState<Sheet | null>(null) // the open sheet
   const { pageState, rows, applied } = pages // the list
   const saving = saveState === 'saving' // a save is running

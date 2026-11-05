@@ -1,6 +1,7 @@
 // The admin page's shell: the oxblood header with the theme control, the tab bar, and the four screens in a 768 px column, with Items kept mounted so its pending changes survive a tab change.
 
 import { useState } from 'react' // the pending count
+import type { PriceSettings } from '../../../workers/admin/src/admin-types.ts' // the saved currency and price
 import { STORE_NAME } from '@/shared/store-name.ts' // the store's name
 import { ThemeControl } from '@/shared/theme/ThemeControl.tsx' // the sun or moon button
 import { AdminTabs } from './AdminTabs.tsx' // Items, Orders, Clubs, Settings
@@ -19,6 +20,7 @@ const TITLES = { items: 'Items', orders: 'Orders', clubs: 'Clubs', settings: 'Se
 export function AdminApp() {
   const { tab, number } = useAdminRoute() // where the admin is
   const [itemsPending, setItemsPending] = useState(0) // edited fields waiting on Items
+  const [prices, setPrices] = useState<PriceSettings | null>(null) // the currency and default price last saved on Settings
   return (
     <>
       {/* The same header grid as the Shop: 44 px, title, 44 px. */}
@@ -39,11 +41,11 @@ export function AdminApp() {
       <main className={`mx-auto max-w-3xl px-4 pt-6 ${tab === 'items' ? 'pb-52' : 'pb-16'}`}>
         {/* Items stays mounted and hidden elsewhere: its edits, leave warning and scroll position stay. */}
         <div hidden={tab !== 'items'}>
-          <ItemsScreen onPendingCount={setItemsPending} />
+          <ItemsScreen onPendingCount={setItemsPending} prices={prices} />
         </div>
         {tab === 'orders' && <OrdersScreen key={number ?? ''} number={number} />} {/* mounts fresh on each visit */}
         {tab === 'clubs' && <ClubsScreen />} {/* mounts fresh on each visit */}
-        {tab === 'settings' && <SettingsScreen />}
+        {tab === 'settings' && <SettingsScreen onPricesSaved={setPrices} />}
       </main>
     </>
   )

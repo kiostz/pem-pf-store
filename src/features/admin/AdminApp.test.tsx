@@ -17,6 +17,7 @@ beforeEach(() => {
         if (path === '/api/orders') return Response.json({ orders, nextCursor: null })
         if (path === '/api/clubs') return Response.json({ clubs })
         if (path === '/api/settings') return Response.json({ orderEmailOn: true })
+        if (path === '/api/settings/prices') return Response.json({ currency: 'SGD', defaultPriceCents: 450 }) // the save's answer
         return Response.json({ honors: rows, nextCursor: null })
       }),
     ),
@@ -54,6 +55,20 @@ describe('AdminApp', () => {
     await goTo('#/settings')
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Settings')
     expect(await screen.findByRole('switch')).toBeInTheDocument()
+  })
+
+  it('shows the new currency symbol on Items after Settings saves it, with no reload', async () => {
+    // Catches an AdminApp that does not hand the saved prices to Items, which keeps the old symbol until a reload.
+    render(<AdminApp />)
+    await screen.findByText('Knot Tying')
+    expect(screen.getAllByText(/RM\s4\.00/).length).toBeGreaterThan(0) // the old symbol
+    await goTo('#/settings')
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Currency' }), { target: { value: 'SGD' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByText('Saved.')
+    await goTo('#/items')
+    expect(screen.getAllByText(/\$4\.00/).length).toBeGreaterThan(0) // the new symbol
+    expect(screen.queryByText(/RM\s4\.00/)).not.toBeInTheDocument()
   })
 
   it('shows four links in order and titles the page Clubs on #/clubs', async () => {

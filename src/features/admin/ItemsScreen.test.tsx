@@ -314,6 +314,18 @@ describe('failed and signed-out fetches after the first page', () => {
 })
 
 describe('the meta', () => {
+  it('shows the new symbol and the Add sheet price from the `prices` prop laid over /api/meta', async () => {
+    // Catches Items that keeps the old currency and default price after a Settings save.
+    stubApi()
+    render(<ItemsScreen prices={{ currency: 'SGD', defaultPriceCents: 500 }} />)
+    await screen.findByText('Knot Tying')
+    await act(async () => undefined) // the meta answer too
+    expect(screen.getAllByText(/\$/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/RM/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' }))
+    expect(screen.getByRole('textbox', { name: 'Price ($)' })).toHaveValue('5.00')
+  })
+
   it('shows "We couldn\'t load the categories." with Reload categories near Add item when /api/meta fails, and recovers', async () => {
     // Catches Add item that stays dead with no word about why.
     let calls = 0

@@ -1,7 +1,9 @@
 // Validates the bodies of the step and settings saves where they enter: strict shape, no surprises reach the database.
 
-import type { SettingsChange, StepChange } from './admin-types' // The shapes.
+import type { PricesChange, SettingsChange, StepChange } from './admin-types' // The shapes.
+import { CURRENCIES } from '../../../src/shared/format/currencies.ts' // The currency list.
 import { ORDER_STEPS, parseOrderNumber } from './order-query' // The step list and the number check.
+import { MAX_PRICE_CENTS } from './validate-changes' // The price limit.
 
 /**
  * Tells whether a value is a plain object whose keys are exactly the given ones.
@@ -41,4 +43,28 @@ export function parseSettingsChange(body: unknown): SettingsChange | null {
   const pair = body.orderEmailOn // The switch.
   if (!hasExactKeys(pair, ['from', 'to']) || typeof pair.from !== 'boolean' || typeof pair.to !== 'boolean') return null // Two booleans.
   return pair.from === pair.to ? null : { orderEmailOn: { from: pair.from, to: pair.to } } // A no-op is refused.
+}
+
+/**
+ * Parses the body of `POST /api/settings/prices`.
+ * @param body The parsed JSON.
+ * @return The change, or null when invalid.
+ */
+export function parsePricesChange(body: unknown): PricesChange | null {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return null // A plain object.
+  const keys = Object.keys(body) // The keys it has.
+  if (keys.length === 0 || keys.some((key) => key !== 'currency' && key !== 'defaultPriceCents')) return null // At least one, and no extra.
+  const { currency, defaultPriceCents } = body as Record<string, unknown> // The two optional pairs.
+  const change: PricesChange = {} // Built field by field.
+  if (currency !== undefined) { // The currency pair.
+    if (!hasExactKeys(currency, ['from', 'to']) || typeof currency.from !== 'string' || !CURRENCIES.some((code) => code === currency.to) || currency.from === currency.to) return null // From is only compared; to must be listed; a no-op is refused.
+    change.currency = { from: currency.from, to: currency.to as string } // Checked.
+  }
+  if (defaultPriceCents !== undefined) { // The price pair.
+    const pair = defaultPriceCents // The pair.
+    if (!hasExactKeys(pair, ['from', 'to']) || !Number.isInteger(pair.from) || !Number.isInteger(pair.to) || pair.from === pair.to) return null // Two integers; a no-op is refused.
+    if ((pair.to as number) < 0 || (pair.to as number) > MAX_PRICE_CENTS) return null // The new value is capped.
+    change.defaultPriceCents = { from: pair.from as number, to: pair.to as number } // Checked.
+  }
+  return change // Checked.
 }

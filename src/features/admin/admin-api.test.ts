@@ -11,6 +11,7 @@ import {
   loadMeta,
   moveClubs,
   removeClub,
+  savePrices,
   sendHonorChanges,
   uploadPicture,
 } from './admin-api.ts' // the code under test
@@ -384,5 +385,35 @@ describe('club calls', () => {
     expect(firstPath(move)).toBe('/api/clubs/order')
     stubFetch(Response.json({ error: 'conflict' }, { status: 409 }))
     expect(await moveClubs({ from: [1, 2], to: [2, 1] })).toEqual({ kind: 'error' })
+  })
+})
+
+describe('savePrices', () => {
+  const change = { currency: { from: 'MYR', to: 'SGD' } } // a currency-only change
+
+  it('posts the change to /api/settings/prices and maps 200 and 409 to the two values', async () => {
+    // Catches a save sent to /api/settings, or a conflict read as a failure so the admin never sees the stored values.
+    const spy = stubFetch(Response.json({ currency: 'SGD', defaultPriceCents: 400 }))
+    expect(await savePrices(change)).toEqual({ kind: 'ok', prices: { currency: 'SGD', defaultPriceCents: 400 } })
+    const [path, init] = spy.mock.calls[0] as unknown as [string, RequestInit]
+    expect(path).toBe('/api/settings/prices')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual(change)
+    stubFetch(Response.json({ error: 'conflict', currency: 'MYR', defaultPriceCents: 600 }, { status: 409 }))
+    expect(await savePrices(change)).toEqual({ kind: 'conflict', prices: { currency: 'MYR', defaultPriceCents: 600 } })
+  })
+
+  it('maps a 403, a blocked redirect, a network failure, a 400 and a wrong shape', async () => {
+    // Catches a session end read as an error, or a wrong-shape answer that reaches the fields.
+    stubFetch(Response.json({}, { status: 403 }))
+    expect(await savePrices(change)).toEqual({ kind: 'signed-out' })
+    stubFetch(opaqueRedirect())
+    expect(await savePrices(change)).toEqual({ kind: 'signed-out' })
+    stubFetch(new Error('offline'))
+    expect(await savePrices(change)).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ error: 'invalid' }, { status: 400 }))
+    expect(await savePrices(change)).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ currency: 'SGD', defaultPriceCents: '400' }))
+    expect(await savePrices(change)).toEqual({ kind: 'error' })
   })
 })

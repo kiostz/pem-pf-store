@@ -149,3 +149,17 @@ export type ClubResult =
   | { kind: 'saved'; clubs: AdminClub[] } // Written (or already so): the whole list.
   | { kind: 'conflict'; clubs: AdminClub[] } // Nothing written: the list as it is now.
   | { kind: 'name-taken' } // Another club holds the name, ignoring case.
+
+// The two shop settings the Settings screen saves together.
+export type PriceSettings = Pick<AdminMeta, 'currency' | 'defaultPriceCents'>
+
+// A prices change: what the admin saw (`from`) and wants (`to`) per changed field; at least one is present.
+export interface PricesChange {
+  currency?: { from: string; to: string } // Three capital letters from the fixed list.
+  defaultPriceCents?: { from: number; to: number } // Whole cents.
+}
+
+// The outcome of a prices save.
+export type PricesResult =
+  | { kind: 'saved'; prices: PriceSettings } // Written (or already so).
+  | { kind: 'conflict'; prices: PriceSettings } // Nothing written: the values as they are now.

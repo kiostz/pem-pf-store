@@ -1,5 +1,7 @@
 // The admin price field's rules: text like "4.50" to whole cents with the Worker's limit, so a price the Worker would refuse never leaves the sheet.
 
+import { symbolOf } from '@/shared/format/currencies.ts' // the site's symbols
+
 // The result of reading a typed price: cents, or the line to show.
 export type PriceResult =
   { ok: true; cents: number } | { ok: false; error: string }
@@ -32,17 +34,6 @@ export const formatPriceInput = (cents: number): string =>
 /**
  * Names the currency by its symbol, such as "RM".
  * @param currency the ISO code from /api/meta
- * @return the symbol, or the code itself when Intl does not know it
+ * @return the site's symbol, or the code itself when it is not in the list
  */
-export function currencySymbol(currency: string): string {
-  try {
-    const parts = new Intl.NumberFormat('en', {
-      style: 'currency',
-      currency,
-      currencyDisplay: 'narrowSymbol',
-    }).formatToParts(0) // the pieces of a price
-    return parts.find((part) => part.type === 'currency')?.value ?? currency // the symbol piece
-  } catch {
-    return currency // Intl throws RangeError on a malformed code
-  }
-}
+export const currencySymbol = (currency: string): string => symbolOf(currency) // the shared symbol table

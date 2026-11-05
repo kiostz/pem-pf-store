@@ -6,6 +6,7 @@ on: # when the workflow runs
     branches: ['main'] # only the main branch
     paths: # only when one of these changes
       - 'workers/**' # Worker code
+      - 'src/shared/format/**' # the order email's money formatter
       - '.nvmrc' # the Node version
       - '.github/workflows/deploy-workers.yml' # this file
   workflow_dispatch: # also from the Actions tab by hand; the deploy job still runs only on main

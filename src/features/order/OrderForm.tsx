@@ -78,7 +78,7 @@ export function OrderForm({
   const errors = validateOrderForm(values, clubs) // what is wrong now
   const complete = Object.keys(errors).length === 0 && token !== null // ready to send
   const missing = missingText(errors, token !== null) // the line under the button
-  const totalText = formatPrice(estimatedTotalCents(lines) / 100, currency).replace(/\u00a0/g, ' ') // "RM 24.00"; Intl puts a no-break space after "RM", and the button's name should read with a plain one
+  const totalText = formatPrice(estimatedTotalCents(lines) / 100, currency).replace(/\u00a0/g, ' ') // "RM 24.00"; the formatter puts a no-break space after "RM", and the button's name should read with a plain one
   /**
    * Gives the error text of a field once the buyer has left it.
    * @param field the field

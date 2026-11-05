@@ -2,6 +2,7 @@
 
 import type { OrderRequest, SavedOrder } from './api-types'
 import { clubBodyText } from './save-order'
+import { formatPrice } from '../../../src/shared/format/price.ts' // The one money formatter the shop and the admin use.
 
 const STORE_NAME = 'PEM Pathfinder Store' // The sender name and subject prefix.
 
@@ -12,7 +13,7 @@ const STORE_NAME = 'PEM Pathfinder Store' // The sender name and subject prefix.
  * @return For example "RM 9.00".
  */
 function money(cents: number, currency: string): string {
-  return new Intl.NumberFormat('en', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).format(cents / 100).replace(/\u00a0/g, ' ') // Plain space reads the same in every mail client.
+  return formatPrice(cents / 100, currency).replace(/\u00a0/g, ' ') // Plain space reads the same in every mail client.
 }
 
 /**
