@@ -62,13 +62,16 @@ describe('OrderRow', () => {
     expect(screen.getByRole('link', { name: '+60 12 000 0000' })).toHaveAttribute('href', 'tel:+60120000000')
   })
 
-  it('says the buyer details were removed, with the date, and shows no links', () => {
-    // Catches blank contact fields with no reason.
-    renderRow(makeOrder({ number: 'PF-20261103-CCCC', buyer: null, personalDataRemovedAt: '2027-11-05T02:00:00.000Z' }))
+  it('says "No buyer details" in the closed and the open row, with no contact links', () => {
+    // Catches blank contact fields, links to nothing, and the old removal reason.
+    renderRow(makeOrder({ number: 'PF-20261103-CCCC', buyer: null, personalDataRemovedAt: null }))
     const toggle = screen.getByRole('button', { name: /PF-20261103-CCCC/ })
-    expect(toggle).toHaveTextContent('Buyer details removed on 5 Nov 2027')
+    expect(toggle).toHaveTextContent('No buyer details')
     fireEvent.click(toggle)
+    expect(screen.getAllByText('No buyer details')).toHaveLength(2) // closed and open row
     expect(screen.queryByRole('link', { name: /@/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /\d/ })).not.toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(/removed/i)
   })
 
   it('saves a step change, sending from, and says "Step saved."', async () => {
@@ -193,14 +196,6 @@ describe('OrderRow', () => {
     // Catches a status that only a colour carries.
     renderRow(orderAt('PF-20261105-AAAA', 'handed_out'))
     expect(screen.getByText('Handed out')).toBeInTheDocument()
-  })
-
-  it('shows "Buyer details removed" with no date when the removal date is unset', () => {
-    // Catches the order's own date printed as the removal date.
-    renderRow(makeOrder({ number: 'PF-20261103-CCCC', buyer: null, personalDataRemovedAt: null }))
-    const toggle = screen.getByRole('button', { name: /PF-20261103-CCCC/ })
-    expect(toggle).toHaveTextContent('Buyer details removed')
-    expect(toggle).not.toHaveTextContent(/removed on/)
   })
 
   /** Opens the row and its Cancel dialog; returns the dialog. */

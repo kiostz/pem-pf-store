@@ -25,6 +25,8 @@
   "ratelimits": [
     { "name": "RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
   ],
+  // Old order removal: every day at 19:00 UTC, which is 03:00 in Malaysia.
+  "triggers": { "crons": ["0 19 * * *"] },
   "d1_databases": [
     {
       // Name of the binding in code: env.DB.

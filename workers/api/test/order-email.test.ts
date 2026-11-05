@@ -34,7 +34,7 @@ describe('orderEmail', () => {
         '',
         'Estimated total: RM 10.50',
         '',
-        'Open the admin: https://admin.example.test',
+        'Open this order: https://admin.example.test/#/orders/PF-20261102-ABCD',
       ].join('\n'),
     ) // Exact text.
   })
@@ -77,7 +77,7 @@ describe('order email on POST /orders', () => {
     expect(message.subject).toMatch(/^PEM Pathfinder Store order PF-\d{8}-[A-Z0-9]{4} — Riverside — Ana Tester$/) // Subject.
     expect(message.text).toContain('Club:  Other: Riverside') // Body.
     expect(message.text).toContain('2 × Knot Tying @ RM 3.00 = RM 6.00') // Line.
-    expect(message.text.split('\n').at(-1)).toBe(`Open the admin: ${env.ADMIN_URL}`) // Last line.
+    expect(message.text.split('\n').at(-1)).toBe(`Open this order: ${env.ADMIN_URL}/#/orders/${message.subject.match(/PF-\d{8}-[A-Z0-9]{4}/)![0]}`) // Last line.
     expect(ordersWhenSent).toBe(1) // Already saved.
   })
 

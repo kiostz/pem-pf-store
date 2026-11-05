@@ -6,3 +6,5 @@ TURNSTILE_SECRET=1x0000000000000000000000000000000AA
 ORDER_EMAIL_TO=club-inbox@example.test
 # The shop's address while running locally (the Vite dev server).
 SHOP_ORIGIN=http://localhost:5173
+# The admin's address while running locally, for the link on the order email's last line.
+ADMIN_URL=http://localhost:8788

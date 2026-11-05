@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react' // the open state, id
 import type { AdminOrder, OrderStep } from '../../../workers/admin/src/admin-types.ts' // the shared shapes
 import { formatPrice } from '@/shared/format/price.ts' // "RM 12.00"
 import { changeOrderStep, SIGNED_OUT_NOTE } from './admin-api.ts' // the step call
-import { formatAdminDay, formatAdminTime } from './admin-dates.ts' // Malaysia dates
+import { formatAdminTime } from './admin-dates.ts' // Malaysia dates
 import { SOFT_BUTTON } from './admin-boxes.ts' // the quiet 44 px action
 import { CancelDialog } from './CancelDialog.tsx' // asks before a cancel
 import { StepControl } from './StepControl.tsx' // the Step select
@@ -15,6 +15,8 @@ const LABELS: Record<OrderStep, string> = {
   handed_out: 'Handed out',
   cancelled: 'Cancelled',
 } // the step words on screen
+
+const NO_BUYER = 'No buyer details' // shown when an order has no buyer
 
 const TAGS: Record<OrderStep, string> = {
   new: 'bg-bg-soft text-accent', // soft fill, oxblood text
@@ -85,13 +87,6 @@ export function OrderRow({
   const toggle = useRef<HTMLButtonElement>(null) // the row header, a stable place for focus
   const refocus = useRef(false) // focus goes to the header once the dialog is gone
   const items = `${order.itemCount} ${order.itemCount === 1 ? 'item' : 'items'} · ${formatPrice(order.totalCents / 100, order.currency)}` // "3 items · RM 12.00"
-  const removed =
-    order.buyer !== null
-      ? null // nothing was removed
-      : order.personalDataRemovedAt === null
-        ? 'Buyer details removed' // no date is known
-        : `Buyer details removed on ${formatAdminDay(order.personalDataRemovedAt)}` // why the buyer is missing
-
   // Once the dialog has closed after a cancel or a conflict, puts focus on the row header: the Cancel order button that opened it is gone.
   useEffect(() => {
     if (cancelling || !refocus.current) return // the dialog is still up, or nothing to do
@@ -178,7 +173,7 @@ export function OrderRow({
           <StepTag step={order.step} />
         </span>
         <span className="text-text-muted text-sm">{`${formatAdminTime(order.createdAt)} · ${order.club}`}</span>
-        <span className="text-sm">{order.buyer?.name ?? removed}</span>
+        <span className="text-sm">{order.buyer?.name ?? NO_BUYER}</span>
         <span className="text-text-muted text-sm">{items}</span>
       </button>
       {/* The outcome of the last change; mounted always so screen readers hear it appear. */}
@@ -221,7 +216,7 @@ export function OrderRow({
               </a>
             </p>
           ) : (
-            <p className="text-text-muted text-sm">{removed}</p>
+            <p className="text-text-muted text-sm">{NO_BUYER}</p>
           )}
           {order.step !== 'cancelled' && (
             // A cancelled order is final: no step control and no cancel.

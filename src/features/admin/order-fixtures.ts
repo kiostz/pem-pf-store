@@ -35,10 +35,5 @@ export const orderAt = (number: string, step: OrderStep): AdminOrder => makeOrde
 export const orders: AdminOrder[] = [
   orderAt('PF-20261105-AAAA', 'new'),
   orderAt('PF-20261104-BBBB', 'paid'),
-  makeOrder({
-    number: 'PF-20261103-CCCC',
-    step: 'handed_out',
-    buyer: null,
-    personalDataRemovedAt: '2027-11-05T02:00:00.000Z',
-  }),
+  orderAt('PF-20261103-CCCC', 'handed_out'),
 ] // the list

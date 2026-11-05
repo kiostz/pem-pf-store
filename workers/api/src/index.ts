@@ -2,6 +2,7 @@
 
 import { parseOrderRequest } from './order-request'
 import { sendOrderEmail } from './order-email'
+import { removeOldOrders } from './remove-old-orders'
 import { saveOrder } from './save-order'
 import { verifyTurnstile } from './turnstile'
 import { readClubs, readHonors, readSettings, readShop } from './read'
@@ -155,6 +156,25 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
   }
 }
 
+/**
+ * Runs the nightly Old order removal; logs the error name only, then throws a fixed error so the cron history shows the run as failed; the next night tries again.
+ * @param controller The scheduled event, whose time sets the cutoff.
+ * @param env The Worker bindings.
+ * @return Resolves when the job finished; rejects with a fixed error when it failed.
+ */
+async function scheduled(controller: ScheduledController, env: Env): Promise<void> {
+  let failed = false // Set in the catch, so the fixed error is thrown outside it.
+  try {
+    const deleted = await removeOldOrders(env.DB, new Date(controller.scheduledTime)) // By the event's time, not the wall clock.
+    console.log(`old orders deleted ${deleted}`) // The count only.
+  } catch (error) {
+    failed = true // Remember the failure.
+    console.error(`old order removal failed ${error instanceof Error ? error.name : 'unknown'}`) // The error name only.
+  }
+  if (failed) throw new Error('old order removal failed') // Fixed text, never the original error or its message, so the run shows as failed.
+}
+
 export default {
-  fetch: handle, // The Worker's only entry point.
+  fetch: handle, // Public reads and the order endpoint.
+  scheduled, // The nightly Old order removal.
 } satisfies ExportedHandler<Env>

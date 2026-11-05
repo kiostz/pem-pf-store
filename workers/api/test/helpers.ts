@@ -173,3 +173,18 @@ export function expectJsonNoStore(res: Response): void {
   expect(res.headers.get('Cache-Control')).toBe('no-store') // Stock changes, so never cacheable.
   expect(res.headers.get('Content-Type')).toBe('application/json; charset=utf-8') // JSON with charset.
 }
+
+/**
+ * Inserts one order with its lines at a given time and step, for a made-up buyer.
+ * @param order `number`, `createdAt` (ISO UTC with milliseconds), `step` (default new) and `lineCount` (default 1).
+ * @return The new order's row id.
+ */
+export async function addOrder(order: { number: string; createdAt: string; step?: string; lineCount?: number }): Promise<number> {
+  const row = await env.DB.prepare(
+    "INSERT INTO orders (number, created_at, step, currency, total_cents, buyer_name, buyer_email, buyer_phone, club) VALUES (?, ?, ?, 'MYR', 900, 'Ana Tester', 'ana@example.test', '+60 12 000 0000', 'Gilead') RETURNING id",
+  ).bind(order.number, order.createdAt, order.step ?? 'new').first<{ id: number }>() // The order row.
+  for (let i = 0; i < (order.lineCount ?? 1); i += 1) {
+    await env.DB.prepare("INSERT INTO order_lines (order_id, honor_id, name, quantity, price_cents) VALUES (?, ?, 'Knot Tying', 1, 300)").bind(row!.id, `line-${i}`).run() // One line each, ids differ.
+  }
+  return row!.id // For the caller's checks.
+}

@@ -19,7 +19,7 @@ function money(cents: number, currency: string): string {
  * Builds the email for one saved order.
  * @param order The saved order.
  * @param buyer The buyer's name, email, phone and club from the request.
- * @param adminUrl The address of the admin page, for the last line.
+ * @param adminUrl The address of the admin page, for the order link on the last line.
  * @return The subject and the text.
  */
 export function orderEmail(
@@ -43,7 +43,7 @@ export function orderEmail(
       '', // Blank line before the total.
       `Estimated total: ${money(order.totalCents, order.currency)}`, // From the saved prices.
       '', // Blank line before the link.
-      `Open the admin: ${adminUrl}`, // Where to act on it.
+      `Open this order: ${adminUrl}/#/orders/${order.number}`, // Straight to the order; the number is not personal data.
     ].join('\n'), // One block.
   }
 }
