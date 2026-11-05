@@ -48,6 +48,7 @@ export interface SavedOrder {
   createdAt: string // ISO UTC time with milliseconds.
   currency: string // Three capital letters.
   totalCents: number // Whole cents, from the saved lines.
+  club: string // The stored club text, "Other: <name>" when typed.
   lines: Array<{ honorId: string; name: string; quantity: number; priceCents: number }> // Saved names and prices.
 }
 

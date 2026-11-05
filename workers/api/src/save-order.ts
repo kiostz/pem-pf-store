@@ -26,11 +26,11 @@ export function clubBodyText(club: OrderRequest['club']): string {
  * @param requestId The shop's request id.
  * @return The order, or null when none has that id.
  */
-async function findByRequestId(db: D1Database, requestId: string): Promise<SavedOrder | null> {
+export async function findByRequestId(db: D1Database, requestId: string): Promise<SavedOrder | null> {
   const row = await db
-    .prepare('SELECT id, number, created_at, currency, total_cents FROM orders WHERE request_id = ?')
+    .prepare('SELECT id, number, created_at, currency, total_cents, club FROM orders WHERE request_id = ?')
     .bind(requestId)
-    .first<{ id: number; number: string; created_at: string; currency: string; total_cents: number }>() // At most one.
+    .first<{ id: number; number: string; created_at: string; currency: string; total_cents: number; club: string }>() // At most one.
   if (row === null) return null // Not saved.
   const { results } = await db
     .prepare('SELECT honor_id, name, quantity, price_cents FROM order_lines WHERE order_id = ? ORDER BY rowid')
@@ -41,6 +41,7 @@ async function findByRequestId(db: D1Database, requestId: string): Promise<Saved
     createdAt: row.created_at, // ISO UTC.
     currency: row.currency, // Three letters.
     totalCents: row.total_cents, // Whole cents.
+    club: row.club, // The stored club text.
     lines: results.map((line) => ({ honorId: line.honor_id, name: line.name, quantity: line.quantity, priceCents: line.price_cents })), // Camel case for the API.
   }
 }

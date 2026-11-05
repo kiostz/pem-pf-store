@@ -42,7 +42,7 @@ describe('POST /orders', () => {
     const { res } = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 2, priceCents: 1, name: 'Free' }, { honorId: 'rope', quantity: 1 }] })) // Extra keys ignored.
     expect(res.status).toBe(201) // Created.
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://kiostz.github.io') // The shop can read it.
-    const saved = (await res.json()) as { number: string; createdAt: string; currency: string; totalCents: number; lines: unknown[] } // The answer.
+    const saved = (await res.json()) as { number: string; createdAt: string; currency: string; totalCents: number; lines: unknown[]; club: string } // The answer.
     expect(saved.number).toMatch(/^PF-20261102-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/) // Malaysia date.
     expect(saved.createdAt).toBe('2026-11-01T17:00:00.000Z') // The moment.
     expect(saved.currency).toBe('MYR') // From settings.
@@ -51,7 +51,8 @@ describe('POST /orders', () => {
       { honorId: 'knots', name: 'Knot Tying', quantity: 2, priceCents: 300 },
       { honorId: 'rope', name: 'Rope Work', quantity: 1, priceCents: 450 },
     ]) // D1's names and prices, request order.
-    expect(JSON.stringify(saved)).not.toMatch(/Ana|ana@|0123|Gilead/) // No buyer fields in the answer.
+    expect(JSON.stringify(saved)).not.toMatch(/Ana|ana@|0123/) // No buyer fields in the answer.
+    expect(saved.club).toBe('Gilead') // The club is part of the order.
     expect(await count('orders')).toBe(1) // One order.
     expect(await count('order_lines')).toBe(2) // Two lines.
     expect(await stockOf('knots')).toBe(3) // 5 - 2.
@@ -130,9 +131,20 @@ describe('POST /orders', () => {
     const second = await postOrder({ ...body, name: 'Someone Else' }) // The retry.
     expect(first.res.status).toBe(201) // Created.
     expect(second.res.status).toBe(200) // Repeat.
-    expect(await second.res.json()).toEqual(await first.res.clone().json()) // The same order.
+    const firstBody = (await first.res.clone().json()) as Record<string, unknown> // First answer.
+    expect(await second.res.json()).toEqual({ ...firstBody, kept: 'earlier-send' }) // The same order, flagged as earlier.
     expect(await count('orders')).toBe(1) // One order.
     expect(await stockOf('knots')).toBe(3) // One drop.
+  })
+
+  it('answers 201 with kept this-send and the club, and a repeat 200 with kept earlier-send and the first body\'s club', async () => {
+    // Catches a confirmation that shows this send's club for an order an earlier send saved.
+    mockSiteverify() // Captcha passes.
+    const body = validOrder({ club: { name: 'Gilead', typed: false } }) // One id.
+    const first = await postOrder(body) // First send.
+    const second = await postOrder({ ...body, club: { name: 'Riverside', typed: true } }) // Same id, another club.
+    expect(await first.res.json()).toMatchObject({ kept: 'this-send', club: 'Gilead' }) // This send.
+    expect(await second.res.json()).toMatchObject({ kept: 'earlier-send', club: 'Gilead' }) // The first body's club.
   })
 
   it('answers a repeated requestId even when the item has since sold out', async () => {
@@ -150,6 +162,7 @@ describe('POST /orders', () => {
     const body = validOrder() // One id.
     const [a, b] = await Promise.all([postOrder(body), postOrder(body)]) // At once.
     expect([a.res.status, b.res.status].sort()).toEqual([200, 201]) // Created once.
+    expect([((await a.res.clone().json()) as { kept: string }).kept, ((await b.res.clone().json()) as { kept: string }).kept].sort()).toEqual(['earlier-send', 'this-send']) // One of each.
     expect(((await a.res.json()) as { number: string }).number).toBe(((await b.res.json()) as { number: string }).number) // Same number.
     expect(await count('orders')).toBe(1) // One order.
     expect(await stockOf('knots')).toBe(3) // One drop.

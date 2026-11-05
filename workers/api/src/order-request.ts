@@ -11,6 +11,15 @@ const HONOR_ID_MAX = 200 // Longest item id.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i // A request id.
 
 /**
+ * Tells whether text is a request id.
+ * @param text The text to check.
+ * @return True for a UUID in any case.
+ */
+export function isRequestId(text: string): boolean {
+  return UUID.test(text) // Same rule as the order body.
+}
+
+/**
  * Folds control characters and line separators to one space, so a field cannot add lines to the email.
  * @param text The typed text.
  * @return The text with each run of control characters as one space, trimmed.

@@ -3,7 +3,7 @@
 import { waitOnExecutionContext } from 'cloudflare:test'
 import { env } from 'cloudflare:workers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fakeEmail, count, mockSiteverify, postOrder, seedShop, validOrder } from './helpers'
+import { call, fakeEmail, count, mockSiteverify, postOrder, SHOP, seedShop, validOrder } from './helpers'
 
 /**
  * Reads one honor's stock.
@@ -77,10 +77,96 @@ describe('a lost answer then a retry', () => {
     const first = await postOrder(body) // Saved.
     const retry = await postOrder({ ...body, lines: [{ honorId: 'knots', quantity: 5 }, { honorId: 'rope', quantity: 1 }] }) // Same id, bigger cart.
     expect(retry.res.status).toBe(200) // Repeat.
-    expect(await retry.res.json()).toEqual(await first.res.json()) // The first cart's order.
+    expect(await retry.res.json()).toEqual({ ...((await first.res.json()) as object), kept: 'earlier-send' }) // The first cart's order.
     expect(await count('orders')).toBe(1) // One order.
     expect(await stockOf('knots')).toBe(3) // Only the first drop.
     expect(await stockOf('rope')).toBe(1) // The edit never reached stock.
+  })
+})
+
+describe('a late first send meeting a changed resend', () => {
+  const clubA = { name: 'Gilead', typed: false } // The first send's club.
+  const clubB = { name: 'Sunway', typed: false } // The changed send's club.
+
+  it.each([
+    ['A lands first', false],
+    ['B lands first', true],
+  ])('saves only the first to land and gives the other its order (%s)', async (_name, bFirst) => {
+    // Catches a late first send and a changed resend under one id making two orders, two stock drops or two emails.
+    mockSiteverify() // Captcha passes.
+    const email = fakeEmail() // Records sends.
+    const id = '00000000-0000-4000-8000-0000000000c1' // One id.
+    const a = validOrder({ requestId: id, club: clubA, lines: [{ honorId: 'knots', quantity: 2 }] }) // First body.
+    const b = validOrder({ requestId: id, club: clubB, lines: [{ honorId: 'knots', quantity: 1 }, { honorId: 'rope', quantity: 1 }] }) // Changed body.
+    const [firstBody, secondBody] = bFirst ? [b, a] : [a, b] // Landing order.
+    const first = await postOrder(firstBody, { overrides: { ORDER_EMAIL: email } }) // Lands first.
+    const second = await postOrder(secondBody, { overrides: { ORDER_EMAIL: email } }) // Lands late.
+    await waitOnExecutionContext(first.ctx) // Email goes out.
+    await waitOnExecutionContext(second.ctx) // Nothing queued.
+    const one = (await first.res.json()) as { kept: string; club: string; lines: unknown[] } // Saved.
+    const two = (await second.res.json()) as { kept: string; club: string; lines: unknown[] } // Repeat.
+    expect(one.kept).toBe('this-send') // Saved now.
+    expect(two).toEqual({ ...one, kept: 'earlier-send' }) // The first's club and lines.
+    expect(await count('orders')).toBe(1) // One order.
+    expect(await stockOf('knots')).toBe(bFirst ? 4 : 3) // One drop only.
+    expect(email.send).toHaveBeenCalledTimes(1) // One email.
+  })
+
+  it('saves one order, one stock drop and one email when A and B reach the Worker at the same moment', async () => {
+    // Catches two sends racing past the pre-lookup into two orders, two stock drops or two emails.
+    mockSiteverify() // Captcha passes.
+    const email = fakeEmail() // Records sends.
+    const id = '00000000-0000-4000-8000-0000000000c4' // One id.
+    const a = validOrder({ requestId: id, club: clubA, lines: [{ honorId: 'knots', quantity: 2 }] }) // First body.
+    const b = validOrder({ requestId: id, club: clubB, lines: [{ honorId: 'knots', quantity: 1 }, { honorId: 'rope', quantity: 1 }] }) // Changed body.
+    const [ra, rb] = await Promise.all([postOrder(a, { overrides: { ORDER_EMAIL: email } }), postOrder(b, { overrides: { ORDER_EMAIL: email } })]) // At once.
+    await waitOnExecutionContext(ra.ctx) // Email goes out.
+    await waitOnExecutionContext(rb.ctx) // Nothing queued.
+    const one = (await ra.res.json()) as { kept: string; number: string; club: string; lines: unknown[] } // A's answer.
+    const two = (await rb.res.json()) as { kept: string; number: string; club: string; lines: unknown[] } // B's answer.
+    expect([one.kept, two.kept].sort()).toEqual(['earlier-send', 'this-send']) // One of each.
+    expect({ ...one, kept: '' }).toEqual({ ...two, kept: '' }) // Both hold the winner's order.
+    expect(await count('orders')).toBe(1) // One order.
+    const drop = 5 - (await stockOf('knots')) // Knots taken.
+    expect([2, 1]).toContain(drop) // Only the winner's quantity.
+    expect(email.send).toHaveBeenCalledTimes(1) // One email.
+  })
+
+  it('treats the same request id in capitals and in lower case as one order', async () => {
+    // Catches a case-sensitive id check that lets a resend with another spelling make a second order.
+    mockSiteverify() // Captcha passes.
+    const id = '00000000-0000-4000-8000-0000000000c5' // Lower case.
+    await postOrder(validOrder({ requestId: id })) // Saved.
+    const again = await postOrder(validOrder({ requestId: id.replace(/[a-f]/g, (c) => c.toUpperCase()), club: clubB })) // Capitals, changed club.
+    expect(again.res.status).toBe(200) // A repeat.
+    expect(await again.res.json()).toMatchObject({ kept: 'earlier-send', club: 'Gilead' }) // The first order.
+    expect(await count('orders')).toBe(1) // One order.
+    expect(await stockOf('knots')).toBe(3) // One drop.
+  })
+
+  it('answers a lookup not found, then A lands, then B gets earlier-send holding A', async () => {
+    // Catches a lookup that creates state or a B that is saved after A.
+    mockSiteverify() // Captcha passes.
+    const id = '00000000-0000-4000-8000-0000000000c2' // One id.
+    const miss = await call(`/orders/status/${id}`, { headers: { Origin: SHOP } }) // Before A lands.
+    expect(await miss.json()).toEqual({ found: false }) // Not found.
+    await postOrder(validOrder({ requestId: id, club: clubA })) // A lands.
+    const b = await postOrder(validOrder({ requestId: id, club: clubB, lines: [{ honorId: 'knots', quantity: 1 }] })) // B arrives.
+    expect(await b.res.json()).toMatchObject({ kept: 'earlier-send', club: 'Gilead', lines: [{ honorId: 'knots', quantity: 2 }] }) // Holds A.
+    expect(await count('orders')).toBe(1) // One order.
+  })
+
+  it('refuses B for stock before A lands with nothing written, then A saves and the lookup finds it', async () => {
+    // Catches a refused resend that wrote something or hid the later landing of A.
+    mockSiteverify() // Captcha passes.
+    const id = '00000000-0000-4000-8000-0000000000c3' // One id.
+    const b = await postOrder(validOrder({ requestId: id, club: clubB, lines: [{ honorId: 'rope', quantity: 2 }] })) // Rope has 1.
+    expect(b.res.status).toBe(409) // Refused.
+    expect(await count('orders')).toBe(0) // Nothing written.
+    expect(await stockOf('rope')).toBe(1) // Untouched.
+    await postOrder(validOrder({ requestId: id, club: clubA })) // A lands.
+    const found = (await (await call(`/orders/status/${id}`, { headers: { Origin: SHOP } })).json()) as { found: boolean; order: { club: string } } // Lookup.
+    expect(found).toMatchObject({ found: true, order: { club: 'Gilead' } }) // A's order.
   })
 })
 

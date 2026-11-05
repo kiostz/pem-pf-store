@@ -24,7 +24,7 @@ function money(cents: number, currency: string): string {
  * @return The subject and the text.
  */
 export function orderEmail(
-  order: SavedOrder,
+  order: Omit<SavedOrder, 'club'>,
   buyer: Pick<OrderRequest, 'name' | 'email' | 'phone' | 'club'>,
   adminUrl: string,
 ): { subject: string; text: string } {
@@ -58,7 +58,7 @@ export function orderEmail(
  */
 export async function sendOrderEmail(
   env: Pick<Env, 'ORDER_EMAIL' | 'ORDER_EMAIL_FROM' | 'ORDER_EMAIL_TO' | 'ADMIN_URL'>,
-  order: SavedOrder,
+  order: Omit<SavedOrder, 'club'>,
   buyer: Pick<OrderRequest, 'name' | 'email' | 'phone' | 'club'>,
 ): Promise<void> {
   try {

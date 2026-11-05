@@ -1,9 +1,9 @@
 // API Worker entry: rate limit, router, CORS and short error codes for the public read endpoints and the order endpoint.
 
-import { parseOrderRequest } from './order-request'
+import { isRequestId, parseOrderRequest } from './order-request'
 import { sendOrderEmail } from './order-email'
 import { removeOldOrders } from './remove-old-orders'
-import { saveOrder } from './save-order'
+import { findByRequestId, saveOrder } from './save-order'
 import { verifyTurnstile } from './turnstile'
 import { readClubs, readHonors, readSettings, readShop } from './read'
 
@@ -108,7 +108,32 @@ async function handleOrder(
   const result = await saveOrder(env.DB, parsed, new Date()) // Stock check and guarded save.
   if (result.kind === 'refused') return send({ error: 'stock', lines: result.lines }, 409) // Nothing written.
   if (result.kind === 'saved' && result.emailOn) ctx.waitUntil(sendOrderEmail(env, result.order, parsed)) // After the save, not awaited.
-  return send(result.order, result.kind === 'saved' ? 201 : 200) // The saved order, no buyer fields.
+  return send({ ...result.order, kept: result.kind === 'saved' ? 'this-send' : 'earlier-send' }, result.kind === 'saved' ? 201 : 200) // The saved order, no buyer fields; kept says whose body it holds.
+}
+
+const STATUS_PREFIX = '/orders/status/' // Where the order lookup lives.
+
+/**
+ * Handles GET /orders/status/<requestId>: the order an earlier send saved, or none; no buyer fields.
+ * @param request The incoming request.
+ * @param env The Worker bindings.
+ * @param path The request path.
+ * @param send Builds a response with this request's CORS context.
+ * @return The JSON response.
+ */
+async function handleLookup(
+  request: Request,
+  env: Env,
+  path: string,
+  send: (body: unknown, status: number, extra?: Record<string, string>) => Response,
+): Promise<Response> {
+  const id = path.slice(STATUS_PREFIX.length) // Whatever follows the prefix.
+  if (id === '' || id.includes('/')) return send({ error: 'not-found' }, 404) // Empty segment, extra segment or trailing slash.
+  if (request.method !== 'GET') return send({ error: 'method-not-allowed' }, 405, { Allow: 'GET' }) // Reads only.
+  if (request.headers.get('Origin') !== env.SHOP_ORIGIN) return send({ error: 'forbidden-origin' }, 403) // The shop only.
+  if (!isRequestId(id)) return send({ error: 'invalid' }, 400) // Not a UUID.
+  const order = await findByRequestId(env.DB, id.toLowerCase()) // Stored in lower case.
+  return send(order === null ? { found: false } : { found: true, order }, 200) // No captcha: the answer holds no buyer fields.
 }
 
 /**
@@ -146,12 +171,13 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       if (request.method !== 'POST') return send({ error: 'method-not-allowed' }, 405, { Allow: 'POST, OPTIONS' }) // Writes only.
       return await handleOrder(request, env, ctx, ip, send) // The order.
     }
+    if (path.startsWith(STATUS_PREFIX)) return await handleLookup(request, env, path, send) // The order lookup.
     const read = routes.get(path) // Exact path lookup.
     if (read === undefined) return send({ error: 'not-found' }, 404) // Unknown path.
     if (request.method !== 'GET') return send({ error: 'method-not-allowed' }, 405, { Allow: 'GET' }) // Reads only.
     return send(await read(env.DB), 200) // The data.
   } catch (error) {
-    console.error('request failed', path, error instanceof Error ? error.name : 'unknown') // Route and error class only.
+    console.error('request failed', path.startsWith(STATUS_PREFIX) ? '/orders/status' : path, error instanceof Error ? error.name : 'unknown') // Route and error class only.
     return send({ error: 'server' }, 500) // Short code, no details.
   }
 }
