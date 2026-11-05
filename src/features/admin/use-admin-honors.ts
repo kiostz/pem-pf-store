@@ -7,7 +7,7 @@ import type {
   HonorStatus,
   NewItem,
 } from '../../../workers/admin/src/admin-types.ts' // the row shape
-import { addItem, deleteItem, loadMeta, sendHonorChanges } from './admin-api.ts' // the calls
+import { addItem, deleteItem, loadMeta, sendHonorChanges, uploadPicture } from './admin-api.ts' // the calls
 import {
   applySaved,
   countChanges,
@@ -41,6 +41,8 @@ export type AddOutcome =
 export type DeleteOutcome =
   | { kind: 'deleted' | 'built-in' | 'signed-out' | 'error' }
   | { kind: 'conflict'; latest: AdminHonor } // the item's current values
+// What a picture upload ended in, for the sheet.
+export type PictureOutcome = 'saved' | 'conflict' | 'signed-out' | 'error'
 // What Discard set aside, so Undo can bring it back.
 type DiscardSnapshot = {
   pending: PendingChanges
@@ -356,6 +358,40 @@ export function useAdminHonors() {
     return { kind: result.kind } // the dialog says what happened
   }
 
+  /**
+   * Uploads an item's picture at once and folds the answer into the list; the item's pending edits stay.
+   * @param row the row as shown (its picture key is the one the admin saw)
+   * @param picture the resized picture
+   * @return what happened, for the sheet to show
+   */
+  const uploadItemPicture = async (row: AdminHonor, picture: Blob): Promise<PictureOutcome> => {
+    const result = await uploadPicture(row.id, row.image, picture) // the one request
+    if (result.kind === 'saved') {
+      const shown = { ...row, image: result.honor.image, modifiedAt: result.honor.modifiedAt } // only the picture and the change time move, so other shown fields stay as the admin saw them
+      pages.applyRows([shown]) // the row stays in place
+      const entry = pendingRef.current[row.id] // the row's unsaved edits, if any
+      if (entry !== undefined)
+        commitPending({
+          ...pendingRef.current,
+          [row.id]: { ...entry, seen: { ...entry.seen, image: shown.image, modifiedAt: shown.modifiedAt } },
+        }) // the snapshot follows, so a later Delete guard sees the new change time; the edits stay
+      setStaleFlags((current) => ({
+        ...Object.fromEntries(Object.entries(current).filter(([id]) => id !== row.id)), // this row's old flag goes
+        ...Object.fromEntries(staleRows([shown], [result.honor]).map((stale) => [stale.id, stale])), // a shown value that is out of date gets the same note as a conflict
+      })) // the other flags stay
+    } else if (result.kind === 'conflict') {
+      const rebased = rebaseOnFetch(dropIds(pendingRef.current, result.deletedIds), result.honors) // gone items lose their edits; the rest move onto the current rows
+      commitPending(rebased.pending) // the edits stay
+      pages.applyRows(result.honors) // the list shows the latest values
+      dropStale(result.honors.map((row) => row.id)) // the latest values replace any older save-raised flag
+      pages.removeRows(result.deletedIds) // another admin deleted these
+      if (rebased.flagged.length > 0) flag(rebased.flagged) // an edited field moved
+      setConflicts((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !result.deletedIds.includes(id)))) // deleted rows lose their flag
+      setStaleFlags((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !result.deletedIds.includes(id)))) // and their stale flag
+    } else if (result.kind === 'signed-out') setSaveState('signed-out') // the existing signed-out note
+    return result.kind // the sheet says what happened
+  }
+
   return {
     pages, // the list's pages and controls
     retry, // Try again
@@ -381,5 +417,6 @@ export function useAdminHonors() {
     setChangesView, // Show changes
     add, // Add item
     remove, // Delete item
+    uploadItemPicture, // Save picture
   }
 }

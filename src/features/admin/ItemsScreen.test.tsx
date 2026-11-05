@@ -1,14 +1,15 @@
 // Tests for the admin Items screen with fetch stubbed at the boundary: paging, search, sort, editing in rows and the sheet, saving, conflicts, Add, Delete, failures, leaving, Discard and Undo.
 
-import { act, fireEvent, render, screen, within } from '@testing-library/react' // rendering and events
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react' // rendering and events
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
 import type { AdminHonor } from '../../../workers/admin/src/admin-types.ts' // the row shape
 import { AdminApp } from './AdminApp.tsx' // the whole page, for the wording check
 import { ItemsScreen } from './ItemsScreen.tsx' // the code under test
 import { meta, rows } from './item-fixtures.ts' // shared data
+import type { ResizeDeps } from './resize-picture.ts' // the passed-in browser pieces
 
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response> // answers one request
-type Routes = { pages?: Handler; meta?: Handler; changes?: Handler; add?: Handler; del?: Handler } // one handler per route
+type Routes = { pages?: Handler; meta?: Handler; changes?: Handler; add?: Handler; del?: Handler; picture?: Handler } // one handler per route
 
 const pageOf = (honors: AdminHonor[], nextCursor: string | null = null) => Response.json({ honors, nextCursor }) // a page answer
 
@@ -25,6 +26,8 @@ function stubApi(routes: Routes = {}) {
       if (path === '/api/meta') return (routes.meta ?? (() => Response.json(meta)))(String(url), init)
       if (path === '/api/items/changes')
         return (routes.changes ?? (() => Response.json({ honors: [] })))(String(url), init)
+      if (path === '/api/items/picture')
+        return (routes.picture ?? (() => Response.json({}, { status: 500 })))(String(url), init)
       if (path === '/api/items/delete')
         return (routes.del ?? (() => Response.json({ deletedId: 'camp-shirt' })))(String(url), init)
       if (post) return (routes.add ?? (() => Response.json({}, { status: 500 })))(String(url), init)
@@ -56,10 +59,11 @@ const postBodies = (spy: ReturnType<typeof stubApi>, path = '/api/items/changes'
 
 /**
  * Renders the screen and waits for the rows.
+ * @param pictureDeps the fake decoder and canvas for a picture upload
  * @return the render result
  */
-async function openScreen() {
-  const view = render(<ItemsScreen />) // the screen
+async function openScreen(pictureDeps?: ResizeDeps) {
+  const view = render(<ItemsScreen pictureDeps={pictureDeps} />) // the screen
   await screen.findByText('Knot Tying') // the rows have loaded
   await act(async () => undefined) // the meta answer too
   return view
@@ -995,5 +999,149 @@ describe('interruptions', () => {
     expect(screen.queryByRole('button', { name: /^Save \(/ })).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })).toHaveValue('12')
     expect(postBodies(spy)).toEqual([])
+  })
+})
+
+describe('picture upload', () => {
+  const resized = new Blob(['small'], { type: 'image/webp' }) // what the fake resize hands back
+  const deps: ResizeDeps = {
+    decode: () => Promise.resolve({ width: 10, height: 10, close: () => undefined } as unknown as ImageBitmap),
+    makeCanvas: () =>
+      ({
+        getContext: () => ({ drawImage: () => undefined }),
+        toBlob: (done: (blob: Blob | null) => void) => done(resized),
+      }) as unknown as HTMLCanvasElement,
+  } // browser pieces jsdom lacks, passed in
+  const knotWithPicture = { ...rows[2], image: 'items/knot-tying-1a2b3c4d.webp', modifiedAt: '2026-11-03T03:00:00.000Z' } // the row after the upload
+
+  beforeEach(() => {
+    URL.createObjectURL = vi.fn(() => 'blob:preview') // jsdom has no object URLs
+    URL.revokeObjectURL = vi.fn()
+  })
+
+  /**
+   * Opens Knot Tying's sheet, chooses a file and presses Save picture.
+   * @param name the name the row shows
+   */
+  async function uploadForKnot(name = 'Knot Tying') {
+    openSheet(name)
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement // the hidden input
+    fireEvent.change(input, { target: { files: [new File(['x'], 'photo.png', { type: 'image/png' })] } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Save picture' }))
+  }
+
+  it('replaces the row in place after a saved picture and keeps a pending name edit pending', async () => {
+    // Catches a picture save that drops the admin's unsaved edits or reshuffles the list.
+    const spy = stubApi({ picture: () => Response.json({ honor: knotWithPicture }) })
+    await openScreen(deps)
+    openSheet('Knot Tying')
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Knots' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    await uploadForKnot('Knots') // the row shows the pending name
+    expect(await screen.findByText('Picture saved.')).toBeInTheDocument()
+    const call = spy.mock.calls.find(([url]) => String(url).startsWith('/api/items/picture'))! // the upload
+    expect(String(call[0])).toBe('/api/items/picture?id=knot-tying&seen=') // the row had no picture
+    expect((call[1] as RequestInit).body).toBe(resized) // the resized bytes
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.getByRole('button', { name: 'Save (1 change)' })).toBeInTheDocument() // the rename is still pending
+    const names = screen.getAllByRole('button', { name: /^(Africa Lore|Camp Shirt|Knots|Nature Walk)$/ }).map((b) => b.textContent)
+    expect(names).toEqual(['Africa Lore', 'Camp Shirt', 'Knots', 'Nature Walk']) // same place
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' }))
+    await screen.findByText('Saved 1 change.')
+    expect(postBodies(spy)[0]).toEqual({ changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots' } }] }) // the guard still names the old name
+  })
+
+  it('flags a field another admin changed when a picture is saved, with the latest values', async () => {
+    // Catches a picture save that hides another admin's rename behind a fresh change time.
+    stubApi({ picture: () => Response.json({ honor: { ...knotWithPicture, name: 'Knot Alpha' } }) }) // renamed meanwhile
+    await openScreen(deps)
+    await uploadForKnot()
+    expect(await screen.findByText('Picture saved.')).toBeInTheDocument()
+    expect(screen.getAllByText('This item has been updated.').length).toBeGreaterThan(0) // the stale note shows
+    expect(screen.getAllByText('Latest: Knot Alpha · Recreation · RM 4.00 · Active · 12 in stock').length).toBeGreaterThan(0) // with the other admin's values
+  })
+
+  /**
+   * Saves Knot Tying's price while another admin has renamed it, so the row shows the "Latest: Knot Alpha" note.
+   * @param picture answers the later picture upload
+   */
+  async function openFlaggedKnotForPicture(picture: Handler) {
+    stubApi({
+      picture,
+      changes: () =>
+        Response.json({ honors: [{ ...rows[2], name: 'Knot Alpha', priceCents: 550, modifiedAt: '2026-11-03T05:00:00.000Z' }] }),
+    })
+    await openScreen(deps)
+    openSheet('Knot Tying')
+    fireEvent.change(screen.getByLabelText('Price (RM)'), { target: { value: '5.50' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' }))
+    await screen.findByText('Saved 1 change.')
+    expect(screen.getByText('Latest: Knot Alpha · Recreation · RM 5.50 · Active · 12 in stock')).toBeInTheDocument() // the note is up
+    await uploadForKnot()
+  }
+
+  it('clears an older save-raised note when a picture save shows nothing else out of date', async () => {
+    // Catches a "This item has been updated" note that stays after a picture save whose answer matches what the row shows.
+    await openFlaggedKnotForPicture(() =>
+      Response.json({ honor: { ...knotWithPicture, name: 'Knot Tying', priceCents: 550 } }),
+    ) // the answer agrees with the shown values
+    expect(await screen.findByText('Picture saved.')).toBeInTheDocument()
+    expect(screen.queryByText(/^Latest: /)).not.toBeInTheDocument() // the old note is gone
+  })
+
+  it('drops an older save-raised note when a picture conflict brings the latest rows', async () => {
+    // Catches an old "Latest: Knot Alpha" line left on a row that a picture conflict just refreshed.
+    await openFlaggedKnotForPicture(() =>
+      Response.json({ error: 'conflict', honors: [{ ...knotWithPicture, name: 'Knot Gamma' }], deletedIds: [] }, { status: 409 }),
+    )
+    await waitFor(() => expect(screen.getAllByText('Knot Gamma').length).toBeGreaterThan(0)) // the list shows the newest values
+    expect(screen.queryByText(/^Latest: /)).not.toBeInTheDocument() // the older note is gone
+  })
+
+  it('deletes with the picture save as the guard after an unsaved edit on the same item', async () => {
+    // Catches a Delete that sends the old change time and gets a false conflict for the admin's own picture save.
+    const campWithPicture = { ...rows[1], image: 'items/camp-shirt-1a2b3c4d.webp', modifiedAt: '2026-11-03T03:00:00.000Z' } // after the upload
+    const spy = stubApi({ picture: () => Response.json({ honor: campWithPicture }) })
+    await openScreen(deps)
+    const stock = screen.getByRole('textbox', { name: 'Stock of Camp Shirt' })
+    fireEvent.change(stock, { target: { value: '9' } })
+    fireEvent.blur(stock) // a pending edit on the row
+    await uploadForKnot('Camp Shirt')
+    expect(await screen.findByText('Picture saved.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete item' }))
+    await act(async () => void fireEvent.click(screen.getAllByRole('button', { name: 'Delete item' }).at(-1)!))
+    expect(postBodies(spy, '/api/items/delete')[0].seen.modifiedAt).toBe('2026-11-03T03:00:00.000Z') // the new change time
+    expect(screen.queryByText('Camp Shirt')).not.toBeInTheDocument() // the row goes
+  })
+
+  it('shows the existing signed-out note when the session has ended', async () => {
+    // Catches an expired session that reads as a plain failure.
+    stubApi({ picture: () => Response.json({}, { status: 403 }) })
+    await openScreen(deps)
+    await uploadForKnot()
+    expect(await screen.findByText(/^Your sign-in has ended\. Open this page in a new tab to sign in, then save here\./)).toBeInTheDocument()
+  })
+
+  it('takes the item off the list and closes the sheet when another admin deleted it', async () => {
+    // Catches a deleted item left on the list, or a sheet that stays open on a row that is gone.
+    stubApi({
+      picture: () => Response.json({ error: 'conflict', honors: [], deletedIds: ['knot-tying'] }, { status: 409 }),
+    })
+    await openScreen(deps)
+    await uploadForKnot()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Knot Tying' })).not.toBeInTheDocument())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('applies the current row on a conflict and says the item was updated', async () => {
+    // Catches a refused upload that leaves the sheet showing the old picture.
+    stubApi({
+      picture: () => Response.json({ error: 'conflict', honors: [knotWithPicture], deletedIds: [] }, { status: 409 }),
+    })
+    await openScreen(deps)
+    await uploadForKnot()
+    expect(await screen.findByText('This item has been updated.')).toBeInTheDocument()
+    expect(document.querySelector('dialog img')).toHaveAttribute('src', '/pictures/items/knot-tying-1a2b3c4d.webp')
   })
 })

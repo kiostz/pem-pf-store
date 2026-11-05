@@ -37,6 +37,11 @@ export type SendResult =
 export type AddResult =
   | { kind: 'added'; honor: AdminHonor }
   | { kind: 'name-taken' | 'id-taken' | 'signed-out' | 'error' }
+// The result of uploading a picture.
+export type PictureResult =
+  | { kind: 'saved'; honor: AdminHonor }
+  | { kind: 'conflict'; honors: AdminHonor[]; deletedIds: string[] }
+  | { kind: 'signed-out' | 'error' }
 // The result of deleting an item.
 export type DeleteResult =
   | { kind: 'deleted'; deletedId: string }
@@ -55,6 +60,7 @@ function isAdminHonor(value: unknown): value is AdminHonor {
     typeof row.id === 'string' && // the id
     typeof row.name === 'string' && // the name
     typeof row.category === 'string' && // the category
+    (row.image === null || typeof row.image === 'string') && // an R2 key or none
     (row.status === 'active' || row.status === 'hidden') && // the status
     Number.isInteger(row.stock) && // a whole number, never text
     Number.isInteger(row.priceCents) && // whole cents
@@ -251,5 +257,34 @@ export async function deleteItem(
     return { kind: 'conflict', honors } // changed since viewing
   if (answer.status === 400 && field(answer.body, 'error') === 'built-in')
     return { kind: 'built-in' } // never deleted
+  return { kind: 'error' } // anything else
+}
+
+/**
+ * Uploads an item's new picture; it is live at once.
+ * @param id the item's id
+ * @param seen the picture key the admin saw, null when the item had none
+ * @param picture the resized picture, WebP or PNG
+ * @return the saved row, a conflict with the current rows, signed-out, or error
+ */
+export async function uploadPicture(
+  id: string,
+  seen: string | null,
+  picture: Blob,
+): Promise<PictureResult> {
+  const query = new URLSearchParams({ id, seen: seen ?? '' }) // an empty seen means no picture
+  const answer = await call(`/api/items/picture?${query}`, {
+    method: 'POST',
+    headers: { 'Content-Type': picture.type },
+    body: picture,
+  }) // the bytes, typed as the Worker expects
+  if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
+  if (answer === null) return { kind: 'error' } // the network failed
+  const honor = field(answer.body, 'honor') // the saved row
+  if (answer.status === 200 && isAdminHonor(honor)) return { kind: 'saved', honor } // stored
+  const honors = field(answer.body, 'honors') // the current rows on a conflict
+  const deletedIds = field(answer.body, 'deletedIds') // the ids another admin deleted
+  if (answer.status === 409 && isHonorList(honors) && isTextList(deletedIds))
+    return { kind: 'conflict', honors, deletedIds } // nothing stored
   return { kind: 'error' } // anything else
 }

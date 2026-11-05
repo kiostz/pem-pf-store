@@ -8,6 +8,7 @@ import { ItemSheet } from './ItemSheet.tsx' // Edit and Add
 import { LoadMore } from './LoadMore.tsx' // the end of the list
 import { SavePill } from './SavePill.tsx' // Discard and Save
 import { SortControl } from './SortControl.tsx' // the order
+import type { ResizeDeps } from './resize-picture.ts' // the passed-in browser pieces
 import { useAdminHonors } from './use-admin-honors.ts' // the screen's state
 
 const SKELETON_ROWS = 8 // how many skeleton rows the loading state shows
@@ -24,9 +25,10 @@ type Sheet = { mode: 'add' } | { mode: 'edit'; id: string }
 
 /**
  * The Items screen.
+ * @param pictureDeps the decoder and canvas factory a picture resize uses; the browser's own when omitted
  * @return the toolbar, the rows with Load more, the sheet, and the Save pill with its notes
  */
-export function ItemsScreen() {
+export function ItemsScreen({ pictureDeps }: { pictureDeps?: ResizeDeps }) {
   const items = useAdminHonors() // the screen's state
   const { pages, meta, pending, conflicts, count, saveState, discarded, changesView } = items // read often
   const [sheet, setSheet] = useState<Sheet | null>(null) // the open sheet
@@ -254,6 +256,7 @@ export function ItemsScreen() {
           onDone={() => undefined} // an Add never uses Done
           onAdd={items.add} // saved at once
           onDelete={items.remove} // never offered in Add
+          onPicture={items.uploadItemPicture} // never offered in Add
           onClose={() => setSheet(null)} // goes away
         />
       )}
@@ -275,6 +278,8 @@ export function ItemsScreen() {
           onDone={(values) => items.setDetails(editing, values)} // into the pending list
           onAdd={items.add} // never used in Edit
           onDelete={items.remove} // after the Delete dialog
+          onPicture={items.uploadItemPicture} // saved at once
+          pictureDeps={pictureDeps} // the browser's own unless a test passes fakes
           onClose={() => setSheet(null)} // goes away
         />
       )}

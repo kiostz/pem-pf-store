@@ -1,9 +1,11 @@
 // Tests for the Item sheet (Edit and Add): the shown times, what Done hands back, the field errors, one request per Add, and who sees Delete.
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react' // rendering and events
-import { describe, expect, it, vi } from 'vitest' // test API
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest' // test API
+import type { AdminHonor } from '../../../workers/admin/src/admin-types.ts' // the row shape
 import { ItemSheet } from './ItemSheet.tsx' // the code under test
 import { makeItem, meta, rows } from './item-fixtures.ts' // shared data
+import type { PictureOutcome } from './use-admin-honors.ts' // what an upload ends in
 
 const knot = rows[2] // Knot Tying, built in
 const shirt = rows[1] // Camp Shirt, Club-added
@@ -18,9 +20,10 @@ function openSheet(props: Partial<React.ComponentProps<typeof ItemSheet>> = {}) 
     onDone: vi.fn(),
     onAdd: vi.fn(() => Promise.resolve('added' as const)),
     onDelete: vi.fn(() => Promise.resolve({ kind: 'deleted' as const })),
+    onPicture: vi.fn<(honor: AdminHonor, picture: Blob) => Promise<PictureOutcome>>(() => Promise.resolve('saved')),
     onClose: vi.fn(),
   } // the callbacks
-  render(
+  const view = render(
     <ItemSheet
       mode="edit"
       honor={knot}
@@ -32,7 +35,7 @@ function openSheet(props: Partial<React.ComponentProps<typeof ItemSheet>> = {}) 
       {...props}
     />,
   )
-  return spies
+  return { ...spies, rerender: view.rerender } // the spies and a way to re-render with new props
 }
 
 describe('Edit sheet', () => {
@@ -170,5 +173,187 @@ describe('Add sheet', () => {
       expect(spies.onClose).not.toHaveBeenCalled()
       cleanup() // the next round renders afresh
     }
+  })
+})
+
+describe('Picture section', () => {
+  const resized = new Blob(['small'], { type: 'image/webp' }) // what the fake resize hands back
+  const pictureDeps = {
+    decode: vi.fn(() => Promise.resolve({ width: 10, height: 10, close: vi.fn() } as unknown as ImageBitmap)),
+    makeCanvas: () =>
+      ({
+        getContext: () => ({ drawImage: vi.fn() }),
+        toBlob: (done: (blob: Blob | null) => void) => done(resized),
+      }) as unknown as HTMLCanvasElement,
+  } // browser pieces jsdom lacks, passed in
+  const withPicture = makeItem({ ...knot, image: 'items/knot-tying.webp' }) // a row that has a picture
+
+  beforeEach(() => {
+    URL.createObjectURL = vi.fn(() => 'blob:preview-1') // jsdom has no object URLs
+    URL.revokeObjectURL = vi.fn()
+    pictureDeps.decode.mockClear()
+  })
+  afterEach(() => cleanup())
+
+  /** Chooses a file in the hidden input and waits for the preview. */
+  async function choose() {
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement // the hidden input
+    fireEvent.change(input, { target: { files: [new File(['x'], 'photo.png', { type: 'image/png' })] } })
+    await screen.findByRole('button', { name: 'Save picture' })
+  }
+
+  it('shows the current picture from /pictures, or the Category mark when there is none', () => {
+    // Catches a picture loaded from the shop's domain in the admin, or a broken image where there is none.
+    openSheet({ honor: withPicture, pictureDeps })
+    expect(screen.getByText('Picture')).toBeInTheDocument()
+    expect(document.querySelector('dialog img')).toHaveAttribute('src', '/pictures/items/knot-tying.webp')
+    expect(screen.getByRole('button', { name: 'Replace picture' })).toBeInTheDocument()
+    cleanup()
+    openSheet({ pictureDeps })
+    expect(document.querySelector('dialog img')).toBeNull()
+    expect(screen.getByTestId('category-mark')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Choose picture' })).toBeInTheDocument()
+  })
+
+  it('opens the file chooser from Choose picture and Replace picture, but not while a file is being prepared', async () => {
+    // Catches a Choose button that does nothing, so no picture can ever be added.
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined) // jsdom has no chooser
+    onTestFinished(() => click.mockRestore()) // restored even when an assertion below fails
+    openSheet({ pictureDeps })
+    fireEvent.click(screen.getByRole('button', { name: 'Choose picture' }))
+    expect(click).toHaveBeenCalledTimes(1) // the hidden file input opened
+    cleanup()
+    openSheet({ honor: withPicture, pictureDeps })
+    fireEvent.click(screen.getByRole('button', { name: 'Replace picture' }))
+    expect(click).toHaveBeenCalledTimes(2) // Replace opens it too
+    const stuck = { ...pictureDeps, decode: vi.fn(() => new Promise<ImageBitmap>(() => undefined)) } // a resize that never ends
+    cleanup()
+    openSheet({ pictureDeps: stuck })
+    fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [new File(['x'], 'photo.png', { type: 'image/png' })] } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose picture' }))
+    expect(click).toHaveBeenCalledTimes(2) // not while Preparing
+  })
+
+  it('has no Picture section in Add mode', () => {
+    // Catches an upload offered for an item that does not exist yet.
+    openSheet({ mode: 'add', honor: undefined, pictureDeps })
+    expect(screen.queryByText('Picture')).not.toBeInTheDocument()
+    expect(document.querySelector('input[type="file"]')).toBeNull()
+  })
+
+  it('shows the preview with Save picture and Cancel after a file is chosen, and sends nothing yet', async () => {
+    // Catches an upload that starts before the admin has seen the result.
+    const spies = openSheet({ pictureDeps })
+    await choose()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+    expect(document.querySelector('dialog img[src="blob:preview-1"]')).not.toBeNull()
+    expect(spies.onPicture).not.toHaveBeenCalled()
+  })
+
+  it('drops the preview on Cancel and revokes its object URL', async () => {
+    // Catches a leaked object URL, or a preview that stays after Cancel.
+    openSheet({ pictureDeps })
+    await choose()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-1')
+    expect(screen.queryByRole('button', { name: 'Save picture' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Choose picture' })).toHaveFocus()
+  })
+
+  it('sends once for a double click, reading Saving… and disabled meanwhile', async () => {
+    // Catches a double click that uploads two objects.
+    let finish: (outcome: PictureOutcome) => void = () => undefined
+    const onPicture = vi.fn(() => new Promise<PictureOutcome>((resolve) => (finish = resolve)))
+    openSheet({ pictureDeps, onPicture })
+    await choose()
+    const save = screen.getByRole('button', { name: 'Save picture' })
+    fireEvent.click(save)
+    fireEvent.click(save)
+    expect(onPicture).toHaveBeenCalledTimes(1)
+    expect(onPicture).toHaveBeenCalledWith(knot, resized)
+    expect(screen.getByRole('button', { name: 'Saving…' })).toHaveAttribute('aria-disabled', 'true')
+    await act(async () => finish('saved'))
+  })
+
+  it('says Picture saved. and shows the new picture after a save', async () => {
+    // Catches a save with no confirmation, or a sheet that keeps showing the old picture.
+    const spies = openSheet({ pictureDeps, honor: withPicture })
+    await choose()
+    await act(async () => void fireEvent.click(screen.getByRole('button', { name: 'Save picture' })))
+    expect(screen.getByRole('status')).toHaveTextContent('Picture saved.')
+    spies.rerender(
+      <ItemSheet
+        mode="edit"
+        honor={{ ...withPicture, image: 'items/knot-tying-1a2b3c4d.webp' }}
+        categories={meta.categories}
+        currency={meta.currency}
+        defaultPriceCents={meta.defaultPriceCents}
+        onDone={spies.onDone}
+        onAdd={spies.onAdd}
+        onDelete={spies.onDelete}
+        onPicture={spies.onPicture}
+        onClose={spies.onClose}
+        pictureDeps={pictureDeps}
+      />,
+    ) // the screen hands the saved row down
+    expect(document.querySelector('dialog img')).toHaveAttribute('src', '/pictures/items/knot-tying-1a2b3c4d.webp')
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-1')
+    expect(screen.getByRole('button', { name: 'Replace picture' })).toHaveFocus()
+  })
+
+  it('shows the failure with Try again, which sends the same picture again', async () => {
+    // Catches a failed upload that loses the picture, or one that fails silently.
+    const onPicture = vi.fn(() => Promise.resolve('error' as PictureOutcome))
+    openSheet({ pictureDeps, onPicture })
+    await choose()
+    await act(async () => void fireEvent.click(screen.getByRole('button', { name: 'Save picture' })))
+    expect(screen.getByRole('alert')).toHaveTextContent("The picture wasn't saved.")
+    await act(async () => void fireEvent.click(screen.getByRole('button', { name: 'Try again' })))
+    expect(onPicture).toHaveBeenCalledTimes(2)
+    expect(onPicture.mock.calls[1]).toEqual([knot, resized])
+  })
+
+  it('says This item has been updated. on a conflict and drops the preview', async () => {
+    // Catches a refused upload shown as saved.
+    openSheet({ pictureDeps, onPicture: vi.fn(() => Promise.resolve('conflict' as PictureOutcome)) })
+    await choose()
+    await act(async () => void fireEvent.click(screen.getByRole('button', { name: 'Save picture' })))
+    expect(screen.getByRole('status')).toHaveTextContent('This item has been updated.')
+    expect(screen.queryByRole('button', { name: 'Save picture' })).not.toBeInTheDocument()
+  })
+
+  it('shows the sign-in line when the session has ended', async () => {
+    // Catches an expired session reported as a plain failure with a Try again that cannot work.
+    openSheet({ pictureDeps, onPicture: vi.fn(() => Promise.resolve('signed-out' as PictureOutcome)) })
+    await choose()
+    await act(async () => void fireEvent.click(screen.getByRole('button', { name: 'Save picture' })))
+    expect(screen.getByRole('alert')).toHaveTextContent('Your sign-in has ended.')
+  })
+
+  it('explains a file that will not open and sends nothing', async () => {
+    // Catches a text file renamed x.png reaching the Worker.
+    pictureDeps.decode.mockRejectedValueOnce(new Error('bad'))
+    const spies = openSheet({ pictureDeps })
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [new File(['not a picture'], 'x.png', { type: 'image/png' })] } })
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "This file can't be used as a picture. Choose a PNG, JPEG or WebP file.",
+    )
+    expect(spies.onPicture).not.toHaveBeenCalled()
+  })
+
+  it('survives the sheet closing mid-save', async () => {
+    // Catches a state update or thrown error after unmount, and a leaked object URL.
+    let finish: (outcome: PictureOutcome) => void = () => undefined
+    const onPicture = vi.fn(() => new Promise<PictureOutcome>((resolve) => (finish = resolve)))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined) // React warns on a late update
+    openSheet({ pictureDeps, onPicture })
+    await choose()
+    fireEvent.click(screen.getByRole('button', { name: 'Save picture' }))
+    cleanup() // the sheet goes mid-save
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-1')
+    await act(async () => finish('saved'))
+    expect(errors).not.toHaveBeenCalled()
+    errors.mockRestore()
   })
 })

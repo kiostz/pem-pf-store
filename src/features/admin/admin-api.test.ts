@@ -7,6 +7,7 @@ import {
   loadItemPage,
   loadMeta,
   sendHonorChanges,
+  uploadPicture,
 } from './admin-api.ts' // the code under test
 import { makeItem, meta } from './item-fixtures.ts' // shared rows
 
@@ -250,5 +251,64 @@ describe('deleteItem', () => {
     expect(await deleteItem(request)).toEqual({ kind: 'signed-out' })
     stubFetch(Response.json({ error: 'server' }, { status: 500 }))
     expect(await deleteItem(request)).toEqual({ kind: 'error' })
+  })
+})
+
+describe('uploadPicture', () => {
+  const picture = new Blob(['webp-bytes'], { type: 'image/webp' }) // a resized picture
+  const withPicture = { ...knot, image: 'items/knot-tying-1a2b3c4d.webp' } // the row after the upload
+
+  it('posts the bytes with the picture type to the picture route, and leaves seen empty for null', async () => {
+    // Catches a JSON body or the wrong type (the Worker refuses both), a wrongly encoded seen key, or a followed Access redirect.
+    const spy = stubFetch(Response.json({ honor: withPicture }))
+    await uploadPicture('knot-tying', 'items/knot-tying.webp', picture)
+    expect(spy).toHaveBeenCalledWith(
+      '/api/items/picture?id=knot-tying&seen=items%2Fknot-tying.webp',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'image/webp' },
+        body: picture,
+        redirect: 'manual',
+        credentials: 'same-origin',
+      }),
+    )
+    await uploadPicture('knot-tying', null, picture)
+    expect(spy).toHaveBeenLastCalledWith('/api/items/picture?id=knot-tying&seen=', expect.anything())
+  })
+
+  it('maps 200 to saved with the checked row, and a row with a wrong image type to error', async () => {
+    // Catches a row of the wrong shape entering the list.
+    stubFetch(Response.json({ honor: withPicture }))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'saved', honor: withPicture })
+    stubFetch(Response.json({ honor: { ...knot, image: 7 } }))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
+  })
+
+  it('maps 409 to conflict with the rows and deleted ids', async () => {
+    // Catches a refused upload shown as saved, or a deleted item left in the list.
+    stubFetch(Response.json({ error: 'conflict', honors: [withPicture], deletedIds: [] }, { status: 409 }))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({
+      kind: 'conflict',
+      honors: [withPicture],
+      deletedIds: [],
+    })
+    stubFetch(Response.json({ error: 'conflict', honors: [], deletedIds: ['knot-tying'] }, { status: 409 }))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({
+      kind: 'conflict',
+      honors: [],
+      deletedIds: ['knot-tying'],
+    })
+  })
+
+  it('maps a 403 or a blocked redirect to signed-out, and a 500 or a network failure to error', async () => {
+    // Catches an ended session or a dead network read as a save.
+    stubFetch(Response.json({}, { status: 403 }))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'signed-out' })
+    stubFetch(opaqueRedirect())
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'signed-out' })
+    stubFetch(Response.json({ error: 'server' }, { status: 500 }))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
+    stubFetch(new TypeError('Failed to fetch'))
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
   })
 })
