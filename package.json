@@ -16,8 +16,7 @@
     "test": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "seed": "node scripts/seed/seed-data.ts",
-    "patches": "node scripts/patches/import-patches.ts"
+    "seed": "node scripts/seed/seed-data.ts"
   },
   "dependencies": {
     "@marsidev/react-turnstile": "1.6.3",
