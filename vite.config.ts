@@ -23,6 +23,7 @@ export default defineConfig(({ command, mode }) => {
     build: { rolldownOptions: { output: { comments: { legal: true } } } },
     // Dev only: `/api/...` goes to the local API Worker (`npm run dev` in workers/, port 8787), so the shop is same-origin and the Worker's CORS stays untouched.
     server: {
+      watch: { ignored: ['**/.wrangler/**'] }, // guard: keeps local wrangler writes under .wrangler/ from ever reaching the dev watcher
       proxy: {
         '/api': {
           target: 'http://localhost:8787', // the local API Worker

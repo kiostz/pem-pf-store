@@ -48,6 +48,10 @@ To try the whole order flow locally, start the API Worker (`npm run dev` in `wor
 
 `npm run patches` copies each honor's patch picture from the Pathfinder Wiki into `public/patches/`, sets `image` in `public/data/honors.json` and writes `scripts/patches/import-report.md`. It needs `cwebp` (`brew install webp`). If it ends with failed requests, run it again: it only fetches the honors that still have no picture.
 
+## Pictures
+
+GitHub Pages serves `public/patches/` to the site. The upload step copies each picture to the R2 bucket `pem-pathfinder-store-pictures` under `items/<id>.webp`. The site switches to R2 later.
+
 ## Test
 
     npm run lint
