@@ -110,3 +110,42 @@ export interface SettingsChange {
 export type SettingsResult =
   | { kind: 'saved'; settings: AdminSettings } // Written.
   | { kind: 'conflict'; settings: AdminSettings } // Nothing written: the settings as they are now.
+
+// The editable fields of a club; the four optional ones are null when blank.
+export interface ClubFields {
+  name: string // Shown name; never "other" in any case.
+  area: string | null // Optional detail.
+  language: string | null // Optional detail.
+  location: string | null // Optional detail.
+  churchName: string | null // Optional detail.
+}
+
+// One club as the admin lists it; lists are always in shown order.
+export interface AdminClub extends ClubFields {
+  id: number // Never changes.
+}
+
+// A club edit: what the admin saw (`from`) and wants (`to`).
+export interface ClubEdit {
+  id: number // Which club.
+  from: ClubFields // The values the admin saw.
+  to: ClubFields // The wanted values.
+}
+
+// A club removal, guarded by what the admin saw.
+export interface ClubRemove {
+  id: number // Which club.
+  seen: ClubFields // The values the admin saw.
+}
+
+// A reorder: the id order the admin saw and the wanted one.
+export interface ClubOrder {
+  from: number[] // Ids in the order the admin saw.
+  to: number[] // The same ids in the wanted order.
+}
+
+// The outcome of a club write.
+export type ClubResult =
+  | { kind: 'saved'; clubs: AdminClub[] } // Written (or already so): the whole list.
+  | { kind: 'conflict'; clubs: AdminClub[] } // Nothing written: the list as it is now.
+  | { kind: 'name-taken' } // Another club holds the name, ignoring case.

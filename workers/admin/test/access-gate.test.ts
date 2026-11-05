@@ -3,6 +3,9 @@
 import { describe, expect, it } from 'vitest'
 import { call, postChanges, postTo, seedHonors } from './helpers'
 
+// A club's fields for the club bodies.
+const CLUB = { name: 'Lions', area: null, language: null, location: null, churchName: null }
+
 // Each request the gate must guard, as a label and a sender.
 const guarded: [string, (options?: Parameters<typeof call>[2]) => Promise<Response>][] = [
   ['GET /api/items', (o) => call('/api/items', {}, o)],
@@ -14,6 +17,11 @@ const guarded: [string, (options?: Parameters<typeof call>[2]) => Promise<Respon
   ['POST /api/orders/step', (o) => postTo('/api/orders/step', { number: 'PF-20261105-ABCD', from: 'new', to: 'paid', restock: false }, {}, o)],
   ['GET /api/settings', (o) => call('/api/settings', {}, o)],
   ['POST /api/settings', (o) => postTo('/api/settings', { orderEmailOn: { from: true, to: false } }, {}, o)],
+  ['GET /api/clubs', (o) => call('/api/clubs', {}, o)],
+  ['POST /api/clubs', (o) => postTo('/api/clubs', { name: 'Lions', area: null, language: null, location: null, churchName: null }, {}, o)],
+  ['POST /api/clubs/edit', (o) => postTo('/api/clubs/edit', { id: 1, from: CLUB, to: { ...CLUB, name: 'Leos' } }, {}, o)],
+  ['POST /api/clubs/remove', (o) => postTo('/api/clubs/remove', { id: 1, seen: CLUB }, {}, o)],
+  ['POST /api/clubs/order', (o) => postTo('/api/clubs/order', { from: [1, 2], to: [2, 1] }, {}, o)],
   ['GET /api/nope', (o) => call('/api/nope', {}, o)],
 ]
 

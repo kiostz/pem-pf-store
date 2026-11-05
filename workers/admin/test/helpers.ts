@@ -226,3 +226,82 @@ export async function stepOf(number: string): Promise<string> {
   if (row === null) throw new Error('no order') // A test bug.
   return row.step // The step text.
 }
+
+// A club row to seed; missing fields get defaults.
+export interface SeedClub {
+  id: number // The row id.
+  name?: string // Defaults to `Club <id>`.
+  area?: string | null // Defaults to null.
+  language?: string | null // Defaults to null.
+  location?: string | null // Defaults to null.
+  churchName?: string | null // Defaults to null.
+  position?: number // Defaults to the id.
+}
+
+/**
+ * Replaces every club in the test database with the given rows, in one batch.
+ * @param clubs The rows to insert.
+ * @return Nothing.
+ */
+export async function seedClubs(clubs: SeedClub[]): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM clubs'), // Start clean.
+    ...clubs.map((club) => env.DB.prepare('INSERT INTO clubs (id, name, area, language, location, church_name, position) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(club.id, club.name ?? `Club ${club.id}`, club.area ?? null, club.language ?? null, club.location ?? null, club.churchName ?? null, club.position ?? club.id)), // One insert each.
+  ]) // One transaction.
+}
+
+/**
+ * Reads every club row as stored, in id order, for before/after comparisons.
+ * @return The raw rows.
+ */
+export async function clubRows(): Promise<Record<string, unknown>[]> {
+  return (await env.DB.prepare('SELECT * FROM clubs ORDER BY id').all()).results // Every column.
+}
+
+/**
+ * Builds the JSON an `AdminClub` has on the wire.
+ * @param id The row id.
+ * @param over Fields that differ from the seeded defaults.
+ * @return The expected club.
+ */
+export function clubWire(id: number, over: Record<string, unknown> = {}): Record<string, unknown> {
+  return { id, name: `Club ${id}`, area: null, language: null, location: null, churchName: null, ...over } // Seed defaults plus overrides.
+}
+
+// A club's four optional fields (no name), all blank.
+export const BLANK = { area: null, language: null, location: null, churchName: null }
+
+/**
+ * Builds a database stand-in that runs a change right after the first read whose SQL matches, so a test can lose a race between a read and the write after it.
+ * @param pattern The SQL of the read to follow.
+ * @param change What another admin does in that gap.
+ * @return A database for `CallOptions.env.DB`; every other statement and `batch` pass through.
+ */
+export function racingAfterRead(pattern: RegExp, change: () => Promise<unknown>): D1Database {
+  let fired = false // The change happens once.
+  /**
+   * Wraps a prepared statement so its first matching read or write fires the change.
+   * @param statement The real prepared statement.
+   * @return A statement that keeps following after `bind` and settles on a read, `run` or `raw`.
+   */
+  const follow = (statement: D1PreparedStatement): D1PreparedStatement => ({
+    bind: (...values: unknown[]) => follow(statement.bind(...values)), // Keep following after the values are bound.
+    all: async () => settle(await statement.all()), // A list read.
+    first: async (column?: string) => settle(await (column === undefined ? statement.first() : statement.first(column))), // A one-row read.
+    run: async () => settle(await statement.run()), // A matched write also fires the change, after it runs.
+    raw: async (...args: unknown[]) => settle(await (statement.raw as (...a: unknown[]) => Promise<unknown>)(...args)), // Raw rows pass through.
+  }) as unknown as D1PreparedStatement
+  /**
+   * Fires the change once, after the first matching statement (read, `run` or `raw`) has its result.
+   * @param result What the statement returned.
+   * @return The same result, unchanged by the change that fires after it.
+   */
+  const settle = async <T,>(result: T): Promise<T> => {
+    if (!fired) { fired = true; await change() } // The other admin writes now.
+    return result // What the read saw before the change.
+  }
+  return {
+    prepare: (sql: string) => (pattern.test(sql) ? follow(env.DB.prepare(sql)) : env.DB.prepare(sql)), // Only the matching read is wrapped.
+    batch: (statements: D1PreparedStatement[]) => env.DB.batch(statements), // Real statements only.
+  } as unknown as D1Database
+}

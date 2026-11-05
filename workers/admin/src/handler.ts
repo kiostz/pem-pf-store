@@ -1,6 +1,7 @@
 // Admin Worker request handler: the Access gate, CSRF checks, router, headers and short error codes.
 
 import { addHonor } from './add-honor' // The Add.
+import { addClub, editClub, readAdminClubs, removeClub, reorderClubs } from './clubs' // The club reads and writes.
 import { deleteHonor } from './delete-honor' // The Delete.
 import { isItemId } from './item-id' // The item id check.
 import { readAdminPage, readMeta, saveHonorChanges } from './honors' // The reads and the guarded save.
@@ -12,6 +13,8 @@ import { hasSignature, MAX_PICTURE_BYTES, type PictureType, uploadPicture } from
 import { PICTURE_KEY, readPicture } from './pictures' // The key pattern and the picture read.
 import { parseDeleteRequest, parseHonorChanges, parseNewItem } from './validate-changes' // The body validators.
 import { parseSettingsChange, parseStepChange } from './validate-orders' // The order and settings body validators.
+import { parseClubEdit, parseClubFields, parseClubOrder, parseClubRemove } from './validate-clubs' // The club body validators.
+import type { ClubResult } from './admin-types' // The club write outcome.
 
 // The built admin page files, handed in by index.ts (tests pass stand-ins).
 export interface Pages {
@@ -289,6 +292,26 @@ async function postSettings(request: Request, env: Env): Promise<Response> {
 }
 
 /**
+ * Builds the handler of one club write: CSRF checks, validation, the guarded write and the answer.
+ * @param parse The body validator; null when invalid.
+ * @param write The guarded write.
+ * @param okStatus The status of a successful write.
+ * @return The route handler.
+ */
+function clubWrite<T>(parse: (body: unknown) => T | null, write: (db: D1Database, value: T) => Promise<ClubResult>, okStatus: number): (request: Request, env: Env) => Promise<Response> {
+  return async (request, env) => { // The route handler.
+    const read = await readJsonBody(request) // The shared checks.
+    if ('refusal' in read) return read.refusal // Refused.
+    const value = parse(read.body) // Null when invalid.
+    if (value === null) return json({ error: 'invalid' }, 400) // Fails validation.
+    const result = await write(env.DB, value) // The guarded write.
+    if (result.kind === 'saved') return json({ clubs: result.clubs }, okStatus) // As saved: the whole list.
+    if (result.kind === 'name-taken') return json({ error: 'name-taken' }, 409) // Another club has the name.
+    return json({ error: 'conflict', clubs: result.clubs }, 409) // Changed since viewing; nothing written.
+  }
+}
+
+/**
  * Handles `POST /api/items/changes`: CSRF checks, validation and the guarded save.
  * @param request The request.
  * @param env The Worker bindings.
@@ -395,6 +418,10 @@ export function createHandler(pages: Pages): ExportedHandlerFetchHandler<Env> {
     ['/api/orders', { GET: getOrders }], // A page of orders, or one by number.
     ['/api/orders/step', { POST: postOrderStep }], // A step change or cancel.
     ['/api/settings', { GET: async (_request, env) => json(await readAdminSettings(env.DB), 200), POST: postSettings }], // The order email switch.
+    ['/api/clubs', { GET: async (_request, env) => json({ clubs: await readAdminClubs(env.DB) }, 200), POST: clubWrite(parseClubFields, addClub, 201) }], // The club list; Add.
+    ['/api/clubs/edit', { POST: clubWrite(parseClubEdit, editClub, 200) }], // A rename or details change.
+    ['/api/clubs/remove', { POST: clubWrite(parseClubRemove, removeClub, 200) }], // Remove.
+    ['/api/clubs/order', { POST: clubWrite(parseClubOrder, reorderClubs, 200) }], // Move up or down.
     ['/api/meta', { GET: async (_request, env) => json(await readMeta(env.DB), 200) }], // Categories, currency, default price.
   ])
   return async (request, env, ctx) => { // The fetch handler.

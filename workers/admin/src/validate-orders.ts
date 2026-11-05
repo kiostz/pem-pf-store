@@ -9,7 +9,7 @@ import { ORDER_STEPS, parseOrderNumber } from './order-query' // The step list a
  * @param keys The only keys, all required.
  * @return True for a matching object.
  */
-function hasExactKeys(value: unknown, keys: string[]): value is Record<string, unknown> {
+export function hasExactKeys(value: unknown, keys: string[]): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false // Plain objects only.
   const actual = Object.keys(value) // The keys it has.
   return actual.length === keys.length && keys.every((key) => actual.includes(key)) // No extra, none missing.

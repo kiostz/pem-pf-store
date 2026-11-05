@@ -81,6 +81,10 @@ describe('the other write routes', () => {
     ['/api/items', { name: 'Camp Shirt', category: 'Shirt', priceCents: 400 }],
     ['/api/orders/step', { number: 'PF-20261105-ABCD', from: 'new', to: 'paid', restock: false }],
     ['/api/settings', { orderEmailOn: { from: true, to: false } }],
+    ['/api/clubs', { name: 'Lions', area: null, language: null, location: null, churchName: null }],
+    ['/api/clubs/edit', { id: 1, from: { name: 'A', area: null, language: null, location: null, churchName: null }, to: { name: 'B', area: null, language: null, location: null, churchName: null } }],
+    ['/api/clubs/remove', { id: 1, seen: { name: 'A', area: null, language: null, location: null, churchName: null } }],
+    ['/api/clubs/order', { from: [1, 2], to: [2, 1] }],
     ['/api/items/delete', { id: 'knot-tying', seen: { name: 'Knot Tying', category: 'Nature', priceCents: 400, status: 'active', stock: 12, modifiedAt: '2026-11-01T00:00:00.000Z' } }],
   ]
 
@@ -94,6 +98,15 @@ describe('the other write routes', () => {
     }
     expect(await fullRowOf('camp-shirt')).toBeNull()
     expect(await fullRowOf('knot-tying')).not.toBeNull()
+  })
+
+  it('refuses a body over 64 KB with 413 on the four club write routes', async () => {
+    // Catches a club route that reads an unbounded body.
+    for (const path of ['/api/clubs', '/api/clubs/edit', '/api/clubs/remove', '/api/clubs/order']) {
+      const res = await postTo(path, { pad: 'x'.repeat(70 * 1024) })
+      expect(res.status, path).toBe(413)
+      expect(await res.json()).toEqual({ error: 'too-large' })
+    }
   })
 
   it('answers 405 with Allow for the wrong method on every route', async () => {
@@ -111,6 +124,10 @@ describe('the other write routes', () => {
       ['/api/orders/step', 'PUT', 'POST'],
       ['/api/settings', 'PUT', 'GET, POST'],
       ['/api/settings', 'DELETE', 'GET, POST'],
+      ['/api/clubs', 'PUT', 'GET, POST'],
+      ['/api/clubs/edit', 'GET', 'POST'],
+      ['/api/clubs/remove', 'GET', 'POST'],
+      ['/api/clubs/order', 'DELETE', 'POST'],
     ]
     for (const [path, method, allow] of cases) {
       const res = await call(path, { method })
