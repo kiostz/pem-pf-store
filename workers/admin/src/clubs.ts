@@ -75,7 +75,12 @@ export async function editClub(db: D1Database, edit: ClubEdit): Promise<ClubResu
   if (await nameHeld(db, to.name, id)) return { kind: 'name-taken' } // Another club has the name.
   try { // The guarded write: every field compared with IS so nulls match.
     const result = await db.prepare('UPDATE clubs SET name = ?, area = ?, language = ?, location = ?, church_name = ? WHERE id = ? AND name IS ? AND area IS ? AND language IS ? AND location IS ? AND church_name IS ?').bind(to.name, to.area, to.language, to.location, to.churchName, id, from.name, from.area, from.language, from.location, from.churchName).run() // One statement, atomic.
-    if (result.meta.changes === 0) return { kind: 'conflict', clubs: await readAdminClubs(db) } // Moved after the read.
+    if (result.meta.changes === 0) { // Moved after the read.
+      const after = await readAdminClubs(db) // The list now.
+      const now = after.find((club) => club.id === id) // The club now.
+      if (now !== undefined && holds(now, to)) return { kind: 'saved', clubs: after } // An identical edit landed first: the same retry answer.
+      return { kind: 'conflict', clubs: after } // Really changed by someone else.
+    }
   } catch (error) { // A race may have taken the name.
     if (isUniqueError(error)) return { kind: 'name-taken' } // The exact-case UNIQUE.
     throw error // A real failure.
