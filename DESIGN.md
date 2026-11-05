@@ -341,6 +341,20 @@ The admin tabs reuse every token above; they add no colour, radius or duration.
 | Outcome lines        | a 14 px status line under the row header ("Step saved.", the conflict, the failure with Try again) and under the switch ("Saved.") | polite live regions, mounted before they speak |
 | Skeleton row         | 126 px (`h-31.5`), six rows, after `delay-loader`                     | a closed row's measured height (126 px at 375 px and at desktop width) |
 
+## Admin Clubs
+
+The Clubs tab reuses every token above; it adds no colour, radius or duration. Every action saves at once, so the screen has no Save pill.
+
+| Use               | Value                                                                 | Reason                                                                 |
+| ----------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Add club          | the one oxblood pill, full width at 375 px and right-aligned from 640 px | with no Save pill the screen's one primary action is Add club         |
+| Row               | a card, `p-3`, 12 px between rows: the name as an underlined bold 44 px button, the grey line in 14 px muted under it, then two 44 px round soft buttons | the name opens the Club sheet; a club with no details has no grey line |
+| Move up, Move down | 44 px round soft buttons with a chevron, 8 px apart; an absent button leaves a 44 px gap, never a disabled button | the first row has no Move up and the last no Move down; the gap keeps Move down under the same thumb |
+| Notes             | one 14 px status line under Add club ("Phoenix Club moved to 3 of 10.", "Club saved."), danger text with a quiet Try again after a failure | polite live region, mounted before it speaks; a failure is words, never colour alone |
+| Club sheet        | the Item sheet's shape: bottom sheet at 375 px, 480 px card from 640 px; Add club or Save is the one oxblood action, Cancel soft, Remove club the quiet red one | Remove club asks first, in the Remove dialog |
+| Remove dialog     | the Delete dialog's shape: Remove club in the danger red with page-colour lettering, Keep club soft and focused | the same contrast reason as the Delete dialog                          |
+| Skeleton row      | 68 px (`h-17`), five rows, after `delay-loader`                       | a closed row with no grey line is about 70 px (measured at 375 px)     |
+
 ## Principles
 
 - Oxblood marks every action and the header; nothing else uses it, except the rose Browse the shop pill on Home's band, and, on the admin Items screen, the edge and "Changed" label of a row with changes waiting to be saved, and the dot on the Items tab link while any wait (they tie to the oxblood Save button). Dark mode swaps the buttons to rose.

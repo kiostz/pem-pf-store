@@ -1,15 +1,16 @@
-// The admin page's shell: the oxblood header with the theme control, the tab bar, and the three screens in a 768 px column, with Items kept mounted so its pending changes survive a tab change.
+// The admin page's shell: the oxblood header with the theme control, the tab bar, and the four screens in a 768 px column, with Items kept mounted so its pending changes survive a tab change.
 
 import { useState } from 'react' // the pending count
 import { STORE_NAME } from '@/shared/store-name.ts' // the store's name
 import { ThemeControl } from '@/shared/theme/ThemeControl.tsx' // the sun or moon button
-import { AdminTabs } from './AdminTabs.tsx' // Items, Orders, Settings
+import { AdminTabs } from './AdminTabs.tsx' // Items, Orders, Clubs, Settings
+import { ClubsScreen } from './ClubsScreen.tsx' // the Clubs screen
 import { ItemsScreen } from './ItemsScreen.tsx' // the Items screen
 import { OrdersScreen } from './OrdersScreen.tsx' // the Orders screen
 import { SettingsScreen } from './SettingsScreen.tsx' // the Settings screen
 import { useAdminRoute } from './use-admin-route.ts' // the open tab
 
-const TITLES = { items: 'Items', orders: 'Orders', settings: 'Settings' } as const // the header title follows the tab
+const TITLES = { items: 'Items', orders: 'Orders', clubs: 'Clubs', settings: 'Settings' } as const // the header title follows the tab
 
 /**
  * Draws the page.
@@ -41,6 +42,7 @@ export function AdminApp() {
           <ItemsScreen onPendingCount={setItemsPending} />
         </div>
         {tab === 'orders' && <OrdersScreen key={number ?? ''} number={number} />} {/* mounts fresh on each visit */}
+        {tab === 'clubs' && <ClubsScreen />} {/* mounts fresh on each visit */}
         {tab === 'settings' && <SettingsScreen />}
       </main>
     </>

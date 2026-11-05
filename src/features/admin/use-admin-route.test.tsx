@@ -32,6 +32,14 @@ describe('useAdminRoute', () => {
     expect(renderHook(() => useAdminRoute()).result.current).toEqual({ tab: 'orders', number: null })
   })
 
+  it('reads #/clubs as the Clubs tab and still sends unknown addresses to Items', () => {
+    // Catches a Clubs link that lands on Items, or a new tab that breaks the fallback.
+    window.location.hash = '#/clubs'
+    expect(renderHook(() => useAdminRoute()).result.current).toEqual({ tab: 'clubs', number: null })
+    window.location.hash = '#/club'
+    expect(renderHook(() => useAdminRoute()).result.current).toEqual({ tab: 'items', number: null })
+  })
+
   it('follows the back button: a hash change switches the tab', () => {
     // Catches a route read once at mount.
     window.location.hash = '#/items'

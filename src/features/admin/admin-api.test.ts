@@ -2,13 +2,19 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API
 import {
+  addClub,
   addItem,
   deleteItem,
+  editClub,
+  loadClubs,
   loadItemPage,
   loadMeta,
+  moveClubs,
+  removeClub,
   sendHonorChanges,
   uploadPicture,
 } from './admin-api.ts' // the code under test
+import { makeClub } from './club-fixtures.ts' // shared clubs
 import { makeItem, meta } from './item-fixtures.ts' // shared rows
 
 const knot = makeItem({ id: 'knot-tying', name: 'Knot Tying' }) // a valid row
@@ -324,5 +330,59 @@ describe('uploadPicture', () => {
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
     stubFetch(Response.json({ honor: withPicture }, { status: 400 }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
+  })
+})
+
+describe('club calls', () => {
+  const firstPath = (spy: { mock: { calls: unknown[][] } }) => spy.mock.calls[0]![0] // the path of the first request
+  const list = [makeClub({ id: 1, name: 'Alpha Club' }), makeClub({ id: 2, name: 'Beta Club', area: 'Klang' })] // a valid list
+  const fields = { name: 'Lions', area: null, language: null, location: null, churchName: null } // new club fields
+
+  it('loadClubs reads the list from GET /api/clubs', async () => {
+    // Catches a list read from the wrong route or a wrong-shape list that reaches the screen.
+    const spy = stubFetch(Response.json({ clubs: list }))
+    expect(await loadClubs()).toEqual({ kind: 'ok', clubs: list })
+    expect(firstPath(spy)).toBe('/api/clubs')
+    stubFetch(Response.json({ clubs: [{ id: '1', name: 'x' }] }))
+    expect(await loadClubs()).toEqual({ kind: 'error' })
+  })
+
+  it('addClub posts the fields and maps 201, name-taken, 403, network and a bad shape', async () => {
+    // Catches a taken name read as a failure, or a session end read as an error.
+    const spy = stubFetch(Response.json({ clubs: list }, { status: 201 }))
+    expect(await addClub(fields)).toEqual({ kind: 'ok', clubs: list })
+    const [path, init] = spy.mock.calls[0] as unknown as [string, RequestInit]
+    expect(path).toBe('/api/clubs')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual(fields)
+    stubFetch(Response.json({ error: 'name-taken' }, { status: 409 }))
+    expect(await addClub(fields)).toEqual({ kind: 'name-taken' })
+    stubFetch(Response.json({}, { status: 403 }))
+    expect(await addClub(fields)).toEqual({ kind: 'signed-out' })
+    stubFetch(opaqueRedirect())
+    expect(await addClub(fields)).toEqual({ kind: 'signed-out' })
+    stubFetch(new Error('offline'))
+    expect(await addClub(fields)).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ clubs: 'no' }, { status: 201 }))
+    expect(await addClub(fields)).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ error: 'invalid' }, { status: 400 }))
+    expect(await addClub(fields)).toEqual({ kind: 'error' })
+  })
+
+  it('editClub, removeClub and moveClubs post to their routes and read a 409 with a list as a conflict', async () => {
+    // Catches a conflict that is treated as a failure, so the admin never sees the latest list.
+    const conflict = Response.json({ error: 'conflict', clubs: list }, { status: 409 })
+    const spy = stubFetch(conflict)
+    expect(await editClub({ id: 1, from: fields, to: { ...fields, name: 'Lions 2' } })).toEqual({ kind: 'conflict', clubs: list })
+    expect(firstPath(spy)).toBe('/api/clubs/edit')
+    stubFetch(Response.json({ clubs: list }))
+    const remove = stubFetch(Response.json({ clubs: list }))
+    expect(await removeClub({ id: 1, seen: fields })).toEqual({ kind: 'ok', clubs: list })
+    expect(firstPath(remove)).toBe('/api/clubs/remove')
+    const move = stubFetch(Response.json({ clubs: list }))
+    expect(await moveClubs({ from: [1, 2], to: [2, 1] })).toEqual({ kind: 'ok', clubs: list })
+    expect(firstPath(move)).toBe('/api/clubs/order')
+    stubFetch(Response.json({ error: 'conflict' }, { status: 409 }))
+    expect(await moveClubs({ from: [1, 2], to: [2, 1] })).toEqual({ kind: 'error' })
   })
 })

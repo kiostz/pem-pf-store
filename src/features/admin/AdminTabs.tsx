@@ -1,10 +1,11 @@
-// The admin's tab bar: three links (Items, Orders, Settings), each an address, with the current one marked and a dot on Items while changes wait to be saved.
+// The admin's tab bar: four links (Items, Orders, Clubs, Settings), each an address, with the current one marked and a dot on Items while changes wait to be saved.
 
 import type { AdminTab } from './use-admin-route.ts' // the tab names
 
 const TABS: ReadonlyArray<{ tab: AdminTab; label: string }> = [
   { tab: 'items', label: 'Items' },
   { tab: 'orders', label: 'Orders' },
+  { tab: 'clubs', label: 'Clubs' },
   { tab: 'settings', label: 'Settings' },
 ] // the bar, in order
 
@@ -12,13 +13,13 @@ const TABS: ReadonlyArray<{ tab: AdminTab; label: string }> = [
  * Draws the bar.
  * @param tab the open tab
  * @param itemsPending how many edited fields wait on the Items screen
- * @return a navigation of three 44 px links
+ * @return a navigation of four 44 px links
  */
 export function AdminTabs({ tab, itemsPending }: { tab: AdminTab; itemsPending: number }) {
   return (
     // A nav of links, not ARIA tabs: each tab is an address.
     <nav aria-label="Admin" className="border-border-subtle bg-bg-app border-b">
-      <ul className="mx-auto grid max-w-3xl grid-cols-3 gap-1 px-4 py-2">
+      <ul className="mx-auto grid max-w-3xl grid-cols-4 gap-1 px-4 py-2">
         {TABS.map(({ tab: name, label }) => (
           <li key={name}>
             <a

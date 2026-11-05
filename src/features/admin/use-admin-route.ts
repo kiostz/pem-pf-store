@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react' // state and the hashchange listener
 
-// The three tabs.
-export type AdminTab = 'items' | 'orders' | 'settings'
+// The four tabs.
+export type AdminTab = 'items' | 'orders' | 'clubs' | 'settings'
 // Where the admin is.
 export type AdminRoute = { tab: AdminTab; number: string | null }
 
@@ -27,6 +27,7 @@ function readNumber(part: string | undefined): string | null {
  */
 function readRoute(): AdminRoute {
   const [, first, second] = window.location.hash.split('/') // "#", the tab, the number
+  if (first === 'clubs') return { tab: 'clubs', number: null } // Clubs
   if (first === 'settings') return { tab: 'settings', number: null } // Settings
   if (first === 'orders') return { tab: 'orders', number: readNumber(second) } // Orders, maybe one order
   return { tab: 'items', number: null } // Items, and the fallback

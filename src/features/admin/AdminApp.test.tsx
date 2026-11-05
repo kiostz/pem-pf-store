@@ -3,6 +3,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react' // rendering and events
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
 import { AdminApp } from './AdminApp.tsx' // the code under test
+import { clubs } from './club-fixtures.ts' // shared clubs
 import { meta, rows } from './item-fixtures.ts' // shared items
 import { orders } from './order-fixtures.ts' // shared orders
 
@@ -14,6 +15,7 @@ beforeEach(() => {
         const path = String(url).split('?')[0] // the route
         if (path === '/api/meta') return Response.json(meta)
         if (path === '/api/orders') return Response.json({ orders, nextCursor: null })
+        if (path === '/api/clubs') return Response.json({ clubs })
         if (path === '/api/settings') return Response.json({ orderEmailOn: true })
         return Response.json({ honors: rows, nextCursor: null })
       }),
@@ -54,12 +56,26 @@ describe('AdminApp', () => {
     expect(await screen.findByRole('switch')).toBeInTheDocument()
   })
 
+  it('shows four links in order and titles the page Clubs on #/clubs', async () => {
+    // Catches a missing or misplaced Clubs link, or a Clubs screen under the wrong title.
+    render(<AdminApp />)
+    const nav = screen.getByRole('navigation', { name: 'Admin' })
+    expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual(['Items', 'Orders', 'Clubs', 'Settings'])
+    expect(within(nav).getByRole('link', { name: 'Clubs' })).toHaveAttribute('href', '#/clubs')
+    await goTo('#/clubs')
+    expect(within(nav).getByRole('link', { name: 'Clubs' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Clubs')
+    expect(await screen.findByRole('button', { name: 'Phoenix Club' })).toBeInTheDocument()
+  })
+
   it('keeps a pending stock edit across Items, Orders and back, and flags it on the Items link', async () => {
     // Catches an unmounted Items screen that drops the admin's unsaved edit on a tab change.
     render(<AdminApp />)
     await screen.findByText('Knot Tying')
     fireEvent.click(screen.getByRole('switch', { name: 'Active: Knot Tying' })) // a pending status edit
     expect(screen.getByRole('button', { name: /Save \(1 change/ })).toBeInTheDocument()
+    await goTo('#/clubs')
+    await screen.findByRole('button', { name: 'Phoenix Club' })
     await goTo('#/orders')
     expect(screen.getByText('changes not saved')).toBeInTheDocument() // the dot's words, still in the page
     expect(within(screen.getByRole('navigation', { name: 'Admin' })).getByRole('link', { name: /Items/ })).toHaveTextContent(

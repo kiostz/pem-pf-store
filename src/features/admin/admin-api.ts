@@ -1,9 +1,14 @@
 // The admin page's calls to the Admin Worker: load a page of items, load the meta, save changes, add and delete, each answer reduced to a kind the screen can act on.
 
 import type {
+  AdminClub,
   AdminHonor,
   AdminMeta,
   AdminOrder,
+  ClubEdit,
+  ClubFields,
+  ClubOrder,
+  ClubRemove,
   DeleteRequest,
   HonorChange,
   NewItem,
@@ -140,12 +145,31 @@ async function call(
  * @param body the JSON body
  * @return as `call`
  */
-const post = (path: string, body: unknown) =>
+const post = (path: string, body: unknown, signal?: AbortSignal) =>
   call(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal, // only a club write sets one
   }) // the Worker refuses anything but JSON
+
+const CLUB_WRITE_TIMEOUT_MS = 15_000 // how long a club write may wait for its answer
+
+/**
+ * Sends a club write that gives up after 15 s, so the sheet that waits for it can close again.
+ * @param path the Worker route
+ * @param body the JSON body
+ * @return as `call`; null (the failure line) when the time ran out
+ */
+async function postClub(path: string, body: unknown) {
+  const controller = new AbortController() // stops the request
+  const timer = setTimeout(() => controller.abort(), CLUB_WRITE_TIMEOUT_MS) // the limit
+  try {
+    return await post(path, body, controller.signal) // the request
+  } finally {
+    clearTimeout(timer) // answered or failed in time
+  }
+}
 
 /**
  * Loads one page of items.
@@ -440,4 +464,89 @@ export async function saveSettings(from: boolean, to: boolean): Promise<Settings
   if (answer.status === 200) return { kind: 'ok', orderEmailOn: value } // written
   if (answer.status === 409) return { kind: 'conflict', orderEmailOn: value } // nothing written
   return { kind: 'error' } // anything else
+}
+
+// The result of loading the clubs or writing one: the whole list after a write.
+export type ClubCallResult =
+  | { kind: 'ok' | 'conflict'; clubs: AdminClub[] }
+  | { kind: 'name-taken' | 'signed-out' | 'error' }
+
+/**
+ * Checks one value is a club of the Worker's list.
+ * @param value anything
+ * @return true for an object with every field in the right type
+ */
+function isAdminClub(value: unknown): value is AdminClub {
+  if (typeof value !== 'object' || value === null) return false // not an object
+  const row = value as Record<string, unknown> // read by field
+  const text = (entry: unknown) => entry === null || typeof entry === 'string' // an optional text
+  return (
+    Number.isInteger(row.id) && // the club's id
+    typeof row.name === 'string' && // the name
+    text(row.area) && // optional
+    text(row.language) && // optional
+    text(row.location) && // optional
+    text(row.churchName) // optional
+  )
+}
+
+/**
+ * Reads a club write's answer.
+ * @param answer what `call` or `post` gave back
+ * @param okStatus the status a write answers with (200, or 201 for Add)
+ * @return the list after the write, a conflict with the latest list, a taken name, signed-out, or error
+ */
+function readClubAnswer(answer: Awaited<ReturnType<typeof call>>, okStatus: number): ClubCallResult {
+  if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
+  if (answer === null) return { kind: 'error' } // the network failed
+  const list = field(answer.body, 'clubs') // the whole list, when there is one
+  const valid = Array.isArray(list) && list.every(isAdminClub) // a right-shaped list
+  if (answer.status === okStatus && valid) return { kind: 'ok', clubs: list } // written
+  if (answer.status === 409 && field(answer.body, 'error') === 'name-taken') return { kind: 'name-taken' } // another club has the name
+  if (answer.status === 409 && valid) return { kind: 'conflict', clubs: list } // nothing written
+  return { kind: 'error' } // anything else
+}
+
+/**
+ * Loads the clubs in the order buyers see them.
+ * @return the list, signed-out, or error
+ */
+export async function loadClubs(): Promise<ClubCallResult> {
+  return readClubAnswer(await call('/api/clubs'), 200) // the request
+}
+
+/**
+ * Adds a club at the end of the list; it is saved at once.
+ * @param fields the club's name and details
+ * @return the list, a taken name, signed-out, or error
+ */
+export async function addClub(fields: ClubFields): Promise<ClubCallResult> {
+  return readClubAnswer(await postClub('/api/clubs', fields), 201) // the request
+}
+
+/**
+ * Renames a club or changes its details; it is saved at once.
+ * @param edit the id, the values seen and the values wanted
+ * @return the list, a conflict with the latest list, a taken name, signed-out, or error
+ */
+export async function editClub(edit: ClubEdit): Promise<ClubCallResult> {
+  return readClubAnswer(await postClub('/api/clubs/edit', edit), 200) // the request
+}
+
+/**
+ * Removes a club; it is saved at once.
+ * @param remove the id and the values seen
+ * @return the list, a conflict with the latest list, signed-out, or error
+ */
+export async function removeClub(remove: ClubRemove): Promise<ClubCallResult> {
+  return readClubAnswer(await postClub('/api/clubs/remove', remove), 200) // the request
+}
+
+/**
+ * Saves a new club order; it is saved at once.
+ * @param order the ids in the order seen and in the order wanted
+ * @return the list, a conflict with the latest list, signed-out, or error
+ */
+export async function moveClubs(order: ClubOrder): Promise<ClubCallResult> {
+  return readClubAnswer(await postClub('/api/clubs/order', order), 200) // the request
 }
