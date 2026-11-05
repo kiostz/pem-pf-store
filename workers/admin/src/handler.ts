@@ -4,10 +4,14 @@ import { addHonor } from './add-honor' // The Add.
 import { deleteHonor } from './delete-honor' // The Delete.
 import { isItemId } from './item-id' // The item id check.
 import { readAdminPage, readMeta, saveHonorChanges } from './honors' // The reads and the guarded save.
+import { changeOrderStep, readOrderPage } from './orders' // The order reads and the step change.
+import { parseOrderQuery } from './order-query' // The order list query validator.
+import { readAdminSettings, saveAdminSettings } from './settings' // The settings read and guarded save.
 import { parseItemQuery } from './item-query' // The list query validator.
 import { hasSignature, MAX_PICTURE_BYTES, type PictureType, uploadPicture } from './picture-upload' // The picture upload.
 import { PICTURE_KEY, readPicture } from './pictures' // The key pattern and the picture read.
 import { parseDeleteRequest, parseHonorChanges, parseNewItem } from './validate-changes' // The body validators.
+import { parseSettingsChange, parseStepChange } from './validate-orders' // The order and settings body validators.
 
 // The built admin page files, handed in by index.ts (tests pass stand-ins).
 export interface Pages {
@@ -240,6 +244,51 @@ async function getItems(request: Request, env: Env): Promise<Response> {
 }
 
 /**
+ * Handles `GET /api/orders`: one page of orders, or one order by number.
+ * @param request The request.
+ * @param env The Worker bindings.
+ * @return The response.
+ */
+async function getOrders(request: Request, env: Env): Promise<Response> {
+  const query = parseOrderQuery(new URL(request.url)) // Null when invalid.
+  if (query === null) return json({ error: 'invalid' }, 400) // Fails validation.
+  return json(await readOrderPage(env.DB, query), 200) // The page.
+}
+
+/**
+ * Handles `POST /api/orders/step`: CSRF checks, validation and the guarded step change or cancel.
+ * @param request The request.
+ * @param env The Worker bindings.
+ * @return The response.
+ */
+async function postOrderStep(request: Request, env: Env): Promise<Response> {
+  const read = await readJsonBody(request) // The shared checks.
+  if ('refusal' in read) return read.refusal // Refused.
+  const change = parseStepChange(read.body) // Null when invalid.
+  if (change === null) return json({ error: 'invalid' }, 400) // Fails validation.
+  const result = await changeOrderStep(env.DB, change) // The guarded write.
+  if (result.kind === 'changed') return json({ order: result.order, restocked: result.restocked }, 200) // As saved.
+  if (result.kind === 'not-found') return json({ error: 'not-found' }, 404) // No such order.
+  return json({ error: 'conflict', order: result.order }, 409) // Changed since viewing; nothing written.
+}
+
+/**
+ * Handles `POST /api/settings`: CSRF checks, validation and the guarded save.
+ * @param request The request.
+ * @param env The Worker bindings.
+ * @return The response.
+ */
+async function postSettings(request: Request, env: Env): Promise<Response> {
+  const read = await readJsonBody(request) // The shared checks.
+  if ('refusal' in read) return read.refusal // Refused.
+  const change = parseSettingsChange(read.body) // Null when invalid.
+  if (change === null) return json({ error: 'invalid' }, 400) // Fails validation.
+  const result = await saveAdminSettings(env.DB, change) // The guarded write.
+  if (result.kind === 'saved') return json(result.settings, 200) // As saved.
+  return json({ error: 'conflict', ...result.settings }, 409) // Changed since viewing; nothing written.
+}
+
+/**
  * Handles `POST /api/items/changes`: CSRF checks, validation and the guarded save.
  * @param request The request.
  * @param env The Worker bindings.
@@ -343,6 +392,9 @@ export function createHandler(pages: Pages): ExportedHandlerFetchHandler<Env> {
     ['/api/items/changes', { POST: postChanges }], // The save.
     ['/api/items/delete', { POST: postDelete }], // Delete.
     ['/api/items/picture', { POST: postPicture }], // The picture upload.
+    ['/api/orders', { GET: getOrders }], // A page of orders, or one by number.
+    ['/api/orders/step', { POST: postOrderStep }], // A step change or cancel.
+    ['/api/settings', { GET: async (_request, env) => json(await readAdminSettings(env.DB), 200), POST: postSettings }], // The order email switch.
     ['/api/meta', { GET: async (_request, env) => json(await readMeta(env.DB), 200) }], // Categories, currency, default price.
   ])
   return async (request, env, ctx) => { // The fetch handler.

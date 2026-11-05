@@ -79,6 +79,8 @@ describe('the other write routes', () => {
   // Each write route with a body that would succeed.
   const writes: [string, unknown][] = [
     ['/api/items', { name: 'Camp Shirt', category: 'Shirt', priceCents: 400 }],
+    ['/api/orders/step', { number: 'PF-20261105-ABCD', from: 'new', to: 'paid', restock: false }],
+    ['/api/settings', { orderEmailOn: { from: true, to: false } }],
     ['/api/items/delete', { id: 'knot-tying', seen: { name: 'Knot Tying', category: 'Nature', priceCents: 400, status: 'active', stock: 12, modifiedAt: '2026-11-01T00:00:00.000Z' } }],
   ]
 
@@ -103,6 +105,12 @@ describe('the other write routes', () => {
       ['/api/items/delete', 'GET', 'POST'],
       ['/api/items/picture', 'GET', 'POST'],
       ['/api/meta', 'POST', 'GET'],
+      ['/api/orders', 'POST', 'GET'],
+      ['/api/orders', 'DELETE', 'GET'],
+      ['/api/orders/step', 'GET', 'POST'],
+      ['/api/orders/step', 'PUT', 'POST'],
+      ['/api/settings', 'PUT', 'GET, POST'],
+      ['/api/settings', 'DELETE', 'GET, POST'],
     ]
     for (const [path, method, allow] of cases) {
       const res = await call(path, { method })

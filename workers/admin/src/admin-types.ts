@@ -58,3 +58,55 @@ export interface DeleteRequest {
   id: string // Which honor.
   seen: { name: string; category: string; priceCents: number; status: HonorStatus; stock: number; modifiedAt: string } // The guard.
 }
+
+// Where an order is.
+export type OrderStep = 'new' | 'paid' | 'handed_out' | 'cancelled'
+
+// One order as the admin lists it.
+export interface AdminOrder {
+  number: string // The order number.
+  createdAt: string // ISO UTC time with milliseconds.
+  step: OrderStep // Where the order is.
+  currency: string // Three capital letters.
+  totalCents: number // Whole cents.
+  itemCount: number // Sum of the line quantities.
+  club: string // The club as typed or picked.
+  buyer: { name: string; email: string; phone: string } | null // Null once the personal data was removed.
+  personalDataRemovedAt: string | null // ISO UTC time of the removal, or null.
+  lines: Array<{ itemId: string; name: string; quantity: number; priceCents: number; inShop: boolean }> // Snapshot name and price; `inShop` says the item still exists.
+}
+
+// One page of orders.
+export interface AdminOrderPage {
+  orders: AdminOrder[] // Up to 50, newest first.
+  nextCursor: string | null // Opaque text for the next page, or null at the end.
+}
+
+// A step change: what the admin saw and wants, and whether a cancel puts stock back.
+export interface StepChange {
+  number: string // The order number.
+  from: OrderStep // The step the admin saw.
+  to: OrderStep // The step the admin wants.
+  restock: boolean // True only with `to: 'cancelled'`.
+}
+
+// The outcome of a step change.
+export type StepResult =
+  | { kind: 'changed'; order: AdminOrder; restocked: number } // Written; quantity restocked.
+  | { kind: 'conflict'; order: AdminOrder } // Nothing written: the order as it is now.
+  | { kind: 'not-found' } // No such order.
+
+// The settings the admin can change.
+export interface AdminSettings {
+  orderEmailOn: boolean // Whether each new order is emailed to the club inbox.
+}
+
+// A settings change: what the admin saw and wants.
+export interface SettingsChange {
+  orderEmailOn: { from: boolean; to: boolean } // The switch.
+}
+
+// The outcome of a settings save.
+export type SettingsResult =
+  | { kind: 'saved'; settings: AdminSettings } // Written.
+  | { kind: 'conflict'; settings: AdminSettings } // Nothing written: the settings as they are now.

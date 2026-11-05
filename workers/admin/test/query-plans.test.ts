@@ -4,7 +4,9 @@ import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { encodeCursor, parseItemQuery, type ItemQuery } from '../src/item-query'
 import { pageSql } from '../src/honors'
-import { insertHonors, seedHonors, type SeedHonor } from './helpers'
+import { orderPageSql } from '../src/orders'
+import { parseOrderQuery } from '../src/order-query'
+import { insertHonors, orderNumber, seedHonors, seedOrders, type SeedHonor } from './helpers'
 
 beforeEach(async () => {
   await seedHonors([])
@@ -43,4 +45,20 @@ describe('query plans', () => {
       }
     }
   }
+})
+
+describe('order list query plans', () => {
+  it('reads orders_created_at in order with no temp B-tree for all orders and for one step', async () => {
+    // Catches a missing index use: SQLite would sort every order for each page, and D1 bills rows read.
+    await seedOrders(Array.from({ length: 200 }, (_, n) => ({ number: orderNumber(n), createdAt: new Date(Date.UTC(2026, 10, 1, 0, n)).toISOString(), step: n % 2 === 0 ? ('paid' as const) : ('new' as const) })))
+    for (const search of ['', 'step=paid', 'cursor=WyIyMDI2LTExLTAxVDAxOjAwOjAwLjAwMFoiLDUwXQ', 'step=paid&cursor=WyIyMDI2LTExLTAxVDAxOjAwOjAwLjAwMFoiLDUwXQ']) {
+      const query = parseOrderQuery(new URL(`https://admin.test/api/orders?${search}`))
+      expect(query, search).not.toBeNull()
+      const { sql, params } = orderPageSql(query!)
+      const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...params).all<{ detail: string }>()
+      const plan = results.map((row) => row.detail).join('\n')
+      expect(plan, search).not.toMatch(/TEMP B-TREE/i)
+      expect(plan, search).toMatch(/USING (COVERING )?INDEX/i)
+    }
+  })
 })

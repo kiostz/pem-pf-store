@@ -169,3 +169,60 @@ export async function imageOf(id: string): Promise<string | null> {
   const row = await env.DB.prepare('SELECT image FROM honors WHERE id = ?').bind(id).first<{ image: string | null }>() // One row.
   return row?.image ?? null // No row or no picture.
 }
+
+// A made-up order to seed; missing fields get defaults.
+export interface SeedOrder {
+  id?: number // The row id; the database picks one when absent.
+  number: string // The order number.
+  createdAt?: string // ISO UTC time with milliseconds.
+  step?: 'new' | 'paid' | 'handed_out' | 'cancelled' // Defaults to new.
+  club?: string // Defaults to Gilead.
+  removedAt?: string // Marks the buyer fields as removed.
+  lines?: { itemId: string; name?: string; quantity?: number; priceCents?: number }[] // Defaults to one line of item-1.
+}
+
+// The made-up buyer every seeded order carries; tests grep for these values in logs and errors.
+export const BUYER = { name: 'Ana Tester', email: 'ana@example.com', phone: '+60 12-345 6789' }
+
+/**
+ * Builds a valid order number from a counter.
+ * @param n A counter from 0 to 960.
+ * @return A number such as PF-20261105-223A.
+ */
+export function orderNumber(n: number): string {
+  const alphabet = '23456789ABCDEFGHJKMNPQRSTUVWXYZ' // The shop's 31 characters.
+  return `PF-20261105-22${alphabet[Math.floor(n / 31)]}${alphabet[n % 31]}` // Two fixed characters then the counter.
+}
+
+/**
+ * Replaces every order and order line with the given made-up orders, in one batch.
+ * @param orders The orders to insert.
+ * @return Nothing.
+ */
+export async function seedOrders(orders: SeedOrder[]): Promise<void> {
+  const statements = [env.DB.prepare('DELETE FROM order_lines'), env.DB.prepare('DELETE FROM orders')] // Start clean.
+  for (const order of orders) { // One insert per order, then its lines.
+    const lines = order.lines ?? [{ itemId: 'item-1' }] // One default line.
+    const total = lines.reduce((sum, line) => sum + (line.priceCents ?? 400) * (line.quantity ?? 1), 0) // The stored total.
+    const removed = order.removedAt !== undefined // Removal clears the buyer fields.
+    statements.push( // The order row.
+      env.DB.prepare('INSERT INTO orders (id, number, created_at, step, currency, total_cents, buyer_name, buyer_email, buyer_phone, club, personal_data_removed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind( // Every column.
+        order.id ?? null, order.number, order.createdAt ?? '2026-11-05T01:00:00.000Z', order.step ?? 'new', 'MYR', total, // Id, number, time, step, currency, total.
+        removed ? null : BUYER.name, removed ? null : BUYER.email, removed ? null : BUYER.phone, order.club ?? 'Gilead', order.removedAt ?? null, // Buyer, club, removal.
+      ),
+    )
+    for (const line of lines) statements.push(env.DB.prepare('INSERT INTO order_lines (order_id, honor_id, name, quantity, price_cents) VALUES ((SELECT id FROM orders WHERE number = ?), ?, ?, ?, ?)').bind(order.number, line.itemId, line.name ?? line.itemId, line.quantity ?? 1, line.priceCents ?? 400)) // One insert per line.
+  }
+  await env.DB.batch(statements) // One transaction.
+}
+
+/**
+ * Reads an order's step straight from the database.
+ * @param number The order number.
+ * @return The step.
+ */
+export async function stepOf(number: string): Promise<string> {
+  const row = await env.DB.prepare('SELECT step FROM orders WHERE number = ?').bind(number).first<{ step: string }>() // One row.
+  if (row === null) throw new Error('no order') // A test bug.
+  return row.step // The step text.
+}

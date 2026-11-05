@@ -10,6 +10,10 @@ const guarded: [string, (options?: Parameters<typeof call>[2]) => Promise<Respon
   ['GET /api/meta', (o) => call('/api/meta', {}, o)],
   ['POST /api/items', (o) => postTo('/api/items', { name: 'Camp Shirt', category: 'Shirt', priceCents: 400 }, {}, o)],
   ['POST /api/items/delete', (o) => postTo('/api/items/delete', { id: 'x' }, {}, o)],
+  ['GET /api/orders', (o) => call('/api/orders', {}, o)],
+  ['POST /api/orders/step', (o) => postTo('/api/orders/step', { number: 'PF-20261105-ABCD', from: 'new', to: 'paid', restock: false }, {}, o)],
+  ['GET /api/settings', (o) => call('/api/settings', {}, o)],
+  ['POST /api/settings', (o) => postTo('/api/settings', { orderEmailOn: { from: true, to: false } }, {}, o)],
   ['GET /api/nope', (o) => call('/api/nope', {}, o)],
 ]
 
