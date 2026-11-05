@@ -1,6 +1,6 @@
 // The admin Items screen: Add item, search, category and sort over D1 in pages, one row each with its status and stock, Load more, the Item sheet, and the Save pill and notes at the bottom, with its loading, error, empty and signed-out states.
 
-import { useState } from 'react' // which sheet is open
+import { useEffect, useState } from 'react' // which sheet is open, and the pending count report
 import { PILL_ACTION, PILL_DOCK, PILL_NOTE } from '@/shared/ui/floating-pill-box.ts' // the floating pill's dock and note shapes
 import { AdminHonorRow } from './AdminHonorRow.tsx' // one row
 import { FIELD_BOX, NOTE_BUTTON, SOFT_BUTTON } from './admin-boxes.ts' // shared shapes
@@ -26,14 +26,22 @@ type Sheet = { mode: 'add' } | { mode: 'edit'; id: string }
 /**
  * The Items screen.
  * @param pictureDeps the decoder and canvas factory a picture resize uses; the browser's own when omitted
+ * @param onPendingCount told how many edited fields wait, each time that changes (the tab bar's dot)
  * @return the toolbar, the rows with Load more, the sheet, and the Save pill with its notes
  */
-export function ItemsScreen({ pictureDeps }: { pictureDeps?: ResizeDeps }) {
+export function ItemsScreen({
+  pictureDeps,
+  onPendingCount,
+}: {
+  pictureDeps?: ResizeDeps
+  onPendingCount?: (count: number) => void
+}) {
   const items = useAdminHonors() // the screen's state
   const { pages, meta, pending, conflicts, count, saveState, discarded, changesView } = items // read often
   const [sheet, setSheet] = useState<Sheet | null>(null) // the open sheet
   const { pageState, rows, applied } = pages // the list
   const saving = saveState === 'saving' // a save is running
+  useEffect(() => onPendingCount?.(count), [count, onPendingCount]) // the tab bar learns each change
   const hasRows = rows.length > 0 // something is listed
   const failedFirst = (pageState === 'error' || pageState === 'signed-out') && !hasRows // the first page never came
   const reloadToSignIn = pageState === 'signed-out' && count === 0 // a reload loses nothing when no edits are pending, rows or not

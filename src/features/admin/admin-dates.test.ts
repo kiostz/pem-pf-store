@@ -1,7 +1,7 @@
 // Tests for the admin's date text: the short "changed" date on a row and the full time on the sheet, both in Malaysia time.
 
 import { describe, expect, it } from 'vitest' // test API
-import { formatAdminTime, formatChangedShort } from './admin-dates.ts' // the code under test
+import { formatAdminDay, formatAdminTime, formatChangedShort } from './admin-dates.ts' // the code under test
 
 const NOW = new Date('2026-11-03T04:00:00.000Z') // 3 Nov 2026, noon in Malaysia
 
@@ -43,5 +43,12 @@ describe('formatAdminTime', () => {
     expect(formatAdminTime('2026-11-03T09:05:00.000Z')).toBe(
       '3 Nov 2026, 5:05 pm',
     )
+  })
+})
+
+describe('formatAdminDay', () => {
+  it('writes the Malaysia day with its year, so a late UTC evening is the next day', () => {
+    // Catches a removal date read in UTC, one day early.
+    expect(formatAdminDay('2027-11-04T17:00:00.000Z')).toBe('5 Nov 2027')
   })
 })

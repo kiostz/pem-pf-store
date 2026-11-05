@@ -3,9 +3,12 @@
 import type {
   AdminHonor,
   AdminMeta,
+  AdminOrder,
   DeleteRequest,
   HonorChange,
   NewItem,
+  OrderStep,
+  StepChange,
 } from '../../../workers/admin/src/admin-types.ts' // the shared shapes
 
 // The three sorts the Worker offers.
@@ -286,5 +289,155 @@ export async function uploadPicture(
   const deletedIds = field(answer.body, 'deletedIds') // the ids another admin deleted
   if (answer.status === 409 && isHonorList(honors) && isTextList(deletedIds))
     return { kind: 'conflict', honors, deletedIds } // nothing stored
+  return { kind: 'error' } // anything else
+}
+
+// The 403 line the order and settings screens share.
+export const SIGNED_OUT_NOTE =
+  'Your sign-in has ended. Open this page in a new tab to sign in, then try again.'
+
+// The order number's shape: PF, a date, and four characters without 0, O, 1, I or L (the Worker's alphabet).
+const ORDER_NUMBER = /^PF-\d{8}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/
+const STEPS: readonly string[] = ['new', 'paid', 'handed_out', 'cancelled'] // every step
+
+/**
+ * Checks a typed text is an order number.
+ * @param text the text, already upper-cased
+ * @return true for a well-formed number
+ */
+export const isOrderNumber = (text: string): boolean => ORDER_NUMBER.test(text) // the Worker's pattern
+
+// What one order page request asks.
+export type OrderPageRequest = {
+  step: OrderStep | null // one step, null for all
+  number: string | null // one order number, null for the list
+  cursor: string | null // the Worker's cursor, null for the first page
+  signal?: AbortSignal // aborts a request a newer one replaces
+}
+// The result of loading an order page.
+export type LoadOrdersResult =
+  | { kind: 'ok'; orders: AdminOrder[]; nextCursor: string | null }
+  | { kind: 'signed-out' | 'error' }
+// The result of a step change.
+export type ChangeStepResult =
+  | { kind: 'changed'; order: AdminOrder; restocked: number }
+  | { kind: 'conflict'; order: AdminOrder }
+  | { kind: 'signed-out' | 'error' }
+// The result of loading or saving the settings.
+export type SettingsCallResult =
+  | { kind: 'ok' | 'conflict'; orderEmailOn: boolean }
+  | { kind: 'signed-out' | 'error' }
+
+/**
+ * Checks one value is an order of the Worker's list.
+ * @param value anything
+ * @return true for an object with every field in the right type
+ */
+function isAdminOrder(value: unknown): value is AdminOrder {
+  if (typeof value !== 'object' || value === null) return false // not an object
+  const row = value as Record<string, unknown> // read by field
+  const buyer = row.buyer as Record<string, unknown> | null // the details or null
+  return (
+    typeof row.number === 'string' && // the order number
+    typeof row.createdAt === 'string' && // an ISO time
+    typeof row.step === 'string' &&
+    STEPS.includes(row.step) && // a known step
+    typeof row.currency === 'string' && // the currency code
+    Number.isInteger(row.totalCents) && // whole cents
+    Number.isInteger(row.itemCount) && // a whole count
+    typeof row.club === 'string' && // the club
+    (buyer === null ||
+      (typeof buyer === 'object' &&
+        typeof buyer.name === 'string' &&
+        typeof buyer.email === 'string' &&
+        typeof buyer.phone === 'string')) && // details or removed
+    (row.personalDataRemovedAt === null || typeof row.personalDataRemovedAt === 'string') && // the removal time or none
+    Array.isArray(row.lines) &&
+    row.lines.every(
+      (line: Record<string, unknown>) =>
+        typeof line.itemId === 'string' &&
+        typeof line.name === 'string' &&
+        Number.isInteger(line.quantity) &&
+        Number.isInteger(line.priceCents) &&
+        typeof line.inShop === 'boolean',
+    ) // every line
+  )
+}
+
+/**
+ * Loads one page of orders, or one order by number.
+ * @param request the step or number, and the cursor
+ * @return the page, signed-out, or error
+ */
+export async function loadOrderPage(request: OrderPageRequest): Promise<LoadOrdersResult> {
+  const query = new URLSearchParams() // the Worker refuses a number together with a step or cursor
+  if (request.number !== null) query.set('number', request.number) // a lookup stands alone
+  else {
+    if (request.step !== null) query.set('step', request.step) // all steps is left out
+    if (request.cursor !== null) query.set('cursor', request.cursor) // the first page has none
+  }
+  const text = query.toString() // the query text
+  const answer = await call(`/api/orders${text === '' ? '' : `?${text}`}`, { signal: request.signal }) // the request
+  if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
+  if (answer === null || answer.status !== 200) return { kind: 'error' } // failed
+  const list = field(answer.body, 'orders') // the orders
+  const nextCursor = field(answer.body, 'nextCursor') // where the next page starts
+  if (!Array.isArray(list) || !list.every(isAdminOrder) || (typeof nextCursor !== 'string' && nextCursor !== null))
+    return { kind: 'error' } // a wrong shape is an error
+  return { kind: 'ok', orders: list, nextCursor } // the page
+}
+
+/**
+ * Changes an order's step; it is saved at once.
+ * @param change the number, the step seen, the step wanted and whether a cancel restocks
+ * @return the changed order, a conflict with the current order, signed-out, or error
+ */
+export async function changeOrderStep(change: StepChange): Promise<ChangeStepResult> {
+  const answer = await post('/api/orders/step', change) // the request
+  if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
+  if (answer === null) return { kind: 'error' } // the network failed
+  const order = field(answer.body, 'order') // the order the Worker holds
+  const restocked = field(answer.body, 'restocked') // the quantity put back
+  if (answer.status === 200 && isAdminOrder(order) && Number.isInteger(restocked))
+    return { kind: 'changed', order, restocked: restocked as number } // written
+  if (answer.status === 409 && isAdminOrder(order)) return { kind: 'conflict', order } // nothing written
+  return { kind: 'error' } // anything else
+}
+
+/**
+ * Reads the order email switch out of an answer.
+ * @param body the parsed answer
+ * @return the switch, or undefined for a wrong shape
+ */
+const switchOf = (body: unknown): boolean | undefined => {
+  const value = field(body, 'orderEmailOn') // the switch
+  return typeof value === 'boolean' ? value : undefined // booleans only
+}
+
+/**
+ * Loads the settings the admin can change.
+ * @return the switch, signed-out, or error
+ */
+export async function loadSettings(): Promise<SettingsCallResult> {
+  const answer = await call('/api/settings') // the request
+  if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
+  const value = answer === null ? undefined : switchOf(answer.body) // the switch
+  if (answer === null || answer.status !== 200 || value === undefined) return { kind: 'error' } // failed or wrong shape
+  return { kind: 'ok', orderEmailOn: value } // the switch
+}
+
+/**
+ * Saves the order email switch; it is live at once.
+ * @param from the value the admin saw
+ * @param to the value the admin wants
+ * @return the stored switch, a conflict with the stored switch, signed-out, or error
+ */
+export async function saveSettings(from: boolean, to: boolean): Promise<SettingsCallResult> {
+  const answer = await post('/api/settings', { orderEmailOn: { from, to } }) // the request
+  if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
+  const value = answer === null ? undefined : switchOf(answer.body) // the switch
+  if (answer === null || value === undefined) return { kind: 'error' } // failed or wrong shape
+  if (answer.status === 200) return { kind: 'ok', orderEmailOn: value } // written
+  if (answer.status === 409) return { kind: 'conflict', orderEmailOn: value } // nothing written
   return { kind: 'error' } // anything else
 }

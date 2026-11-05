@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react' // the dialog element, focus
 import { PatchPicture } from '@/shared/ui/PatchPicture.tsx' // the current picture or its Category mark
 import type { AdminHonor, NewItem } from '../../../workers/admin/src/admin-types.ts' // the row and the new item
 import { ACTION_BOX } from '@/shared/ui/button-box.ts' // the shared 44 px pill action
+import { SIGNED_OUT_NOTE } from './admin-api.ts' // the 403 line
 import { formatAdminTime } from './admin-dates.ts' // the times in Malaysia
 import { FIELD_BOX, SHEET_BOX, SOFT_BUTTON } from './admin-boxes.ts' // shared shapes
 import { DeleteDialog } from './DeleteDialog.tsx' // the confirmation
@@ -16,7 +17,6 @@ import type { AddOutcome, DeleteOutcome, PictureOutcome } from './use-admin-hono
 const MAX_NAME = 100 // the Worker's limit
 const PICTURE_BASE = '/pictures' // the Admin Worker serves pictures from its own origin
 const SAVE_PICTURE = `${SOFT_BUTTON} border-accent border-2 bg-transparent! font-bold aria-disabled:opacity-60` // the picture's own commit: outlined, so Done stays the one filled action
-const SIGNED_OUT = 'Your sign-in has ended. Open this page in a new tab to sign in, then try again.' // the 403 line
 
 /**
  * Checks a typed name.
@@ -176,7 +176,7 @@ export function ItemSheet({
         : outcome === 'id-taken'
           ? { form: "Couldn't add this item. Try a slightly different name." } // the id clash
           : outcome === 'signed-out'
-            ? { form: SIGNED_OUT } // the session ended
+            ? { form: SIGNED_OUT_NOTE } // the session ended
             : { form: "We couldn't add the item. Try again." }, // anything else
     )
   }
@@ -256,7 +256,7 @@ export function ItemSheet({
         : outcome.kind === 'built-in'
           ? "Built-in items can't be deleted."
           : outcome.kind === 'signed-out'
-            ? SIGNED_OUT
+            ? SIGNED_OUT_NOTE
             : "We couldn't delete the item. Try again.",
     ) // why it stayed
   }
@@ -371,7 +371,7 @@ export function ItemSheet({
                     {pictureFailure === 'bad-file'
                       ? "This file can't be used as a picture. Choose a PNG, JPEG or WebP file."
                       : pictureFailure === 'signed-out'
-                        ? SIGNED_OUT
+                        ? SIGNED_OUT_NOTE
                         : "The picture wasn't saved."}
                   </p>
                 )}

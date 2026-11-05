@@ -8,15 +8,26 @@ import type { PageState } from './use-item-pages.ts' // where a fetch stands
  * @param state where the page fetch stands
  * @param hasMore whether the Worker has a next page
  * @param onLoad called to load the next page, or to try again
+ * @param noun what the list holds, for the failure line
  * @return a button, a failure line with Try again, or the end line
  */
-export function LoadMore({ state, hasMore, onLoad }: { state: PageState; hasMore: boolean; onLoad: () => void }) {
+export function LoadMore({
+  state,
+  hasMore,
+  onLoad,
+  noun = 'items',
+}: {
+  state: PageState
+  hasMore: boolean
+  onLoad: () => void
+  noun?: string
+}) {
   if (!hasMore) return <p className="text-text-muted py-4 text-center">End of the list.</p> // nothing more
   if (state === 'more-error')
     return (
       // The failure line and its action; the rows above stay.
       <div className="flex flex-wrap items-center justify-center gap-3 py-2">
-        <p className="text-danger">We couldn&apos;t load more items.</p> {/* what failed */}
+        <p className="text-danger">{`We couldn't load more ${noun}.`}</p> {/* what failed */}
         <button type="button" onClick={onLoad} className={SOFT_BUTTON}>
           Try again
         </button>

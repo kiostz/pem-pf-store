@@ -42,3 +42,13 @@ export function formatAdminTime(iso: string): string {
   const parts = partsOf(new Date(iso)) // the time
   return `${parts.day} ${parts.month} ${parts.year}, ${parts.hour}:${parts.minute} ${parts.dayPeriod.toLowerCase()}` // day month year, time with a lowercase am or pm
 }
+
+/**
+ * Writes a day for the "Buyer details removed on" line.
+ * @param iso an ISO UTC time with milliseconds
+ * @return "5 Nov 2027" in Malaysia time
+ */
+export function formatAdminDay(iso: string): string {
+  const parts = partsOf(new Date(iso)) // the time
+  return `${parts.day} ${parts.month} ${parts.year}` // day month year
+}

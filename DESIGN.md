@@ -324,9 +324,26 @@ The admin page (`admin.html`) reuses every token above; it adds no colour, radiu
 | Bottom clearance            | 208 px (`pb-52`)                        | the cart's clearance: a note (about 52 px), the 12 px gap and the pill |
 | Skeleton row                | 144 px under 768 px, 90 px from 768 px  | the real row's two heights, measured at 375 px and 1280 px (the details line grew); shown after `delay-loader` |
 
+## Admin Orders and Settings
+
+The admin tabs reuse every token above; they add no colour, radius or duration.
+
+| Use                  | Value                                                                 | Reason                                                                 |
+| -------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Tab bar              | a nav of three 44 px links under the header, `bg-app` with a hairline below; the open tab on the `bg-soft` capsule in oxblood and bold, the others muted | the Tab pill's current-tab look; links, not ARIA tabs, since each tab is an address |
+| Pending dot          | an 8 px oxblood dot after "Items" plus the words "changes not saved" for screen readers | the pending-changes exception to the oxblood rule; the Items screen stays mounted and hidden on other tabs |
+| Order row            | a card with a full-width disclosure button (`aria-expanded`): number in bold, the step tag, then date and club, buyer, "3 items · RM 12.00" in 14 px | the row closed says everything a list scan needs; no count of orders anywhere |
+| Step tag             | icon plus word: New soft fill with oxblood text (a clock); Paid soft fill with ink (a tick); Handed out the dark note's pair `bg-inverse` and `on-inverse` (a parcel); Cancelled a danger outline and danger text on the card (a cross) | status is never colour alone; every pair reuses an existing token and holds 4.5:1 |
+| Step select          | the site's select, 44 px, labelled "Step"; New, Paid, Handed out only | Cancelled is final and has its own dialog |
+| Cancel order         | a quiet underlined danger-text button at 44 px, away from the primary spot | the one destructive action on an open row |
+| Cancel dialog        | the Delete dialog's sheet; Cancel order in the danger red with page-colour lettering, Keep order soft and focused; the restock box is a 20 px native checkbox in a 44 px row | the same shape and contrast reasons as the Delete dialog |
+| Order email switch   | the Active switch's track (44 x 24 px, green On, grey Off) in a card, with "On" or "Off" beside it | same control and token as the status switch; the word keeps it from being colour alone |
+| Outcome lines        | a 14 px status line under the row header ("Step saved.", the conflict, the failure with Try again) and under the switch ("Saved.") | polite live regions, mounted before they speak |
+| Skeleton row         | 126 px (`h-31.5`), six rows, after `delay-loader`                     | a closed row's measured height (126 px at 375 px and at desktop width) |
+
 ## Principles
 
-- Oxblood marks every action and the header; nothing else uses it, except the rose Browse the shop pill on Home's band, and, on the admin Items screen, the edge and "Changed" label of a row with changes waiting to be saved (they tie to the oxblood Save button). Dark mode swaps the buttons to rose.
+- Oxblood marks every action and the header; nothing else uses it, except the rose Browse the shop pill on Home's band, and, on the admin Items screen, the edge and "Changed" label of a row with changes waiting to be saved, and the dot on the Items tab link while any wait (they tie to the oxblood Save button). Dark mode swaps the buttons to rose.
 - The patch is the hero of every card. Text stays small and grey under it.
 - Quiet chrome: no gradients and no decoration except Home's emblem trace. The space between things does the separating.
 - The theme button sits in the header on Home and Shop only.
