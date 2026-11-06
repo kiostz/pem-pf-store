@@ -6,7 +6,7 @@ import { saveOrder } from '../../api/src/save-order'
 import { parseOrderRequest } from '../../api/src/order-request'
 import { formatPrice } from '../../../src/shared/format/price.ts' // the shared money formatter
 import { readShop } from '../../api/src/read' // the shop read the settings show up in
-import { call, fullRowOf, postTo, seedHonors, seedOrders } from './helpers'
+import { call, fullRowOf, postTo, seedItems, seedOrders } from './helpers'
 
 beforeEach(async () => {
   await env.DB.exec("DELETE FROM settings; INSERT INTO settings (id, currency, default_price_cents, order_email_on) VALUES (1, 'MYR', 400, 1)")
@@ -44,7 +44,7 @@ describe('POST /api/settings/prices', () => {
 
   it('leaves item prices and orders alone, and keeps the order email switch', async () => {
     // Catches a currency change that rewrites stored prices or past orders.
-    await seedHonors([{ id: 'knot-tying', name: 'Knot Tying', stock: 5 }])
+    await seedItems([{ id: 'knot-tying', name: 'Knot Tying', stock: 5 }])
     await seedOrders([{ number: 'PF-20261105-2222', lines: [{ itemId: 'knot-tying', priceCents: 450 }] }])
     const items = async () => (await env.DB.prepare('SELECT id, price_cents FROM items ORDER BY id').all()).results
     const orders = async () => (await env.DB.prepare('SELECT number, currency, total_cents FROM orders ORDER BY number').all()).results
@@ -100,7 +100,7 @@ describe('POST /api/settings/prices', () => {
 
   it('makes the API Worker\'s /shop and next order use the new currency and its symbol', async () => {
     // Catches a currency the order handler or the shop read does not take from settings, or a money text that keeps the old symbol.
-    await seedHonors([{ id: 'knot-tying', name: 'Knot Tying', stock: 5 }])
+    await seedItems([{ id: 'knot-tying', name: 'Knot Tying', stock: 5 }])
     await save({ currency: { from: 'MYR', to: 'CNY' } })
     expect((await readShop(env.DB)).settings).toEqual({ currency: 'CNY' })
     const request = parseOrderRequest({ requestId: '00000000-0000-4000-8000-000000000019', turnstileToken: 't', name: 'Ana Tester', email: 'ana@example.com', phone: '+60 12-345 6789', club: { name: 'Gilead', typed: false }, lines: [{ itemId: 'knot-tying', quantity: 2 }] })!

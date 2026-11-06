@@ -2,7 +2,7 @@
 
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { BUYER, call, insertHonors, orderNumber, seedHonors, seedOrders, type SeedOrder } from './helpers'
+import { BUYER, call, insertItems, orderNumber, seedItems, seedOrders, type SeedOrder } from './helpers'
 
 interface Page { orders: { number: string; step: string; itemCount: number; totalCents: number; buyer: unknown; lines: { itemId: string; name: string; quantity: number; priceCents: number; inShop: boolean }[] }[]; nextCursor: string | null }
 
@@ -33,7 +33,7 @@ async function allPages(query = ''): Promise<string[][]> {
 }
 
 beforeEach(async () => {
-  await seedHonors([])
+  await seedItems([])
   await seedOrders([])
 })
 
@@ -90,7 +90,7 @@ describe('GET /api/orders pages', () => {
 
   it('carries snapshot names and prices, sums quantities, and marks a deleted item as not in the shop', async () => {
     // Catches lines read from the live item (a renamed or repriced item rewriting history) and a count of lines instead of quantity.
-    await insertHonors([{ id: 'knot-tying', name: 'Knot Tying Renamed', priceCents: 999 }])
+    await insertItems([{ id: 'knot-tying', name: 'Knot Tying Renamed', priceCents: 999 }])
     await seedOrders([{ number: 'PF-20261105-ABCD', lines: [{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 2, priceCents: 400 }, { itemId: 'gone', name: 'Gone Item', quantity: 3, priceCents: 250 }] }])
     const { body } = await page('number=PF-20261105-ABCD')
     const order = body.orders[0]

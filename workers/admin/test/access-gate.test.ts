@@ -1,7 +1,7 @@
 // Tests the Access gate: every path and method answers 403 unless Access signed in an allowed admin.
 
 import { describe, expect, it } from 'vitest'
-import { call, postChanges, postTo, seedHonors } from './helpers'
+import { call, postChanges, postTo, seedItems } from './helpers'
 
 // A club's fields for the club bodies.
 const CLUB = { name: 'Lions', area: null, language: null, location: null, churchName: null }
@@ -69,13 +69,13 @@ describe('Access gate', () => {
 
   it('lets an admin in whatever the email case', async () => {
     // Catches a case-sensitive email compare locking out an admin whose sign-in code arrived in other casing.
-    await seedHonors([])
+    await seedItems([])
     expect((await call('/api/items', {}, { access: { email: 'ADMIN@Example.TEST' } })).status).toBe(200)
   })
 
   it('allows every listed address and tolerates spaces and mixed case in the list', async () => {
     // Catches a list parser that fails on ", " or on upper case entries.
-    await seedHonors([])
+    await seedItems([])
     const listed = { ADMIN_EMAILS: ' Admin@example.test ,  SECOND@example.test,, ' }
     expect((await call('/api/items', {}, { access: { email: 'second@example.test' }, env: listed })).status).toBe(200) // Second admin.
     expect((await call('/api/items', {}, { access: { email: 'admin@example.test' }, env: listed })).status).toBe(200) // First admin.

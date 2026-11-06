@@ -2,13 +2,13 @@
 
 import { env } from 'cloudflare:workers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { call, fullRowOf, insertHonors, postTo, seedHonors, wire } from './helpers'
+import { call, fullRowOf, insertItems, postTo, seedItems, wire } from './helpers'
 
 // The time a frozen-clock request stamps.
 const NOW = '2026-11-03T09:30:15.123Z'
 
 beforeEach(async () => {
-  await seedHonors([{ id: 'knot-tying', name: 'Knot Tying' }])
+  await seedItems([{ id: 'knot-tying', name: 'Knot Tying' }])
   vi.useFakeTimers({ toFake: ['Date'] }) // Only Date, so D1 still runs.
   vi.setSystemTime(new Date(NOW))
 })
@@ -38,7 +38,7 @@ describe('POST /api/items', () => {
 
   it('gives -2 when the id is taken by a differently named item', async () => {
     // Catches an id clash answered as a 500, or an overwrite of the other item.
-    await insertHonors([{ id: 'camp-shirt', name: 'Camp  Shirt!' }]) // The same slug, another name.
+    await insertItems([{ id: 'camp-shirt', name: 'Camp  Shirt!' }]) // The same slug, another name.
     const res = await add()
     expect(res.status).toBe(201)
     expect(((await res.json()) as { item: { id: string } }).item.id).toBe('camp-shirt-2')
@@ -73,7 +73,7 @@ describe('POST /api/items', () => {
 
   it('answers 409 id-taken after the nine suffixes are used', async () => {
     // Catches an endless loop or a 500 when -2 to -9 are all taken.
-    await insertHonors([{ id: 'camp-shirt', name: 'A1' }, ...[2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ id: `camp-shirt-${n}`, name: `A${n}` }))])
+    await insertItems([{ id: 'camp-shirt', name: 'A1' }, ...[2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ id: `camp-shirt-${n}`, name: `A${n}` }))])
     const res = await add()
     expect(res.status).toBe(409)
     expect(await res.json()).toEqual({ error: 'id-taken' })

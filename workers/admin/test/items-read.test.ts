@@ -1,12 +1,12 @@
-// Tests the admin read: a page of honors with their full row shape, hidden ones included, newest change first.
+// Tests the admin read: a page of items with their full row shape, hidden ones included, newest change first.
 
 import { describe, expect, it } from 'vitest'
-import { call, seedHonors, wire } from './helpers'
+import { call, seedItems, wire } from './helpers'
 
 describe('GET /api/items', () => {
-  it('lists active and hidden honors with every field the admin shows', async () => {
-    // Catches a read that filters out Hidden honors, so the admin could never show one again, or drops the price and the times.
-    await seedHonors([
+  it('lists active and hidden items with every field the admin shows', async () => {
+    // Catches a read that filters out Hidden items, so the admin could never show one again, or drops the price and the times.
+    await seedItems([
       { id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor Industries', status: 'active', stock: 12, priceCents: 450, image: 'items/knot-tying.webp' },
       { id: 'africa-lore', name: 'Africa Lore', category: 'Outreach', status: 'hidden', stock: 0, issuedBy: 'Club', modifiedAt: '2026-11-02T10:00:00.000Z' },
     ])
@@ -25,7 +25,7 @@ describe('GET /api/items', () => {
 
   it('returns an empty page for an empty database', async () => {
     // Catches a null or error where the table has no rows.
-    await seedHonors([])
+    await seedItems([])
     const res = await call('/api/items')
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ items: [], nextCursor: null })

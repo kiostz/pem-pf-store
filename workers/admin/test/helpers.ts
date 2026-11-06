@@ -80,8 +80,8 @@ export function postChanges(body: unknown, init: RequestInit = {}, options: Call
 // The time every seeded row carries unless a test says otherwise (the migration's backfill value).
 export const BACKFILL_TIME = '2026-11-01T00:00:00.000Z'
 
-// A honor row to seed.
-export interface SeedHonor {
+// An item row to seed.
+export interface SeedItem {
   id: string
   name?: string
   category?: string
@@ -95,56 +95,56 @@ export interface SeedHonor {
 }
 
 /**
- * Replaces every honor in the test database with the given rows.
- * @param honors The rows to insert; missing fields get defaults.
+ * Replaces every item in the test database with the given rows.
+ * @param items The rows to insert; missing fields get defaults.
  * @return Nothing.
  */
-export async function seedHonors(honors: SeedHonor[]): Promise<void> {
+export async function seedItems(items: SeedItem[]): Promise<void> {
   await env.DB.prepare('DELETE FROM items').run() // Start clean.
-  await insertHonors(honors) // Then the rows.
+  await insertItems(items) // Then the rows.
 }
 
 /**
- * Adds honors without clearing the table, in one batch.
- * @param honors The rows to insert; missing fields get defaults.
+ * Adds items without clearing the table, in one batch.
+ * @param items The rows to insert; missing fields get defaults.
  * @return Nothing.
  */
-export async function insertHonors(honors: SeedHonor[]): Promise<void> {
-  if (honors.length === 0) return // Nothing to batch.
+export async function insertItems(items: SeedItem[]): Promise<void> {
+  if (items.length === 0) return // Nothing to batch.
   await env.DB.batch(
-    honors.map((honor) =>
+    items.map((item) =>
       env.DB.prepare(
         'INSERT INTO items (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       ).bind(
-        honor.id,
-        honor.name ?? honor.id,
-        honor.category ?? 'Nature',
-        honor.issuedBy ?? 'General Conference',
-        honor.status ?? 'active',
-        honor.stock ?? 0,
-        honor.priceCents ?? 400,
-        honor.createdAt ?? BACKFILL_TIME,
-        honor.modifiedAt ?? BACKFILL_TIME,
-        honor.image ?? null,
+        item.id,
+        item.name ?? item.id,
+        item.category ?? 'Nature',
+        item.issuedBy ?? 'General Conference',
+        item.status ?? 'active',
+        item.stock ?? 0,
+        item.priceCents ?? 400,
+        item.createdAt ?? BACKFILL_TIME,
+        item.modifiedAt ?? BACKFILL_TIME,
+        item.image ?? null,
       ),
     ),
   ) // One transaction.
 }
 
 /**
- * Reads one honor's stock and status straight from the database.
- * @param id The honor id.
+ * Reads one item's stock and status straight from the database.
+ * @param id The item id.
  * @return Its stock and status.
  */
 export async function rowOf(id: string): Promise<{ stock: number; status: string }> {
   const row = await env.DB.prepare('SELECT stock, status FROM items WHERE id = ?').bind(id).first<{ stock: number; status: string }>() // One row.
-  if (row === null) throw new Error(`no honor ${id}`) // A test bug.
+  if (row === null) throw new Error(`no item ${id}`) // A test bug.
   return row
 }
 
 /**
  * Reads every stored column a test cares about, straight from the database.
- * @param id The honor id.
+ * @param id The item id.
  * @return The row, or null when it does not exist.
  */
 export async function fullRowOf(id: string): Promise<{ name: string; category: string; price_cents: number; status: string; stock: number; issued_by: string; created_at: string; modified_at: string } | null> {
@@ -152,17 +152,17 @@ export async function fullRowOf(id: string): Promise<{ name: string; category: s
 }
 
 /**
- * Builds the JSON an `AdminHonor` has on the wire.
+ * Builds the JSON an `AdminItem` has on the wire.
  * @param over Fields that differ from a default seeded row called `id`.
- * @return The expected honor.
+ * @return The expected item.
  */
 export function wire(over: Record<string, unknown> & { id: string }): Record<string, unknown> {
   return { name: over.id, category: 'Nature', status: 'active', stock: 0, priceCents: 400, clubAdded: false, createdAt: BACKFILL_TIME, modifiedAt: BACKFILL_TIME, image: null, ...over } // Seed defaults plus overrides.
 }
 
 /**
- * Reads one honor's stored picture key straight from the database.
- * @param id The honor id.
+ * Reads one item's stored picture key straight from the database.
+ * @param id The item id.
  * @return The key, or null when it has none or the row is gone.
  */
 export async function imageOf(id: string): Promise<string | null> {

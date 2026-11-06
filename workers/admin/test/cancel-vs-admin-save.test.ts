@@ -1,11 +1,11 @@
 // Tests a restock landing between the admin's load and save of Items: the stale save is refused and the restock kept.
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import { insertHonors, postChanges, postTo, rowOf, seedHonors, seedOrders, wire } from './helpers'
+import { insertItems, postChanges, postTo, rowOf, seedItems, seedOrders, wire } from './helpers'
 
 beforeEach(async () => {
-  await seedHonors([])
-  await insertHonors([{ id: 'knot-tying', name: 'Knot Tying', stock: 3 }])
+  await seedItems([])
+  await insertItems([{ id: 'knot-tying', name: 'Knot Tying', stock: 3 }])
   await seedOrders([{ number: 'PF-20261105-ABCD', lines: [{ itemId: 'knot-tying', quantity: 2 }] }])
 })
 

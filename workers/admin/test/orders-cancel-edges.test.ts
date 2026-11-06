@@ -2,15 +2,15 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { env } from 'cloudflare:workers'
-import { BUYER, call, insertHonors, postChanges, postTo, rowOf, seedHonors, seedOrders, stepOf } from './helpers'
+import { BUYER, call, insertItems, postChanges, postTo, rowOf, seedItems, seedOrders, stepOf } from './helpers'
 
 const A = 'PF-20261105-AAAA' // First seeded order.
 const B = 'PF-20261105-BBBB' // Second seeded order.
 const EDITED = '2026-11-03T00:00:00.000Z' // The item's modified_at.
 
 beforeEach(async () => {
-  await seedHonors([]) // Empty shop.
-  await insertHonors([{ id: 'knot-tying', name: 'Knot Tying', stock: 3, modifiedAt: EDITED }]) // One item.
+  await seedItems([]) // Empty shop.
+  await insertItems([{ id: 'knot-tying', name: 'Knot Tying', stock: 3, modifiedAt: EDITED }]) // One item.
 })
 
 afterEach(() => {
@@ -42,7 +42,7 @@ describe('cancelling from any open step', () => {
 describe('restock arithmetic', () => {
   it('adds on top of a large stock with no cap', async () => {
     // Catches a clamp on the restocked stock.
-    await insertHonors([{ id: 'big', name: 'Big', stock: 5000 }])
+    await insertItems([{ id: 'big', name: 'Big', stock: 5000 }])
     await seedOrders([{ number: A, lines: [{ itemId: 'big', quantity: 7 }] }])
     await move(A, 'new', 'cancelled', true)
     expect((await rowOf('big')).stock).toBe(5007)

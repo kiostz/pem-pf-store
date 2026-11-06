@@ -2,14 +2,14 @@
 
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { fullRowOf, insertHonors, postTo, rowOf, seedHonors, seedOrders, stepOf } from './helpers'
+import { fullRowOf, insertItems, postTo, rowOf, seedItems, seedOrders, stepOf } from './helpers'
 
 const NUMBER = 'PF-20261105-ABCD' // The seeded order.
-const EDITED = '2026-11-03T00:00:00.000Z' // The honors' modified_at.
+const EDITED = '2026-11-03T00:00:00.000Z' // The items' modified_at.
 
 beforeEach(async () => {
-  await seedHonors([])
-  await insertHonors([
+  await seedItems([])
+  await insertItems([
     { id: 'knot-tying', name: 'Knot Tying', stock: 3, modifiedAt: EDITED },
     { id: 'camp-shirt', name: 'Camp Shirt', stock: 1, status: 'hidden', modifiedAt: EDITED },
   ])

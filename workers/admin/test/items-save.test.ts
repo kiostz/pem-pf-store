@@ -4,10 +4,10 @@ import { env } from 'cloudflare:workers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHandler } from '../src/handler'
 import { saveItemChanges } from '../src/items'
-import { BACKFILL_TIME, call, fullRowOf, insertHonors, pages, postChanges, postTo, rowOf, seedHonors, wire } from './helpers'
+import { BACKFILL_TIME, call, fullRowOf, insertItems, pages, postChanges, postTo, rowOf, seedItems, wire } from './helpers'
 
 beforeEach(async () => {
-  await seedHonors([
+  await seedItems([
     { id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 12 },
     { id: 'africa-lore', name: 'Africa Lore', category: 'Mission', status: 'hidden', stock: 0 },
   ])
@@ -431,7 +431,7 @@ describe('interruptions', () => {
 
   it('answers 409 with deletedIds and writes nothing else when another admin deleted one of the rows', async () => {
     // Catches a save that applies the live rows and skips the deleted one, leaving the admin to think all saved.
-    await insertHonors([{ id: 'camp-shirt', name: 'Camp Shirt', issuedBy: 'Club', stock: 0 }])
+    await insertItems([{ id: 'camp-shirt', name: 'Camp Shirt', issuedBy: 'Club', stock: 0 }])
     expect((await postTo('/api/items/delete', { id: 'camp-shirt', seen: { name: 'Camp Shirt', category: 'Nature', priceCents: 400, status: 'active', stock: 0, modifiedAt: BACKFILL_TIME } })).status).toBe(200) // Tab A deletes.
     const res = await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 12, to: 13 } }, { id: 'camp-shirt', stock: { from: 0, to: 5 } }] }) // Tab B, old view.
     expect(res.status).toBe(409)

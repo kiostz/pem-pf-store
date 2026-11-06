@@ -5,12 +5,12 @@ import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { readShop } from '../../api/src/read'
 import { loadShop } from '../../../src/shared/data/load.ts' // the shop page's own check of /shop
-import { BLANK, clubRows, postTo, racingAfterRead, seedClubs, seedHonors } from './helpers'
+import { BLANK, clubRows, postTo, racingAfterRead, seedClubs, seedItems } from './helpers'
 
 const FIELDS = { name: 'Lions', area: 'Klang', language: null, location: null, churchName: null }
 
 beforeEach(async () => {
-  await seedHonors([{ id: 'knot-tying', name: 'Knot Tying', stock: 5 }])
+  await seedItems([{ id: 'knot-tying', name: 'Knot Tying', stock: 5 }])
   await env.DB.exec("DELETE FROM settings; INSERT INTO settings (id, currency, default_price_cents, order_email_on) VALUES (1, 'MYR', 400, 1)")
   await seedClubs([{ id: 1, name: 'Lions', area: 'Klang' }, { id: 2, name: 'Gilead', churchName: 'Gilead SDA' }])
 })

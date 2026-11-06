@@ -1,16 +1,16 @@
 // Tests the save route's same-origin (CSRF) rules, method handling and gate ordering beyond the basic cases, so a loose Origin compare or a late gate cannot let a foreign page or a stranger save.
 
 import { describe, expect, it } from 'vitest'
-import { call, fullRowOf, postChanges, postTo, rowOf, seedHonors } from './helpers'
+import { call, fullRowOf, postChanges, postTo, rowOf, seedItems } from './helpers'
 
 // A valid save the admin page could send.
 const body = { changes: [{ id: 'knot-tying', stock: { from: 12, to: 20 } }] }
 
 /**
- * Seeds one honor.
+ * Seeds one item.
  * @return Nothing.
  */
-const seed = () => seedHonors([{ id: 'knot-tying', name: 'Knot Tying', status: 'active', stock: 12 }])
+const seed = () => seedItems([{ id: 'knot-tying', name: 'Knot Tying', status: 'active', stock: 12 }])
 
 describe('same-origin check on the save', () => {
   it('refuses every Origin that is not exactly the Worker\'s own, writing nothing', async () => {

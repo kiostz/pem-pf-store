@@ -1,14 +1,14 @@
 // Tests POST /api/orders/step without a restock: every move, stale guard, validation, 404, and no buyer data in logs or errors.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BUYER, call, postTo, seedHonors, seedOrders, stepOf } from './helpers'
+import { BUYER, call, postTo, seedItems, seedOrders, stepOf } from './helpers'
 
 const NUMBER = 'PF-20261105-ABCD' // The seeded order.
 
 afterEach(() => vi.restoreAllMocks()) // Spies go even when an assertion fails.
 
 beforeEach(async () => {
-  await seedHonors([])
+  await seedItems([])
   await seedOrders([{ number: NUMBER, step: 'new' }])
 })
 

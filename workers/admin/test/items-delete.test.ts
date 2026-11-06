@@ -3,13 +3,13 @@
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { deleteItem } from '../src/delete-item'
-import { fullRowOf, postTo, seedHonors, wire } from './helpers'
+import { fullRowOf, postTo, seedItems, wire } from './helpers'
 
 // The row as the admin saw it.
 const seen = { name: 'Camp Shirt', category: 'Shirt', priceCents: 1500, status: 'hidden', stock: 0, modifiedAt: '2026-11-03T01:00:00.000Z' }
 
 beforeEach(() =>
-  seedHonors([
+  seedItems([
     { id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', priceCents: 1500, status: 'hidden', issuedBy: 'Club', modifiedAt: '2026-11-03T01:00:00.000Z', createdAt: '2026-11-03T01:00:00.000Z' },
     { id: 'knot-tying', name: 'Knot Tying' },
   ]),
@@ -82,7 +82,7 @@ describe('POST /api/items/delete', () => {
   it('answers 409 after an edit made after viewing', async () => {
     // Catches a delete over another admin's rename or price change.
     for (const change of ["name = 'Camp Tee'", 'price_cents = 1600', "modified_at = '2026-11-03T02:00:00.000Z'", "category = 'Nature'", "status = 'active'"]) {
-      await seedHonors([{ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', priceCents: 1500, status: 'hidden', issuedBy: 'Club', modifiedAt: seen.modifiedAt }])
+      await seedItems([{ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', priceCents: 1500, status: 'hidden', issuedBy: 'Club', modifiedAt: seen.modifiedAt }])
       await env.DB.prepare(`UPDATE items SET ${change} WHERE id = 'camp-shirt'`).run()
       expect((await del('camp-shirt')).status, change).toBe(409)
       expect(await fullRowOf('camp-shirt'), change).not.toBeNull()

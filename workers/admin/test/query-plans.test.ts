@@ -6,13 +6,13 @@ import { encodeCursor, parseItemQuery, type ItemQuery } from '../src/item-query'
 import { pageSql } from '../src/items'
 import { orderPageSql } from '../src/orders'
 import { parseOrderQuery } from '../src/order-query'
-import { insertHonors, orderNumber, seedHonors, seedOrders, type SeedHonor } from './helpers'
+import { insertItems, orderNumber, seedItems, seedOrders, type SeedItem } from './helpers'
 
 beforeEach(async () => {
-  await seedHonors([])
-  const rows: SeedHonor[] = []
+  await seedItems([])
+  const rows: SeedItem[] = []
   for (let n = 1; n <= 200; n++) rows.push({ id: `item-${n}`, name: `Item ${n}`, category: n % 3 === 0 ? 'Nature' : 'Outreach', modifiedAt: new Date(Date.UTC(2026, 10, 1, 0, n)).toISOString(), createdAt: new Date(Date.UTC(2026, 10, 1, 0, 300 - n)).toISOString() })
-  await insertHonors(rows)
+  await insertItems(rows)
 })
 
 /**

@@ -4,12 +4,12 @@ import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { saveOrder } from '../../api/src/save-order'
 import { parseOrderRequest } from '../../api/src/order-request'
-import { call, fullRowOf, postChanges, rowOf, seedHonors, wire } from './helpers'
+import { call, fullRowOf, postChanges, rowOf, seedItems, wire } from './helpers'
 
 beforeEach(async () => {
   await env.DB.batch([env.DB.prepare('DELETE FROM order_lines'), env.DB.prepare('DELETE FROM orders'), env.DB.prepare('DELETE FROM settings')]) // Clean slate.
   await env.DB.exec("INSERT INTO settings (id, currency, default_price_cents, order_email_on) VALUES (1, 'MYR', 400, 1)") // The order save needs it.
-  await seedHonors([{ id: 'knot-tying', name: 'Knot Tying', stock: 5 }]) // The admin sees 5.
+  await seedItems([{ id: 'knot-tying', name: 'Knot Tying', stock: 5 }]) // The admin sees 5.
 })
 
 describe('an order between the admin load and save', () => {
@@ -33,7 +33,7 @@ describe('an order between the admin load and save', () => {
 describe('an order for an item the admin just edited', () => {
   it('lowers the stock but leaves the changed time and the Recently changed position as the edit left them', async () => {
     // Catches an order stamping modified_at, which would push every sold item to the top of Recently changed.
-    await seedHonors([{ id: 'africa-lore', name: 'Africa Lore', stock: 5 }, { id: 'knot-tying', name: 'Knot Tying', stock: 5 }])
+    await seedItems([{ id: 'africa-lore', name: 'Africa Lore', stock: 5 }, { id: 'knot-tying', name: 'Knot Tying', stock: 5 }])
     expect((await postChanges({ changes: [{ id: 'africa-lore', priceCents: { from: 400, to: 650 } }] })).status).toBe(200) // The edit stamps Africa Lore.
     const edited = (await fullRowOf('africa-lore'))!.modified_at
     const request = parseOrderRequest({ requestId: '00000000-0000-4000-8000-000000000002', turnstileToken: 't', name: 'Ana Tester', email: 'ana@example.com', phone: '+60 12-345 6789', club: { name: 'Gilead', typed: false }, lines: [{ itemId: 'africa-lore', quantity: 2 }] })!

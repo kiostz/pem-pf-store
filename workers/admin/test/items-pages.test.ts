@@ -2,7 +2,7 @@
 
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { call, insertHonors, seedHonors, type SeedHonor } from './helpers'
+import { call, insertItems, seedItems, type SeedItem } from './helpers'
 
 // One page as the Worker answers it.
 interface Page {
@@ -30,9 +30,9 @@ const pad = (n: number): string => String(n).padStart(3, '0')
  * @return Nothing.
  */
 async function seedNumbered(count: number): Promise<void> {
-  const rows: SeedHonor[] = []
+  const rows: SeedItem[] = []
   for (let n = 1; n <= count; n++) rows.push({ id: `item-${pad(n)}`, name: `Item ${pad(n)}`, createdAt: at(n), modifiedAt: at(n), category: n % 2 === 0 ? 'Nature' : 'Outreach' })
-  await seedHonors(rows)
+  await seedItems(rows)
 }
 
 /**
@@ -94,7 +94,7 @@ describe('pages of 50', () => {
 
   it('breaks equal times by name A-Z, ignoring case', async () => {
     // Catches ties left to the database's own order: the 422 backfilled rows share one time and must read A-Z.
-    await seedHonors([
+    await seedItems([
       { id: 'banana', name: 'banana' },
       { id: 'cherry', name: 'Cherry' },
       { id: 'apple', name: 'Apple' },
@@ -107,15 +107,15 @@ describe('pages of 50', () => {
 
   it('lists name order case-insensitively', async () => {
     // Catches binary collation, which puts "apple" after every capital.
-    await seedHonors([{ id: 'b', name: 'Banana' }, { id: 'a', name: 'apple' }, { id: 'c', name: 'Cherry' }])
+    await seedItems([{ id: 'b', name: 'Banana' }, { id: 'a', name: 'apple' }, { id: 'c', name: 'Cherry' }])
     expect((await page('sort=name')).body.items.map((h) => h.id)).toEqual(['a', 'b', 'c'])
   })
 
   it('pages the same way when two rows tie on time across the page edge', async () => {
     // Catches a cursor that keeps only the time: rows tied with the 50th would be lost or repeated.
-    const rows: SeedHonor[] = []
+    const rows: SeedItem[] = []
     for (let n = 1; n <= 120; n++) rows.push({ id: `tie-${pad(n)}`, name: `Tie ${pad(n)}` }) // All the same time.
-    await seedHonors(rows)
+    await seedItems(rows)
     const pages = await walk('changed')
     expect(pages.map((ids) => ids.length)).toEqual([50, 50, 20])
     expect(pages.flat()).toEqual(rows.map((row) => row.id)) // A-Z.
@@ -133,7 +133,7 @@ describe('filters', () => {
 
     it(`searches words in any order under sort=${sort}, together with a category`, async () => {
       // Catches a search that is a phrase match, or that ignores the category.
-      await insertHonors([
+      await insertItems([
         { id: 'rope-work', name: 'Rope Work', category: 'Outreach' },
         { id: 'work-rope', name: 'Work With Rope', category: 'Nature' },
         { id: 'knots', name: 'Knots', category: 'Nature' },
@@ -145,7 +145,7 @@ describe('filters', () => {
 
   it('takes % and _ literally in a search', async () => {
     // Catches a LIKE-based search where "%" matches everything and "_" any one character.
-    await insertHonors([
+    await insertItems([
       { id: 'pct', name: 'Fifty 50% Off' },
       { id: 'under', name: 'Snake_Charmer' },
       { id: 'plain', name: 'Snake Charmer' },
@@ -161,7 +161,7 @@ describe('filters', () => {
 
   it('returns an empty page for an empty table', async () => {
     // Catches a crash on no rows.
-    await seedHonors([])
+    await seedItems([])
     expect((await page('')).body).toEqual({ items: [], nextCursor: null })
   })
 
@@ -191,9 +191,9 @@ describe('filters', () => {
     expect(body.items[0]).toEqual({ id: 'item-001', name: 'Item 001', category: 'Outreach', status: 'active', stock: 0, priceCents: 400, image: null, clubAdded: false, createdAt: at(1), modifiedAt: at(1) })
   })
 
-  it('marks a Club-added honor with clubAdded', async () => {
+  it('marks a Club-added item with clubAdded', async () => {
     // Catches clubAdded read from the wrong column.
-    await seedHonors([{ id: 'camp-shirt', name: 'Camp Shirt', issuedBy: 'Club' }])
+    await seedItems([{ id: 'camp-shirt', name: 'Camp Shirt', issuedBy: 'Club' }])
     expect(((await page('')).body.items[0] as Record<string, unknown>).clubAdded).toBe(true)
   })
 })

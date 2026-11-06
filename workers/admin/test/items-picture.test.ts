@@ -2,7 +2,7 @@
 
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { call, fullRowOf, imageOf, seedHonors, wire } from './helpers'
+import { call, fullRowOf, imageOf, seedItems, wire } from './helpers'
 
 // A valid WebP header followed by filler.
 const WEBP = new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 9, 9])
@@ -24,13 +24,13 @@ const upload = (query: string, body: BodyInit | null = WEBP, headers: Record<str
 
 /**
  * Lists the stored keys under one id.
- * @param id The honor id.
+ * @param id The item id.
  * @return The keys.
  */
 const keysOf = async (id: string) => (await env.PICTURES.list({ prefix: `items/${id}` })).objects.map((object) => object.key)
 
 beforeEach(async () => {
-  await seedHonors([{ id: 'knot-tying', name: 'Knot Tying', stock: 5, priceCents: 450, status: 'active', image: OLD }, { id: 'africa-lore', name: 'Africa Lore' }])
+  await seedItems([{ id: 'knot-tying', name: 'Knot Tying', stock: 5, priceCents: 450, status: 'active', image: OLD }, { id: 'africa-lore', name: 'Africa Lore' }])
   for (const { key } of (await env.PICTURES.list()).objects) await env.PICTURES.delete(key) // Empty bucket.
   await env.PICTURES.put(OLD, WEBP, { httpMetadata: { contentType: 'image/webp' } })
 })
@@ -209,7 +209,7 @@ describe('POST /api/items/picture', () => {
   it('accepts a 92-character item id', async () => {
     // catches: an upload-only id cap tighter than the 100 characters every other route accepts
     const id = `${'a'.repeat(45)}-${'b'.repeat(46)}`
-    await seedHonors([{ id, name: 'Long' }])
+    await seedItems([{ id, name: 'Long' }])
     const res = await upload(`id=${id}&seen=`)
     expect(res.status).toBe(200)
     expect(id).toHaveLength(92)
@@ -231,7 +231,7 @@ describe('POST /api/items/picture', () => {
   })
 
   it('answers 409 deletedIds and drops the new object when the row is deleted right after the guarded update succeeds', async () => {
-    // catches: a 200 with no honor, or an orphan new object, when another admin deletes the item between the update and the re-read
+    // catches: a 200 with no item, or an orphan new object, when another admin deletes the item between the update and the re-read
     const real = env.DB.prepare.bind(env.DB)
     const spy = vi.spyOn(env.DB, 'prepare').mockImplementation((sql: string) => {
       const statement = real(sql)

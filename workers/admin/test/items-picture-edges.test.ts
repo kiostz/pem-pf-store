@@ -2,7 +2,7 @@
 
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { call, imageOf, seedHonors } from './helpers'
+import { call, imageOf, seedItems } from './helpers'
 
 // The bytes "RIFF", a size and "WAVE": a RIFF file that is not a WebP.
 const WAVE = new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 0, 0, 0, 0x57, 0x41, 0x56, 0x45, 9, 9])
@@ -30,7 +30,7 @@ const upload = (query: string, body: BodyInit | null, type = 'image/webp') =>
 const allKeys = async () => (await env.PICTURES.list()).objects.map((object) => object.key)
 
 beforeEach(async () => {
-  await seedHonors([{ id: 'knot-tying', name: 'Knot Tying', image: 'items/knot-tying.webp' }, { id: 'africa-lore', name: 'Africa Lore' }])
+  await seedItems([{ id: 'knot-tying', name: 'Knot Tying', image: 'items/knot-tying.webp' }, { id: 'africa-lore', name: 'Africa Lore' }])
   for (const { key } of (await env.PICTURES.list()).objects) await env.PICTURES.delete(key) // Empty bucket.
   await env.PICTURES.put('items/knot-tying.webp', WEBP, { httpMetadata: { contentType: 'image/webp' } })
 })
