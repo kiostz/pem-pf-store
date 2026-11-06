@@ -19,20 +19,6 @@ The shop reads its items, clubs and settings from the API Worker's `/shop`, one 
 
 Each card shows "Stock: N left"; at 0 it shows Sold out in place of Add, and the steppers stop at the stock. A cart line above today's stock, or Sold out, is marked in red and blocks Checkout until the buyer lowers or removes it (their saved cart is never changed for them). Home ends with an "Admin" link to the live Admin Worker. While the shop loads, Shop, Cart and Details show grey skeletons after 300 ms. Orders go through the API Worker (see "Endpoints"), so a sent order lowers stock by itself.
 
-### The first push to the live site (the owner, once)
-
-Work after the last push is committed on `main` and not yet pushed; the user pushes, never a script. Run the deploy checklist first, then in this order:
-
-1. Connect `pictures.stardew.win` to the R2 bucket and check a picture opens (steps 1 and 2 of "Switch pictures to R2").
-2. The GitHub deploy token needs R2 access before the first push, because the Admin Worker deploys with the R2 binding. If "Deploy Admin Worker" fails on it, add that one permission and run the job again.
-3. Push the API Worker's order lookup by request id (`0caa8c3`) by its id: `git push origin 0caa8c3:main`. It carries all the work before it too (pictures from R2, admin orders with the nightly cron, clubs and settings). Wait for Pages, the API Worker and the Admin Worker to pass.
-4. Right after that Pages deploy, run the picture-key rewrite (steps 4 to 6 of "Switch pictures to R2"). Under Triggers, the API Worker should now show the `0 19 * * *` cron. Then push the shop's lookup before a resend (`47c8373`): `git push origin 47c8373:main`, and wait for Pages. The lookup route it calls is already live from step 3.
-5. Rename the database to `items`, in this order. Pick a quiet hour, not within 30 minutes of 19:00 UTC. In `workers/`, run `npx wrangler d1 time-travel info pem-pathfinder-store` and keep the bookmark. Count the rows with `npx wrangler d1 execute pem-pathfinder-store --remote --config api/wrangler.jsonc --command "SELECT (SELECT count(*) FROM honors) h, (SELECT count(*) FROM orders) o, (SELECT count(*) FROM order_lines) l, (SELECT count(*) FROM orders WHERE buyer_name IS NULL OR buyer_email IS NULL OR buyer_phone IS NULL) nb"` and note them; `nb` must be 0 (see the `0004` paragraph below). Run `npm run db:migrate:remote`; if it errors, nothing changed, so do not push, and report. Then push the remaining commits at once and wait for Deploy API Worker, Deploy Admin Worker and Pages. Between the migration and the deploys the live shop shows "We couldn't load the shop." for a short while, and no order can be saved.
-6. Check the live shop loads, the order counts match the counts taken before, and the admin Orders tab shows buyers.
-7. If a deploy fails, never restore for a single failure: if only Pages or only one Worker failed, open the run in the Actions tab and press "Re-run failed jobs", because the Worker that did deploy already saves orders on `items`, and a restore would delete them and break it. Restore only when both Deploy API Worker and Deploy Admin Worker failed (both old Workers still run) and no order has arrived since the migration: `npx wrangler d1 time-travel restore pem-pathfinder-store --bookmark=<the bookmark>`.
-
-Until step 5 has run on the live database, `npm run db:export:remote` fails there (it reads `--table items`, which the live database does not have yet). To refill a local database before that, export with the old table name `honors`.
-
 ## Order form settings
 
 The order form reads two keys from the committed `.env` files, which are public by design:
@@ -47,18 +33,6 @@ To try the whole order flow locally, start the API Worker (`npm run dev` in `wor
 Pictures live in the R2 bucket `pem-pathfinder-store-pictures` under `items/<id>.webp`. The database column `image` holds that key, never a full address. Buyers load each picture from the bucket's custom domain, `https://pictures.stardew.win/`, which the shop builds from `VITE_PICTURE_URL` in `.env`. The shop shows the Category mark for an `image` that is not an `items/<id>.webp` or `.png` key.
 
 Locally, `.env.development` sets `VITE_PICTURE_URL=/pictures`, and Vite sends `/pictures` to the local Admin Worker (`npm run dev:admin` in `workers/`, port 8788), which serves the local R2 in `workers/api/.wrangler/state`. With `dev:admin` stopped, the local shop shows Category marks. A fresh clone has an empty local R2, so its shop shows Category marks until a picture is uploaded locally.
-
-### Switch pictures to R2 (the owner, once)
-
-1. In the Cloudflare dashboard open R2, the bucket `pem-pathfinder-store-pictures`, Settings, Custom Domains, and add `pictures.stardew.win`. Wait until its status is Active.
-2. Check `https://pictures.stardew.win/items/knot-tying.webp` opens in a browser.
-3. Commit and push. The push deploys the Pages site, the API Worker and the Admin Worker, which gets its R2 binding. Then check the "Deploy Admin Worker" run; if it names a missing R2 permission on the CI token, add only that one.
-4. Right after the push finishes, in `workers/` run the rewrite on the live database:
-   `npx wrangler d1 execute pem-pathfinder-store --remote --config api/wrangler.jsonc --command "UPDATE honors SET image = 'items/' || substr(image, 9) WHERE image LIKE 'patches/%'"`.
-   It is safe to run twice, and it leaves `modified_at` alone. Until it runs, the shop shows Category marks.
-5. Check the count: `npx wrangler d1 execute pem-pathfinder-store --remote --config api/wrangler.jsonc --command "SELECT count(*) AS n FROM honors WHERE image LIKE 'items/%'"` answers 401, and the same query for `'patches/%'` answers 0.
-6. Open the live shop and check the pictures load from `pictures.stardew.win` (browser network list).
-7. Once the live shop shows the pictures, the move is done. `public/patches/` is already gone from the repo.
 
 ## Test
 
