@@ -71,6 +71,16 @@ describe('resolveCart', () => {
       ['Leaves', 1],
     ])
   })
+
+  it('keeps lines A to Z whatever the stock, with Sold out items not moved last', () => { // the cart does not use the Shop's order
+    // catches: the Shop's stock-first order leaking into the cart
+    const items = [ // stock varies against the name order
+      makeItem('zebra', 'Zebra', { stock: 5 }), // in stock, last by name
+      makeItem('ants', 'Ants', { stock: 0 }), // Sold out, first by name
+    ]
+    const { lines } = resolveCart({ zebra: 1, ants: 1 }, items) // both in the cart
+    expect(lines.map((line) => line.item.name)).toEqual(['Ants', 'Zebra']) // A to Z
+  })
 })
 
 describe('money and count', () => {

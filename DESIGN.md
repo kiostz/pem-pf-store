@@ -163,7 +163,7 @@ A 44 px outlined circle in the header of Home and Shop: a sun while the page is 
 
 - White (dark `#1C1C1E`), 16 px radius, and a 1 px `border-subtle` hairline in both themes. No shadow in either theme: the hairline alone gives the edge, so a card looks the same whichever way the theme is set.
 - This holds for the Item card, the cart card, and the cards on Order sent. Home's "How ordering works" list has it too, with hairline dividers between steps in the soft fill.
-- The patch picture is the hero of an Item card; the name wraps rather than truncates; the Category label is a quiet text box (not a control); the price is muted in tabular figures; Add sits at the same height on every card in a row.
+- The patch picture is the hero of an Item card; the name wraps rather than truncates; the Category label is a quiet text box (not a control) under the name, reading "Honors · Nature" or just the category ("Accessories") when there is no subcategory; the price is muted in tabular figures; Add sits at the same height on every card in a row.
 
 ### Buttons and steppers
 
@@ -368,4 +368,4 @@ The Clubs tab reuses every token above; it adds no colour, radius or duration. E
 ## Fixed choices
 
 - Items show as a card grid, with Add turning into a stepper after the first tap, not as rows with always-shown steppers.
-- Unchanged: the A–Z order, the Category label on each card, the Category filter dropdown, the Category mark colours and the confirmation wording.
+- Shop order: in-stock items first, then Sold out, each group A–Z (the cart stays A–Z). Unchanged: the Category label's place on each card, the Category filter dropdown, the Category mark colours and the confirmation wording.

@@ -1,4 +1,4 @@
-// Search, category filter and A to Z sort for the catalogue, as plain functions so the screen only renders their result.
+// Search, category filter, the Shop's stock-first order and the Category label text for the catalogue, as plain functions so the screen only renders their result.
 
 import type { Item } from '@/shared/data/types.ts' // the shape of one item
 import { byText } from '@/shared/sort/sort-by-name.ts' // A to Z compare
@@ -34,4 +34,23 @@ export function categoryNames(items: Item[]): string[] { // the items to take ca
     // the option names
     ...new Set(items.map((item) => item.category)),
   ].sort(byText) // dedupe, then A to Z
+}
+
+/**
+ * Puts the Shop's items in order: in stock first, then Sold out, each group A to Z.
+ * @param items the items to order
+ * @return a new array; the input is left as it was, and equal names keep their input order
+ */
+export function shopOrder(items: Item[]): Item[] { // the items to order
+  const soldOut = (item: Item): number => (item.stock > 0 ? 0 : 1) // 0 sorts first: in stock before Sold out
+  return [...items].sort((a, b) => soldOut(a) - soldOut(b) || byText(a.name, b.name)) // copy, then stock group, then A to Z
+}
+
+/**
+ * Writes the text of a card's Category label.
+ * @param item the item whose category and subcategory to show
+ * @return "Honors · Nature", or the category alone when there is no subcategory
+ */
+export function categoryLabel(item: Pick<Item, 'category' | 'subcategory'>): string { // the fields the label needs
+  return item.subcategory === null ? item.category : `${item.category} · ${item.subcategory}` // a middle dot with a space either side
 }

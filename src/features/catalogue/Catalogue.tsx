@@ -1,9 +1,8 @@
-// The catalogue screen: a sticky search and category toolbar over one A to Z grid of item cards, plus its loading, error, empty and no-match states.
+// The catalogue screen: a sticky search and category toolbar over one stock-first, then A to Z grid of item cards, plus its loading, error, empty and no-match states.
 
 import { useRef, useState } from 'react' // the filter, and handles on the list and the search box
-import { sortByName } from '@/shared/sort/sort-by-name.ts' // names A to Z
 import { CategoryFilter } from './CategoryFilter.tsx' // the category filter
-import { categoryNames, filterItems } from './filter.ts' // search and category filter
+import { categoryNames, filterItems, shopOrder } from './filter.ts' // search, category filter and the Shop's order
 import { PILL_BOX } from '@/shared/ui/button-box.ts' // the pill shape of the actions
 import { loadErrorText } from '@/shared/ui/load-error-text.ts' // the failed-load message by reason
 import { LoadingStatus } from '@/shared/ui/LoadingStatus.tsx' // what a screen reader hears while loading
@@ -24,7 +23,7 @@ const LIST_BOX = 'mt-3' // the grid's top, shared by the real list and the skele
  * @param data the load: state, skeleton gate and retry
  * @param category the category the address names, or null; validated here against the data
  * @param onSelectCategory called with the category picked, or null for All categories
- * @return the toolbar, the status line, the retry or Clear filters button, and the A to Z list
+ * @return the toolbar, the status line, the retry or Clear filters button, and the stock-first list
  */
 export function Catalogue({
   data, // the load
@@ -44,7 +43,7 @@ export function Catalogue({
   const switchedOn = filterItems(allItems, { query: '', category: null }) // what the buyer may see at all
   const category = requestedCategory !== null && categoryNames(allItems).includes(requestedCategory) ? requestedCategory : null // an unknown, blank or not yet loaded category is All categories
   const matches = filterItems(allItems, { query, category }) // what the search and the category leave
-  const sorted = sortByName(matches) // names A to Z
+  const sorted = shopOrder(matches) // in stock first, then Sold out, each A to Z
   const filtering = query.trim() !== '' || category !== null // whether any filter is active
   const countText = `${matches.length} ${matches.length === 1 ? 'item' : 'items'}${filtering ? (matches.length === 1 ? ' matches' : ' match') : ''}` // "299 items", "12 items match", "1 item matches"
 
@@ -172,7 +171,7 @@ export function Catalogue({
       {state.status === 'ready' && (
         // The grid fades in once as a whole; cards do not animate one by one.
         <div ref={listRef} className="animate-fade-in">
-          {/* All Active items at once, A to Z. */}
+          {/* All Active items at once, in stock first, then Sold out, each A to Z. */}
           <ul className={`${LIST_BOX} ${CARD_GRID_BOX}`}>
             {sorted.map((item) => ( // one item per card
               // one card per item

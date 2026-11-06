@@ -1,4 +1,4 @@
-// Tests for Catalogue: loading, error, empty and ready states, the flat A to Z list, search and the category filter, with fetch mocked at the boundary.
+// Tests for Catalogue: loading, error, empty and ready states, the stock-first list, search and the category filter, with fetch mocked at the boundary.
 
 import { useState } from 'react' // the stand-in address
 import { act, fireEvent, render, screen, within } from '@testing-library/react' // render and query the screen
@@ -68,13 +68,13 @@ afterEach(() => {
 })
 
 describe('Catalogue', () => {
-  it('lists one flat list with no headings, items A to Z across categories', async () => { // one flat A to Z list across categories
-    // catches: file order or category grouping leaking into the list, or a heading left in it
+  it('lists one flat list with no headings, in-stock items first and then Sold out, each A to Z across categories', async () => { // one flat stock-first list across categories
+    // catches: file order or category grouping leaking into the list, a heading left in it, or Sold out items mixed among the stocked ones
     serve([
-      item('Leaves', 'Nature'), // one test item the shop lists
-      item('Knot Tying', 'Recreation'), // one test item the shop lists
-      item('Ants', 'Nature'), // one test item the shop lists
-      item('Braiding - Advanced', 'Arts and Crafts'), // one test item the shop lists
+      makeItem('leaves', 'Leaves', { category: 'Nature', stock: 0 }), // Sold out
+      makeItem('knot-tying', 'Knot Tying', { category: 'Recreation', stock: 3 }), // in stock
+      makeItem('ants', 'Ants', { category: 'Nature', stock: 0 }), // Sold out
+      makeItem('braiding', 'Braiding - Advanced', { category: 'Arts and Crafts', stock: 1 }), // in stock
     ])
     render(<CatalogueWithCart />)
     const list = await screen.findByRole('list')
@@ -84,7 +84,33 @@ describe('Catalogue', () => {
       within(list)
         .getAllByRole('listitem')
         .map((li) => li.textContent?.replace(/(Nature|Recreation|Arts and Crafts)?RM.*/, '')),
-    ).toEqual(['Ants', 'Braiding - Advanced', 'Knot Tying', 'Leaves']) // names only, labels and prices checked elsewhere
+    ).toEqual(['Braiding - Advanced', 'Knot Tying', 'Ants', 'Leaves']) // stock group A to Z, then Sold out A to Z
+  })
+
+  it('keeps the stock-first order inside a search', async () => { // order inside a search
+    // catches: the order applied before filtering and lost, or only for the full list
+    serve([ // four items, one not matching
+      makeItem('barn', 'Barn', { stock: 0 }), // Sold out match
+      makeItem('arrow', 'Arrow', { stock: 0 }), // Sold out match
+      makeItem('marsh', 'Marsh', { stock: 2 }), // stocked match
+      makeItem('zebra', 'Zebra', { stock: 5 }), // no match
+    ])
+    render(<CatalogueWithCart />) // the screen under test
+    await screen.findByText('Barn') // wait for the load
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search items' }), { target: { value: 'ar' } }) // matches Barn, Arrow, Marsh
+    expect(screen.getAllByRole('listitem').map((li) => li.textContent?.replace(/Recreation.*/, ''))).toEqual(['Marsh', 'Arrow', 'Barn']) // stocked first, then A to Z
+  })
+
+  it('keeps the stock-first order inside a category', async () => { // order inside a category
+    // catches: the order lost when a category is picked
+    serve([ // two honors and a shirt
+      makeItem('a', 'Ants', { category: 'Honors', stock: 0 }), // Sold out
+      makeItem('b', 'Bees', { category: 'Honors', stock: 4 }), // stocked
+      makeItem('c', 'Cap', { category: 'Shirts', stock: 4 }), // other category
+    ])
+    render(<CatalogueWithCart initialCategory="Honors" />) // opened on Honors
+    await screen.findByText('Bees') // wait for the load
+    expect(screen.getAllByRole('listitem').map((li) => li.textContent?.replace(/Honors.*/, ''))).toEqual(['Bees', 'Ants']) // stocked first
   })
 
   it('shows each card its category label, and the label is not a button', async () => {
@@ -97,16 +123,17 @@ describe('Catalogue', () => {
     expect(within(row).queryByRole('link')).not.toBeInTheDocument()
   })
 
-  it('with the Honors and Accessories data, labels a card Honors, filters on those two and shows All for an old Nature link', async () => { // the new category names
-    // catches: a label or filter built from the subcategory, or an old ?category=Nature link hiding every item
+  it('with the Honors and Accessories data, labels a card Honors · Nature, filters on those two and shows All for an old Nature link', async () => { // the new category names
+    // catches: a label missing its subcategory, or an old ?category=Nature link hiding every item
     serve([ // a /shop answer with the new category names
       makeItem('knots', 'Knot Tying', { category: 'Honors', subcategory: 'Nature' }), // an honor with a subcategory
       makeItem('scarf', 'Scarf', { category: 'Accessories' }), // an accessory with none
     ]) // the shop lists these items
     render(<CatalogueWithCart initialCategory="Nature" />) // an old link: Nature is no longer a category
     const row = (await screen.findByText('Knot Tying')).closest('li')! // the honor's card
-    expect(within(row).getByText('Honors')).toBeInTheDocument() // the label is the category
-    expect(within(row).queryByText('Nature')).not.toBeInTheDocument() // the subcategory is not shown
+    expect(within(row).getByText('Honors · Nature')).toBeInTheDocument() // the label is the category and subcategory
+    expect(within(row).queryByRole('button', { name: /Honors/ })).not.toBeInTheDocument() // still not a control
+    expect(within((await screen.findByText('Scarf')).closest('li')!).getByText('Accessories')).toBeInTheDocument() // no subcategory: the category alone
     const control = screen.getByRole('combobox', { name: 'Category' }) // the filter
     expect(within(control).getAllByRole('option').map((option) => option.textContent)).toEqual(['All categories', 'Accessories', 'Honors']) // only categories present
     expect(control).toHaveDisplayValue('All categories') // the old link falls back

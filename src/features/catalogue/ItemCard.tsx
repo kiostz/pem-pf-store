@@ -6,6 +6,7 @@ import { useCart } from '@/features/cart/use-cart.ts' // the cart the card edits
 import { CardQuantity } from '@/features/cart/CardQuantity.tsx' // Add, the stepper or Sold out
 import { quantityCap } from '@/features/cart/cart.ts' // the most a buyer may pick
 import { PatchPicture } from '@/shared/ui/PatchPicture.tsx' // picture or category mark
+import { categoryLabel } from './filter.ts' // "Honors · Nature" or the category alone
 import { CARD_BOX } from './item-card-box.ts' // the card's box classes
 
 const STOCK_FORMAT = new Intl.NumberFormat('en-US') // 1,200: a thousands separator whatever the browser's language
@@ -31,8 +32,8 @@ export function ItemCard({ item, currency }: { item: Item; currency: string }) {
       <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
         {/* The name, read first; wraps rather than truncates. */}
         <span className="font-medium wrap-break-word">{item.name}</span>
-        {/* The Category label: text only, not a control. */}
-        <span className="text-text-default bg-border-subtle rounded-sm px-1.5 text-xs">{item.category}</span>
+        {/* The Category label, "Honors · Nature" or the category alone: text only, not a control. */}
+        <span className="text-text-default bg-border-subtle rounded-sm px-1.5 text-xs">{categoryLabel(item)}</span>
         {/* The price in tabular figures. */}
         <span className="text-text-muted tabular-nums">{formatPrice(item.price, currency)}</span>
         {/* How many are left, on every card including Sold out ones; a 20 px line, 13 px text. */}
