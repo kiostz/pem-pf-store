@@ -149,4 +149,24 @@ describe('migration 0004', () => {
     expect(await rows('SELECT count(*) FROM order_lines')).toEqual([[6]])
     expect(await rows(`SELECT name FROM sqlite_master WHERE name LIKE '%\\_copy' ESCAPE '\\' OR name = 'items'`)).toEqual([])
   })
+
+  it('keeps line order across orders when lines were deleted and interleaved before the rebuild', async () => {
+    // Catches copy-back that renumbers or regroups lines instead of keeping each old rowid (a gap left by a deleted line, lines of two orders interleaved).
+    await seed()
+    await db.prepare(`INSERT INTO order_lines (order_id, honor_id, name, quantity, price_cents) VALUES (3, 'zeta', 'Zeta', 1, 400)`).run() // Order 3 gets a late line after order 4's.
+    await db.prepare(`DELETE FROM order_lines WHERE order_id = 1 AND honor_id = 'camp'`).run() // Leaves a rowid gap inside order 1.
+    const before = await rows('SELECT rowid, order_id, honor_id FROM order_lines ORDER BY rowid')
+    await applyD1Migrations(db, REBUILD)
+    expect(await rows('SELECT rowid, order_id, item_id FROM order_lines ORDER BY rowid')).toEqual(before) // Same rowids, same sequence.
+  })
+
+  it('refuses an order whose personal data was already removed and leaves every table as seeded', async () => {
+    // Catches a migration that silently drops or blanks a removed-buyer order: its NULL buyer fields must stop 0004 whole, as the live check U3 expects.
+    await seed()
+    await db.prepare(`UPDATE orders SET buyer_name = NULL, buyer_email = NULL, buyer_phone = NULL, personal_data_removed_at = '2026-11-05T00:00:00.000Z' WHERE id = 2`).run()
+    await expect(applyD1Migrations(db, REBUILD)).rejects.toThrow()
+    expect(await rows('SELECT id, buyer_name, personal_data_removed_at FROM orders ORDER BY id')).toEqual([[1, 'Ana', null], [2, null, '2026-11-05T00:00:00.000Z'], [3, 'Ana', null], [4, 'Ana', null]])
+    expect(await rows('SELECT count(*) FROM order_lines')).toEqual([[6]])
+    expect(await rows('SELECT count(*) FROM honors')).toEqual([[4]])
+  })
 })
