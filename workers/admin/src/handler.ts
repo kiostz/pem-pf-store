@@ -357,6 +357,7 @@ async function postItem(request: Request, env: Env): Promise<Response> {
   if (input === null) return json({ error: 'invalid' }, 400) // Fails validation.
   const result = await addItem(env.DB, input, new Date().toISOString()) // Both times are this one.
   if (result.kind === 'added') return json({ item: result.item }, 201) // Created.
+  if (result.kind === 'invalid') return json({ error: 'invalid' }, 400) // A subcategory that does not fit; nothing written.
   return json({ error: result.kind }, 409) // `name-taken` or `id-taken`.
 }
 

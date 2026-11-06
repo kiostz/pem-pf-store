@@ -11,7 +11,7 @@ import { insertItems, orderNumber, seedItems, seedOrders, type SeedItem } from '
 beforeEach(async () => {
   await seedItems([])
   const rows: SeedItem[] = []
-  for (let n = 1; n <= 200; n++) rows.push({ id: `item-${n}`, name: `Item ${n}`, category: n % 3 === 0 ? 'Nature' : 'Outreach', modifiedAt: new Date(Date.UTC(2026, 10, 1, 0, n)).toISOString(), createdAt: new Date(Date.UTC(2026, 10, 1, 0, 300 - n)).toISOString() })
+  for (let n = 1; n <= 200; n++) rows.push({ id: `item-${n}`, name: `Item ${n}`, category: n % 3 === 0 ? 'Honors' : 'Shirts', modifiedAt: new Date(Date.UTC(2026, 10, 1, 0, n)).toISOString(), createdAt: new Date(Date.UTC(2026, 10, 1, 0, 300 - n)).toISOString() }) // A current category name.
   await insertItems(rows)
 })
 
@@ -28,7 +28,7 @@ async function planOf(query: ItemQuery): Promise<string[]> {
 
 describe('query plans', () => {
   for (const sort of ['changed', 'newest', 'name'] as const) {
-    for (const category of [null, 'Nature']) {
+    for (const category of [null, 'Honors']) { // A current category name.
       for (const withCursor of [false, true]) {
         for (const search of [false, true]) {
           const label = `sort=${sort} category=${category ?? 'all'} cursor=${withCursor} search=${search}`

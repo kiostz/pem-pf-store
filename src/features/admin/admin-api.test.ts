@@ -119,6 +119,29 @@ describe('loadItemPage', () => {
   })
 })
 
+describe('isAdminItem through loadItemPage', () => { // the subcategory fields of a row
+  /**
+   * Builds a page answer.
+   * @param items The rows to carry.
+   * @return A JSON response with those rows and no next cursor.
+   */
+  const body = (items: unknown[]) => Response.json({ items, nextCursor: null }) // a page answer
+  const query = { sort: 'changed', q: '', category: null, cursor: null } as const // any query
+
+  it('accepts a row with a subcategory pair and refuses a missing, text or half-set one', async () => { // row checks
+    // catches: a page that trusts a row without subcategoryId, or one with a name but no id.
+    const set = { ...knot, subcategoryId: 5, subcategory: 'Nature' } // both set
+    stubFetch(body([set, knot])) // a pair, and null with null
+    expect(await loadItemPage(query)).toEqual({ kind: 'ok', items: [set, knot], nextCursor: null }) // accepted
+    const withoutId: Partial<typeof knot> = { ...knot } // a row from an old Worker
+    delete withoutId.subcategoryId // the field is missing
+    for (const bad of [withoutId, { ...knot, subcategoryId: '5', subcategory: 'Nature' }, { ...knot, subcategoryId: 5 }, { ...knot, subcategory: 'Nature' }, { ...knot, subcategoryId: 0, subcategory: 'Nature' }]) { // each is refused
+      stubFetch(body([bad])) // the bad row
+      expect(await loadItemPage(query), JSON.stringify(bad)).toEqual({ kind: 'error' }) // an error
+    } // end of loop
+  }) // end of it
+}) // end of the row tests
+
 describe('loadMeta', () => {
   it('reads the currency, default price and categories, and refuses a wrong shape', async () => {
     // Catches an Add sheet built from a malformed answer.
@@ -135,6 +158,18 @@ describe('loadMeta', () => {
     stubFetch(Response.json({}, { status: 403 }))
     expect(await loadMeta()).toEqual({ kind: 'signed-out' })
   })
+
+  it('refuses meta whose subcategories are missing, an array or hold a bad entry', async () => { // subcategories check
+    // catches: a picker built from a malformed list, which would crash when opened.
+    const withoutList: Partial<typeof meta> = { ...meta } // meta without the list
+    delete withoutList.subcategories // the list is missing
+    for (const bad of [withoutList, { ...meta, subcategories: [] }, { ...meta, subcategories: { Honors: 'x' } }, { ...meta, subcategories: { Honors: [{ id: '5', name: 'Nature' }] } }, { ...meta, subcategories: { Honors: [{ id: 5 }] } }, { ...meta, subcategories: { Honors: [{ id: 5.5, name: 'Nature' }] } }]) { // each is refused
+      stubFetch(Response.json(bad)) // the bad answer
+      expect(await loadMeta(), JSON.stringify(bad)).toEqual({ kind: 'error' }) // an error
+    } // end of loop
+    stubFetch(Response.json(meta)) // a good answer with the three keys
+    expect(await loadMeta()).toEqual({ kind: 'ok', meta }) // accepted
+  }) // end of it
 })
 
 describe('sendItemChanges', () => {

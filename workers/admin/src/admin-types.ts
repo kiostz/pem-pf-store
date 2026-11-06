@@ -8,6 +8,8 @@ export interface AdminItem {
   id: string // Never changes.
   name: string // Shown name.
   category: string // Category label.
+  subcategoryId: number | null // The subcategory's id, or null for none.
+  subcategory: string | null // The subcategory's name; null exactly when subcategoryId is null.
   status: ItemStatus // Active or Hidden.
   stock: number // Units on hand.
   priceCents: number // Whole cents.
@@ -28,6 +30,7 @@ export interface AdminMeta {
   currency: string // Three capital letters.
   defaultPriceCents: number // Whole cents.
   categories: string[] // The fixed list.
+  subcategories: Record<string, Array<{ id: number; name: string }>> // The subcategories of each category, A-Z, keyed by every category.
 }
 
 // One item's edits: what the admin saw (`from`) and wants (`to`) per changed field.
@@ -35,6 +38,7 @@ export interface ItemChange {
   id: string // Which item.
   name?: { from: string; to: string } // Present when the name changed.
   category?: { from: string; to: string } // Present when the category changed.
+  subcategoryId?: { from: number | null; to: number | null } // Present when the subcategory changed; null means none.
   priceCents?: { from: number; to: number } // Present when the price changed.
   status?: { from: ItemStatus; to: ItemStatus } // Present when the status changed.
   stock?: { from: number; to: number } // Present when the stock changed.
@@ -51,6 +55,7 @@ export interface NewItem {
   name: string // 1-100 characters.
   category: string // One of the fixed list.
   priceCents: number // 0-99,999.
+  subcategoryId?: number | null // A subcategory of the category; absent or null means none.
 }
 
 // A delete request: the id and the row as the admin saw it.

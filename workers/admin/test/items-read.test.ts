@@ -7,8 +7,8 @@ describe('GET /api/items', () => {
   it('lists active and hidden items with every field the admin shows', async () => {
     // Catches a read that filters out Hidden items, so the admin could never show one again, or drops the price and the times.
     await seedItems([
-      { id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor Industries', status: 'active', stock: 12, priceCents: 450, image: 'items/knot-tying.webp' },
-      { id: 'africa-lore', name: 'Africa Lore', category: 'Outreach', status: 'hidden', stock: 0, issuedBy: 'Club', modifiedAt: '2026-11-02T10:00:00.000Z' },
+      { id: 'knot-tying', name: 'Knot Tying', category: 'Honors', status: 'active', stock: 12, priceCents: 450, image: 'items/knot-tying.webp' }, // An active catalogue row.
+      { id: 'africa-lore', name: 'Africa Lore', category: 'Accessories', status: 'hidden', stock: 0, issuedBy: 'Club', modifiedAt: '2026-11-02T10:00:00.000Z' }, // A hidden Club-added row.
     ])
     const res = await call('/api/items')
     expect(res.status).toBe(200)
@@ -16,8 +16,8 @@ describe('GET /api/items', () => {
     expect(res.headers.get('Cache-Control')).toBe('no-store')
     expect(await res.json()).toEqual({
       items: [
-        wire({ id: 'africa-lore', name: 'Africa Lore', category: 'Outreach', status: 'hidden', clubAdded: true, modifiedAt: '2026-11-02T10:00:00.000Z' }),
-        wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor Industries', stock: 12, priceCents: 450, image: 'items/knot-tying.webp' }),
+        wire({ id: 'africa-lore', name: 'Africa Lore', category: 'Accessories', status: 'hidden', clubAdded: true, modifiedAt: '2026-11-02T10:00:00.000Z' }), // The Club-added row, newest first.
+        wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Honors', stock: 12, priceCents: 450, image: 'items/knot-tying.webp' }), // The catalogue row.
       ],
       nextCursor: null,
     })

@@ -85,6 +85,7 @@ export interface SeedItem {
   id: string
   name?: string
   category?: string
+  subcategoryId?: number | null // The subcategory id, or null for none.
   status?: 'active' | 'hidden'
   stock?: number
   priceCents?: number
@@ -114,11 +115,11 @@ export async function insertItems(items: SeedItem[]): Promise<void> {
   await env.DB.batch(
     items.map((item) =>
       env.DB.prepare(
-        'INSERT INTO items (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO items (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at, image, subcategory_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', // The subcategory id is the last column.
       ).bind(
         item.id,
         item.name ?? item.id,
-        item.category ?? 'Nature',
+        item.category ?? 'Honors', // The default category is Honors.
         item.issuedBy ?? 'General Conference',
         item.status ?? 'active',
         item.stock ?? 0,
@@ -126,6 +127,7 @@ export async function insertItems(items: SeedItem[]): Promise<void> {
         item.createdAt ?? BACKFILL_TIME,
         item.modifiedAt ?? BACKFILL_TIME,
         item.image ?? null,
+        item.subcategoryId ?? null, // No subcategory unless a test sets one.
       ),
     ),
   ) // One transaction.
@@ -147,8 +149,8 @@ export async function rowOf(id: string): Promise<{ stock: number; status: string
  * @param id The item id.
  * @return The row, or null when it does not exist.
  */
-export async function fullRowOf(id: string): Promise<{ name: string; category: string; price_cents: number; status: string; stock: number; issued_by: string; created_at: string; modified_at: string } | null> {
-  return env.DB.prepare('SELECT name, category, price_cents, status, stock, issued_by, created_at, modified_at FROM items WHERE id = ?').bind(id).first() // Null when absent.
+export async function fullRowOf(id: string): Promise<{ name: string; category: string; subcategory_id: number | null; price_cents: number; status: string; stock: number; issued_by: string; created_at: string; modified_at: string } | null> { // Uses the new category and subcategory fields.
+  return env.DB.prepare('SELECT name, category, subcategory_id, price_cents, status, stock, issued_by, created_at, modified_at FROM items WHERE id = ?').bind(id).first() // Null when absent.
 }
 
 /**
@@ -157,7 +159,7 @@ export async function fullRowOf(id: string): Promise<{ name: string; category: s
  * @return The expected item.
  */
 export function wire(over: Record<string, unknown> & { id: string }): Record<string, unknown> {
-  return { name: over.id, category: 'Nature', status: 'active', stock: 0, priceCents: 400, clubAdded: false, createdAt: BACKFILL_TIME, modifiedAt: BACKFILL_TIME, image: null, ...over } // Seed defaults plus overrides.
+  return { name: over.id, category: 'Honors', subcategoryId: null, subcategory: null, status: 'active', stock: 0, priceCents: 400, clubAdded: false, createdAt: BACKFILL_TIME, modifiedAt: BACKFILL_TIME, image: null, ...over } // Seed defaults plus overrides.
 }
 
 /**

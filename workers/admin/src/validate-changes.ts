@@ -89,6 +89,15 @@ function validCategory(side: unknown, which: 'from' | 'to'): side is string {
 }
 
 /**
+ * Checks a subcategory side: null for none, or a positive integer id; `from` is only compared, never stored.
+ * @param side The raw id.
+ * @return True when acceptable.
+ */
+function validSubcategory(side: unknown): side is number | null { // One rule for both sides.
+  return side === null || (typeof side === 'number' && Number.isSafeInteger(side) && side > 0) // 0, negatives, fractions and text fail.
+}
+
+/**
  * Checks a price side: whole cents; `to` is also capped.
  * @param side The raw number.
  * @param which Whether it is the seen value or the wanted one.
@@ -105,7 +114,7 @@ function validPrice(side: unknown, which: 'from' | 'to'): side is number {
  * @return The change, or null when invalid.
  */
 function parseChange(value: unknown): ItemChange | null {
-  if (!isRecord(value) || !onlyKeys(value, ['id', 'status', 'stock', 'name', 'category', 'priceCents'])) return null // No extra keys.
+  if (!isRecord(value) || !onlyKeys(value, ['id', 'status', 'stock', 'name', 'category', 'subcategoryId', 'priceCents'])) return null // No extra keys.
   const { id } = value // The item id.
   if (!isItemId(id)) return null // Slug only.
   const change: ItemChange = { id } // Starts with the id only.
@@ -128,6 +137,11 @@ function parseChange(value: unknown): ItemChange | null {
     const category = parsePair(value.category, validCategory) // Category pair.
     if (category === null) return null // Invalid category.
     change.category = category // Keep the pair.
+  }
+  if (value.subcategoryId !== undefined) { // A subcategory change is present.
+    const subcategoryId = parsePair(value.subcategoryId, validSubcategory) // Subcategory pair.
+    if (subcategoryId === null) return null // Invalid subcategory.
+    change.subcategoryId = subcategoryId // Keep the pair.
   }
   if (value.priceCents !== undefined) { // A price change is present.
     const priceCents = parsePair(value.priceCents, validPrice) // Price pair.
@@ -161,10 +175,12 @@ export function parseItemChanges(body: unknown): ItemChange[] | null {
  * @return The new item, or null when invalid.
  */
 export function parseNewItem(body: unknown): NewItem | null {
-  if (!isRecord(body) || !onlyKeys(body, ['name', 'category', 'priceCents'])) return null // Exactly these three.
+  if (!isRecord(body) || !onlyKeys(body, ['name', 'category', 'priceCents', 'subcategoryId'])) return null // These three, and the optional subcategory.
   const name = parseItemName(body.name) // Name rules.
   if (name === null || !validCategory(body.category, 'to') || !validPrice(body.priceCents, 'to')) return null // Each field checked as a `to`.
-  return { name, category: body.category, priceCents: body.priceCents } // Checked above.
+  const subcategoryId = body.subcategoryId === undefined ? null : body.subcategoryId // Absent means none.
+  if (!validSubcategory(subcategoryId)) return null // Null or a positive integer.
+  return { name, category: body.category, priceCents: body.priceCents, subcategoryId } // Checked above.
 }
 
 /**

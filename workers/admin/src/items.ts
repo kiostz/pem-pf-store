@@ -3,11 +3,12 @@
 import type { AdminItem, AdminMeta, AdminPage, ItemChange, SaveResult } from './admin-types' // The shared shapes.
 import { CATEGORIES } from './categories' // The fixed category list.
 import { encodeCursor, type ItemQuery } from './item-query' // The checked query and the cursor codec.
+import { readSubcategories, subcategoryFits, type SubcategoryLists } from './subcategories' // The subcategory lists and the belongs check.
 
 // Rows per page; one more is read to know whether another page exists.
 const PAGE_SIZE = 50
 // The columns the admin sees, in the shape of a raw row.
-const COLUMNS = "id, name, category, status, stock, price_cents AS priceCents, image, issued_by = 'Club' AS clubAdded, created_at AS createdAt, modified_at AS modifiedAt"
+const COLUMNS = "id, name, category, subcategory_id AS subcategoryId, (SELECT name FROM subcategories WHERE id = items.subcategory_id) AS subcategory, status, stock, price_cents AS priceCents, image, issued_by = 'Club' AS clubAdded, created_at AS createdAt, modified_at AS modifiedAt" // The subcategory name comes from a primary-key subquery, so no JOIN makes a column ambiguous.
 // The order of a list of named ids (the rows of a save).
 const ORDER = 'ORDER BY name COLLATE NOCASE, id'
 // A statement that raises "integer overflow" (the only way a batch statement can abort the batch) when its item no longer exists.
@@ -72,7 +73,7 @@ export async function readAdminPage(db: D1Database, query: ItemQuery): Promise<A
 }
 
 /**
- * Reads the settings the Add sheet needs, and the category list.
+ * Reads the settings the Add sheet needs, the category list and the subcategories of each.
  * @param db The D1 database.
  * @return The meta answer.
  * @throws Error when the settings row is missing.
@@ -80,7 +81,7 @@ export async function readAdminPage(db: D1Database, query: ItemQuery): Promise<A
 export async function readMeta(db: D1Database): Promise<AdminMeta> {
   const row = await db.prepare('SELECT currency, default_price_cents AS defaultPriceCents FROM settings WHERE id = 1').first<{ currency: string; defaultPriceCents: number }>() // The single row.
   if (row === null) throw new Error('settings-missing') // Surfaces as a 500 with a short code.
-  return { currency: row.currency, defaultPriceCents: row.defaultPriceCents, categories: [...CATEGORIES] } // A copy, so no caller edits the list.
+  return { currency: row.currency, defaultPriceCents: row.defaultPriceCents, categories: [...CATEGORIES], subcategories: await readSubcategories(db) } // A copy of the names, so no caller edits the list.
 }
 
 /**
@@ -106,6 +107,7 @@ function isStale(item: AdminItem, change: ItemChange): boolean {
     (change.status !== undefined && change.status.from !== item.status) || // Status moved.
     (change.name !== undefined && change.name.from !== item.name) || // Name moved.
     (change.category !== undefined && change.category.from !== item.category) || // Category moved.
+    (change.subcategoryId !== undefined && change.subcategoryId.from !== item.subcategoryId) || // Subcategory moved.
     (change.priceCents !== undefined && change.priceCents.from !== item.priceCents) // Price moved.
   )
 }
@@ -140,9 +142,38 @@ function allApplied(current: AdminItem[], changes: ItemChange[]): boolean {
       (change.status === undefined || change.status.to === item.status) && // Status is applied.
       (change.name === undefined || change.name.to === item.name) && // Name is applied.
       (change.category === undefined || change.category.to === item.category) && // Category is applied.
+      (change.subcategoryId === undefined || change.subcategoryId.to === item.subcategoryId) && // Subcategory is applied.
       (change.priceCents === undefined || change.priceCents.to === item.priceCents) // Every changed field equals `to`.
     )
   })
+}
+
+/**
+ * Finds the items whose changed subcategory does not belong to the category the item will have.
+ * @param current The current rows of the changed items.
+ * @param changes The requested changes.
+ * @param lists The subcategories read in the same request.
+ * @return The current rows whose wanted subcategory is unknown or from another category.
+ */
+function misfits(current: AdminItem[], changes: ItemChange[], lists: SubcategoryLists): AdminItem[] { // Pure check on rows already read.
+  const byId = new Map(changes.map((change) => [change.id, change])) // Change per id.
+  return current.filter((item) => { // Keep the misfits.
+    const to = byId.get(item.id)?.subcategoryId?.to // The wanted subcategory, if the change sets one.
+    if (to === undefined) return false // This change leaves the subcategory alone.
+    return !subcategoryFits(lists, byId.get(item.id)?.category?.to ?? item.category, to) // Checked against the new category when it changes too.
+  })
+}
+
+/**
+ * Merges the stale rows and the misfits into one list, in the order of the current rows.
+ * @param current The current rows of the changed items.
+ * @param changes The requested changes.
+ * @param lists The subcategories read in the same request.
+ * @return The current rows that are stale or misfit, each once.
+ */
+function refused(current: AdminItem[], changes: ItemChange[], lists: SubcategoryLists): AdminItem[] { // Stale plus misfit.
+  const bad = new Set([...mismatched(current, changes), ...misfits(current, changes, lists)].map((item) => item.id)) // Ids of either kind.
+  return current.filter((item) => bad.has(item.id)) // Each once, in read order.
 }
 
 /**
@@ -154,7 +185,7 @@ function allApplied(current: AdminItem[], changes: ItemChange[]): boolean {
  */
 function guardedUpdate(db: D1Database, change: ItemChange, now: string): D1PreparedStatement {
   const sets: string[] = [] // SET clauses.
-  const values: (string | number)[] = [] // Their bound values, in order.
+  const values: (string | number | null)[] = [] // Their bound values, in order.
   if (change.stock !== undefined) { // A stock change.
     sets.push('stock = CASE WHEN stock = ? THEN ? ELSE -1 END') // -1 trips the stock CHECK.
     values.push(change.stock.from, change.stock.to) // Bound in clause order.
@@ -170,6 +201,14 @@ function guardedUpdate(db: D1Database, change: ItemChange, now: string): D1Prepa
   if (change.category !== undefined) { // A category change.
     sets.push("category = CASE WHEN category = ? THEN ? ELSE '' END") // '' trips the category CHECK.
     values.push(change.category.from, change.category.to) // Bound in clause order.
+  }
+  if (change.subcategoryId !== undefined) { // A subcategory change.
+    const { from, to } = change.subcategoryId // The guard and the target.
+    sets.push('subcategory_id = CASE WHEN subcategory_id IS ? THEN (CASE WHEN ? IS NULL OR EXISTS (SELECT 1 FROM subcategories s WHERE s.id = ? AND s.category = COALESCE(?, items.category)) THEN ? ELSE 0 END) ELSE 0 END') // 0 is no subcategory, so the foreign key aborts the batch when the guard or the belongs check fails.
+    values.push(from, to, to, change.category?.to ?? null, to) // Bound in clause order; the new category when it changes in the same change.
+  } else if (change.category !== undefined) { // Only the category changes: keep a subcategory that still fits, else clear it.
+    sets.push('subcategory_id = CASE WHEN EXISTS (SELECT 1 FROM subcategories s WHERE s.id = items.subcategory_id AND s.category = ?) THEN subcategory_id ELSE NULL END') // The old row's subcategory against the new category.
+    values.push(change.category.to) // Bound in clause order.
   }
   if (change.priceCents !== undefined) { // A price change.
     sets.push('price_cents = CASE WHEN price_cents = ? THEN ? ELSE -1 END') // -1 trips the price CHECK.
@@ -220,7 +259,7 @@ export async function saveItemChanges(db: D1Database, now: string, changes: Item
   const current = await readAdminItems(db, ids) // The first read.
   const present = new Set(current.map((item) => item.id)) // Ids that exist.
   const gone = ids.filter((id) => !present.has(id)) // Deleted by another admin.
-  const stale = mismatched(current, changes) // Rows that moved since the admin's view.
+  const stale = refused(current, changes, await readSubcategories(db)) // Rows that moved since the admin's view, or whose wanted subcategory does not fit.
   if (stale.length > 0 || gone.length > 0) return { kind: 'conflict', items: stale, deletedIds: gone } // Nothing written.
   const duplicated = duplicateNameIds(changes) // Two renames to one name in this save.
   if (duplicated.length > 0) return { kind: 'name-taken', ids: duplicated } // Refused before any write.
@@ -230,9 +269,9 @@ export async function saveItemChanges(db: D1Database, now: string, changes: Item
     const after = await readAdminItems(db, ids) // The rows as they are now.
     const afterIds = new Set(after.map((item) => item.id)) // Ids that still exist.
     const goneNow = ids.filter((id) => !afterIds.has(id)) // Deleted after the read.
-    if (goneNow.length > 0) return { kind: 'conflict', items: mismatched(after, changes), deletedIds: goneNow } // A conflict, nothing written.
+    if (goneNow.length > 0) return { kind: 'conflict', items: refused(after, changes, await readSubcategories(db)), deletedIds: goneNow } // A conflict, nothing written.
     if (allApplied(after, changes)) return { kind: 'saved', items: after } // The write landed and only the answer was lost.
-    const movedNow = mismatched(after, changes) // Was it a row that moved after the read?
+    const movedNow = refused(after, changes, await readSubcategories(db)) // Was it a row that moved after the read, or a subcategory that no longer fits?
     if (movedNow.length > 0) return { kind: 'conflict', items: movedNow, deletedIds: [] } // Yes: a conflict, nothing written.
     const taken = await nameTakenIds(db, changes) // Was it a name another item holds? A swap lands here too: the batch checks the unique index per statement, so a rename onto a name another row is leaving in the same save is refused, and the admin renames through a temporary name in two saves.
     if (taken.length > 0) return { kind: 'name-taken', ids: taken } // Yes.

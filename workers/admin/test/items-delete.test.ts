@@ -6,11 +6,11 @@ import { deleteItem } from '../src/delete-item'
 import { fullRowOf, postTo, seedItems, wire } from './helpers'
 
 // The row as the admin saw it.
-const seen = { name: 'Camp Shirt', category: 'Shirt', priceCents: 1500, status: 'hidden', stock: 0, modifiedAt: '2026-11-03T01:00:00.000Z' }
+const seen = { name: 'Camp Shirt', category: 'Shirts', priceCents: 1500, status: 'hidden', stock: 0, modifiedAt: '2026-11-03T01:00:00.000Z' } // The row as the page saw it.
 
 beforeEach(() =>
   seedItems([
-    { id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', priceCents: 1500, status: 'hidden', issuedBy: 'Club', modifiedAt: '2026-11-03T01:00:00.000Z', createdAt: '2026-11-03T01:00:00.000Z' },
+    { id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirts', priceCents: 1500, status: 'hidden', issuedBy: 'Club', modifiedAt: '2026-11-03T01:00:00.000Z', createdAt: '2026-11-03T01:00:00.000Z' }, // The Club-added row to delete.
     { id: 'knot-tying', name: 'Knot Tying' },
   ]),
 )
@@ -64,7 +64,7 @@ describe('POST /api/items/delete', () => {
 
   it('answers 400 built-in for an item the club did not add, and keeps it', async () => {
     // Catches a delete of a General Conference honor, which the shop's history and imports rely on.
-    const res = await del('knot-tying', { name: 'Knot Tying', category: 'Nature', priceCents: 400, status: 'active', modifiedAt: '2026-11-01T00:00:00.000Z' })
+    const res = await del('knot-tying', { name: 'Knot Tying', category: 'Honors', priceCents: 400, status: 'active', modifiedAt: '2026-11-01T00:00:00.000Z' }) // A catalogue row, not Club-added.
     expect(res.status).toBe(400)
     expect(await res.json()).toEqual({ error: 'built-in' })
     expect(await fullRowOf('knot-tying')).not.toBeNull()
@@ -75,14 +75,14 @@ describe('POST /api/items/delete', () => {
     await env.DB.prepare('UPDATE items SET stock = 3 WHERE id = ?').bind('camp-shirt').run()
     const res = await del('camp-shirt')
     expect(res.status).toBe(409)
-    expect(await res.json()).toEqual({ error: 'conflict', items: [wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', status: 'hidden', stock: 3, priceCents: 1500, clubAdded: true, createdAt: seen.modifiedAt, modifiedAt: seen.modifiedAt })] })
+    expect(await res.json()).toEqual({ error: 'conflict', items: [wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirts', status: 'hidden', stock: 3, priceCents: 1500, clubAdded: true, createdAt: seen.modifiedAt, modifiedAt: seen.modifiedAt })] }) // The current row comes back.
     expect(await fullRowOf('camp-shirt')).not.toBeNull()
   })
 
   it('answers 409 after an edit made after viewing', async () => {
     // Catches a delete over another admin's rename or price change.
-    for (const change of ["name = 'Camp Tee'", 'price_cents = 1600', "modified_at = '2026-11-03T02:00:00.000Z'", "category = 'Nature'", "status = 'active'"]) {
-      await seedItems([{ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', priceCents: 1500, status: 'hidden', issuedBy: 'Club', modifiedAt: seen.modifiedAt }])
+    for (const change of ["name = 'Camp Tee'", 'price_cents = 1600', "modified_at = '2026-11-03T02:00:00.000Z'", "category = 'Accessories'", "status = 'active'"]) { // Each change makes the seen row stale.
+      await seedItems([{ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirts', priceCents: 1500, status: 'hidden', issuedBy: 'Club', modifiedAt: seen.modifiedAt }]) // Reseed the row.
       await env.DB.prepare(`UPDATE items SET ${change} WHERE id = 'camp-shirt'`).run()
       expect((await del('camp-shirt')).status, change).toBe(409)
       expect(await fullRowOf('camp-shirt'), change).not.toBeNull()
@@ -124,7 +124,7 @@ describe('the delete statement\'s own guard', () => {
   it('answers conflict with the current row and keeps the item when a sale lands just before the DELETE', async () => {
     // Catches a guard column dropped from the DELETE's WHERE: an item sold a second earlier would be deleted unseen.
     const result = await deleteItem(racing(() => env.DB.prepare('UPDATE items SET stock = 3 WHERE id = ?').bind('camp-shirt').run()), env.PICTURES, { id: 'camp-shirt', seen: seen as never })
-    expect(result).toEqual({ kind: 'conflict', items: [wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', status: 'hidden', stock: 3, priceCents: 1500, clubAdded: true, createdAt: seen.modifiedAt, modifiedAt: seen.modifiedAt })] })
+    expect(result).toEqual({ kind: 'conflict', items: [wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirts', status: 'hidden', stock: 3, priceCents: 1500, clubAdded: true, createdAt: seen.modifiedAt, modifiedAt: seen.modifiedAt })] }) // The current row comes back.
     expect(await fullRowOf('camp-shirt')).not.toBeNull()
   })
 

@@ -78,7 +78,7 @@ describe('parseItemChanges', () => {
 describe('parseItemChanges: name, category and price', () => {
   it('accepts each new field alone and all together', () => {
     // Catches a parser that refuses the fields the Edit sheet sends.
-    const all = { id: 'a', name: { from: 'Old', to: 'New' }, category: { from: 'Nature', to: 'Shirt' }, priceCents: { from: 400, to: 99999 } }
+    const all = { id: 'a', name: { from: 'Old', to: 'New' }, category: { from: 'Honors', to: 'Shirts' }, priceCents: { from: 400, to: 99999 } } // The new category names.
     expect(parse([all])).toEqual([all])
     expect(parse([{ id: 'a', priceCents: { from: 0, to: 1 } }])).not.toBeNull()
   })
@@ -97,8 +97,8 @@ describe('parseItemChanges: name, category and price', () => {
 
   it('accepts a category only from the fixed list, spelled exactly', () => {
     // Catches free text or a wrong-case category reaching the table, which the shop would show as a grey mark.
-    expect(parse([{ id: 'a', category: { from: 'x', to: 'Shirt' } }])).not.toBeNull()
-    for (const to of ['shirt', 'Gardening', '', 'Shirt ']) expect(parse([{ id: 'a', category: { from: 'Nature', to } }]), to).toBeNull()
+    for (const to of ['Accessories', 'Honors', 'Shirts']) expect(parse([{ id: 'a', category: { from: 'x', to } }]), to).not.toBeNull() // The three names.
+    for (const to of ['shirts', 'Gardening', '', 'Shirts ', 'Shirt', 'Nature']) expect(parse([{ id: 'a', category: { from: 'Honors', to } }]), to).toBeNull() // Wrong case, free text and the old names.
   })
 
   it('caps only the new price: 0 to 99,999 cents, whole numbers', () => {
@@ -124,16 +124,37 @@ describe('parseItemName', () => {
   })
 })
 
+describe('parseItemChanges: subcategoryId', () => { // The subcategory pair.
+  /**
+   * Parses one change carrying a subcategory pair.
+   * @param value The `subcategoryId` value to try.
+   * @return The parsed changes, or null when refused.
+   */
+  const pair = (value: unknown) => parse([{ id: 'a', subcategoryId: value }]) // One change with that pair.
+
+  it('accepts null on either side and positive integers', () => { // Valid pairs.
+    // catches: a parser that refuses clearing (to null) or a first assignment (from null).
+    expect(pair({ from: null, to: 5 })).not.toBeNull() // First assignment.
+    expect(pair({ from: 5, to: null })).not.toBeNull() // Clear.
+    expect(pair({ from: 5, to: 8 })).not.toBeNull() // Move.
+  }) // End of it.
+
+  it('refuses 0, -1, 1.5, text, extra keys and a no-op', () => { // Invalid pairs.
+    // catches: id 0 (the internal abort value), a text id or a no-op reaching the database.
+    for (const bad of [{ from: 5, to: 0 }, { from: 5, to: -1 }, { from: 5, to: 1.5 }, { from: 5, to: '5' }, { from: 0, to: 5 }, { from: '5', to: 8 }, { from: 5, to: 8, extra: 1 }, { from: 5, to: 5 }, { from: null, to: null }, { from: 5 }, null]) expect(pair(bad), JSON.stringify(bad)).toBeNull() // Each is refused.
+  }) // End of it.
+}) // End of the subcategory pair tests.
+
 describe('parseNewItem', () => {
   it('accepts a name, a listed category and a price', () => {
     // Catches a parser that refuses the Add sheet's own request.
-    expect(parseNewItem({ name: 'Camp Shirt', category: 'Shirt', priceCents: 1500 })).toEqual({ name: 'Camp Shirt', category: 'Shirt', priceCents: 1500 })
+    expect(parseNewItem({ name: 'Camp Shirt', category: 'Shirts', priceCents: 1500 })).toEqual({ name: 'Camp Shirt', category: 'Shirts', priceCents: 1500, subcategoryId: null }) // Absent means null.
   })
 
   it('refuses extra keys, a bad name, category or price', () => {
     // Catches Add taking a status or stock from the client, which must always start Hidden with 0.
-    const ok = { name: 'Camp Shirt', category: 'Shirt', priceCents: 1500 }
-    for (const bad of [{ ...ok, status: 'active' }, { ...ok, name: '' }, { ...ok, category: 'Other' }, { ...ok, priceCents: -1 }, { ...ok, priceCents: 100000 }, { name: 'x', category: 'Shirt' }, null, [ok]]) {
+    const ok = { name: 'Camp Shirt', category: 'Shirts', priceCents: 1500 } // A valid Add.
+    for (const bad of [{ ...ok, status: 'active' }, { ...ok, name: '' }, { ...ok, category: 'Other' }, { ...ok, priceCents: -1 }, { ...ok, priceCents: 100000 }, { name: 'x', category: 'Shirts' }, { ...ok, category: 'Shirt' }, { ...ok, subcategoryId: 0 }, { ...ok, subcategoryId: '5' }, { ...ok, subcategoryId: 1.5 }, null, [ok]]) { // The refused values.
       expect(parseNewItem(bad), JSON.stringify(bad)).toBeNull()
     }
   })

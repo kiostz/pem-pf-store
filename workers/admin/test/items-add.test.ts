@@ -19,14 +19,14 @@ afterEach(() => vi.useRealTimers())
  * @param over Fields that differ from a valid Camp Shirt.
  * @return The response.
  */
-const add = (over: Record<string, unknown> = {}) => postTo('/api/items', { name: 'Camp Shirt', category: 'Shirt', priceCents: 400, ...over })
+const add = (over: Record<string, unknown> = {}) => postTo('/api/items', { name: 'Camp Shirt', category: 'Shirts', priceCents: 400, ...over }) // The new plural name.
 
 describe('POST /api/items', () => {
   it('adds a Hidden item with stock 0, issued by Club, both times equal to the request time', async () => {
     // Catches an Add that starts Active (sellable before the admin looked), or with a time of the backfill date.
     const res = await add()
     expect(res.status).toBe(201)
-    expect(await res.json()).toEqual({ item: wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', status: 'hidden', stock: 0, priceCents: 400, clubAdded: true, createdAt: NOW, modifiedAt: NOW }) })
+    expect(await res.json()).toEqual({ item: wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirts', status: 'hidden', stock: 0, priceCents: 400, clubAdded: true, createdAt: NOW, modifiedAt: NOW }) }) // A current category name.
     expect(await fullRowOf('camp-shirt')).toMatchObject({ issued_by: 'Club', status: 'hidden', stock: 0, created_at: NOW, modified_at: NOW })
   })
 

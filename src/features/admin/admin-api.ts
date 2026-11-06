@@ -70,6 +70,9 @@ function isAdminItem(value: unknown): value is AdminItem {
     typeof row.id === 'string' && // the id
     typeof row.name === 'string' && // the name
     typeof row.category === 'string' && // the category
+    (row.subcategoryId === null || (Number.isInteger(row.subcategoryId) && (row.subcategoryId as number) > 0)) && // no subcategory or a positive id
+    (row.subcategory === null || typeof row.subcategory === 'string') && // no name or a name
+    (row.subcategoryId === null) === (row.subcategory === null) && // both set or both null
     (row.image === null || typeof row.image === 'string') && // an R2 key or none
     (row.status === 'active' || row.status === 'hidden') && // the status
     Number.isInteger(row.stock) && // a whole number, never text
@@ -95,6 +98,22 @@ const isItemList = (value: unknown): value is AdminItem[] =>
  */
 const isTextList = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === 'string') // strings only
+
+/**
+ * Checks a value is the subcategory lists of the meta answer.
+ * @param value anything
+ * @return true for an object whose every value is a list of `{ id, name }`
+ */
+const isSubcategoryLists = (value: unknown): boolean => // an object of lists
+  typeof value === 'object' && value !== null && !Array.isArray(value) && // a plain object
+  Object.values(value).every( // every category's list
+    (list) => // one category's list
+      Array.isArray(list) && // a list
+      list.every( // whose entries
+        (entry) => // are
+          typeof entry === 'object' && entry !== null && Number.isInteger(entry.id) && typeof entry.name === 'string', // objects with an integer id and a text name
+      ),
+  ) // each list holds `{ id: integer, name: string }`
 
 /**
  * Reads a field of an unknown answer.
@@ -210,7 +229,8 @@ export async function loadMeta(): Promise<LoadMetaResult> {
   if (
     typeof field(body, 'currency') !== 'string' ||
     !Number.isInteger(field(body, 'defaultPriceCents')) ||
-    !isTextList(field(body, 'categories'))
+    !isTextList(field(body, 'categories')) || // the category names are text
+    !isSubcategoryLists(field(body, 'subcategories')) // the picker's lists
   )
     return { kind: 'error' } // a wrong shape is an error
   return { kind: 'ok', meta: body as AdminMeta } // checked above

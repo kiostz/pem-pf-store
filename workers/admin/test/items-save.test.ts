@@ -8,8 +8,8 @@ import { BACKFILL_TIME, call, fullRowOf, insertItems, pages, postChanges, postTo
 
 beforeEach(async () => {
   await seedItems([
-    { id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 12 },
-    { id: 'africa-lore', name: 'Africa Lore', category: 'Mission', status: 'hidden', stock: 0 },
+    { id: 'knot-tying', name: 'Knot Tying', category: 'Honors', status: 'active', stock: 12 }, // A current category name.
+    { id: 'africa-lore', name: 'Africa Lore', category: 'Accessories', status: 'hidden', stock: 0 }, // A current category name.
   ])
 })
 afterEach(() => {
@@ -53,8 +53,8 @@ describe('POST /api/items/changes', () => {
     expect(res.headers.get('Cache-Control')).toBe('no-store')
     expect(await res.json()).toEqual({
       items: [
-        wire({ id: 'africa-lore', name: 'Africa Lore', category: 'Mission', status: 'active', stock: 0, modifiedAt: NOW }),
-        wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 20, modifiedAt: NOW }),
+        wire({ id: 'africa-lore', name: 'Africa Lore', category: 'Accessories', status: 'active', stock: 0, modifiedAt: NOW }), // A current category name.
+        wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Honors', status: 'active', stock: 20, modifiedAt: NOW }), // A current category name.
       ],
     })
     expect(await rowOf('knot-tying')).toEqual({ stock: 20, status: 'active' }) // Really stored.
@@ -72,7 +72,7 @@ describe('POST /api/items/changes', () => {
     expect(res.status).toBe(409)
     expect(await res.json()).toEqual({
       error: 'conflict',
-      items: [wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 12 })],
+      items: [wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Honors', status: 'active', stock: 12 })], // A current category name.
       deletedIds: [],
     })
     expect(await rowOf('knot-tying')).toEqual({ stock: 12, status: 'active' }) // Untouched.
@@ -106,7 +106,7 @@ describe('POST /api/items/changes', () => {
       { id: 'africa-lore', status: { from: 'hidden', to: 'active' } },
     ])
     expect(result.kind).toBe('conflict')
-    expect(itemsOf(result)).toEqual([wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 3 })])
+    expect(itemsOf(result)).toEqual([wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Honors', status: 'active', stock: 3 })]) // A current category name.
     expect(await rowOf('knot-tying')).toEqual({ stock: 3, status: 'active' }) // The sale stands.
     expect((await rowOf('africa-lore')).status).toBe('hidden') // The whole batch rolled back.
   })
@@ -125,7 +125,7 @@ describe('POST /api/items/changes', () => {
       { id: 'africa-lore', stock: { from: 0, to: 5 } }, // Valid beside it.
     ])
     expect(result.kind).toBe('conflict')
-    expect(itemsOf(result)).toEqual([wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'hidden', stock: 12 })])
+    expect(itemsOf(result)).toEqual([wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Honors', status: 'hidden', stock: 12 })]) // A current category name.
     expect((await rowOf('africa-lore')).stock).toBe(0) // The whole batch rolled back.
   })
 
@@ -294,10 +294,10 @@ describe('name, category and price', () => {
     // Catches a field that is validated but never written, and a save that forgets the modified time.
     freezeClock()
     const res = await postChanges({
-      changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots' }, category: { from: 'Outdoor', to: 'Shirt' }, priceCents: { from: 400, to: 650 } }],
+      changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots' }, category: { from: 'Honors', to: 'Shirts' }, priceCents: { from: 400, to: 650 } }], // A current category name.
     })
     expect(res.status).toBe(200)
-    expect(await fullRowOf('knot-tying')).toMatchObject({ name: 'Knots', category: 'Shirt', price_cents: 650, created_at: BACKFILL_TIME, modified_at: NOW })
+    expect(await fullRowOf('knot-tying')).toMatchObject({ name: 'Knots', category: 'Shirts', price_cents: 650, created_at: BACKFILL_TIME, modified_at: NOW }) // A current category name.
     expect(((await res.json()) as { items: { modifiedAt: string }[] }).items[0].modifiedAt).toBe(NOW)
   })
 
@@ -309,13 +309,13 @@ describe('name, category and price', () => {
     expect((await fullRowOf('africa-lore'))!.modified_at).toBe(NOW)
   })
 
-  for (const [field, stale] of [['name', { from: 'Not Its Name', to: 'X' }], ['category', { from: 'Nature', to: 'Shirt' }], ['priceCents', { from: 999, to: 5 }]] as const) {
+  for (const [field, stale] of [['name', { from: 'Not Its Name', to: 'X' }], ['category', { from: 'Nature', to: 'Shirts' }], ['priceCents', { from: 999, to: 5 }]] as const) { // Each stale from value; Nature is no longer a category.
     it(`answers 409 with the current row and writes nothing when the ${field} was changed by someone else`, async () => {
       // Catches a missing per-field guard on ${field}: an old view would overwrite another admin's edit.
       freezeClock()
       const res = await postChanges({ changes: [{ id: 'knot-tying', [field]: stale, stock: { from: 12, to: 13 } }] })
       expect(res.status).toBe(409)
-      expect(await res.json()).toEqual({ error: 'conflict', items: [wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', stock: 12 })], deletedIds: [] })
+      expect(await res.json()).toEqual({ error: 'conflict', items: [wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Honors', stock: 12 })], deletedIds: [] }) // A current category name.
       expect(await fullRowOf('knot-tying')).toMatchObject({ stock: 12, modified_at: BACKFILL_TIME }) // A 409 leaves the time alone.
     })
   }
@@ -432,7 +432,7 @@ describe('interruptions', () => {
   it('answers 409 with deletedIds and writes nothing else when another admin deleted one of the rows', async () => {
     // Catches a save that applies the live rows and skips the deleted one, leaving the admin to think all saved.
     await insertItems([{ id: 'camp-shirt', name: 'Camp Shirt', issuedBy: 'Club', stock: 0 }])
-    expect((await postTo('/api/items/delete', { id: 'camp-shirt', seen: { name: 'Camp Shirt', category: 'Nature', priceCents: 400, status: 'active', stock: 0, modifiedAt: BACKFILL_TIME } })).status).toBe(200) // Tab A deletes.
+    expect((await postTo('/api/items/delete', { id: 'camp-shirt', seen: { name: 'Camp Shirt', category: 'Honors', priceCents: 400, status: 'active', stock: 0, modifiedAt: BACKFILL_TIME } })).status).toBe(200) // Tab A deletes.
     const res = await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 12, to: 13 } }, { id: 'camp-shirt', stock: { from: 0, to: 5 } }] }) // Tab B, old view.
     expect(res.status).toBe(409)
     expect(((await res.json()) as { deletedIds: string[] }).deletedIds).toEqual(['camp-shirt'])

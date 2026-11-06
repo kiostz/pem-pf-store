@@ -15,6 +15,8 @@ export const makeItem = (
 ): AdminItem => ({
   name: fields.id, // the id doubles as a name unless given
   category: 'Nature', // a category of the fixed list
+  subcategoryId: null, // no subcategory
+  subcategory: null, // no subcategory name
   status: 'active', // shown to buyers
   stock: 3, // a little stock
   priceCents: 400, // RM 4.00
@@ -61,4 +63,5 @@ export const meta: AdminMeta = {
   currency: 'MYR', // Malaysian ringgit
   defaultPriceCents: 450, // RM 4.50
   categories: ['Accessories', 'Nature', 'Outreach', 'Recreation', 'Shirt'], // a short list
+  subcategories: { Accessories: [], Nature: [], Outreach: [], Recreation: [], Shirt: [] }, // a key per category, none filled yet
 }

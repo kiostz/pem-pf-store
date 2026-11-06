@@ -31,7 +31,7 @@ const pad = (n: number): string => String(n).padStart(3, '0')
  */
 async function seedNumbered(count: number): Promise<void> {
   const rows: SeedItem[] = []
-  for (let n = 1; n <= count; n++) rows.push({ id: `item-${pad(n)}`, name: `Item ${pad(n)}`, createdAt: at(n), modifiedAt: at(n), category: n % 2 === 0 ? 'Nature' : 'Outreach' })
+  for (let n = 1; n <= count; n++) rows.push({ id: `item-${pad(n)}`, name: `Item ${pad(n)}`, createdAt: at(n), modifiedAt: at(n), category: n % 2 === 0 ? 'Honors' : 'Shirts' }) // Two of the three categories.
   await seedItems(rows)
 }
 
@@ -48,7 +48,7 @@ async function page(query: string): Promise<{ status: number; body: Page }> {
 /**
  * Walks every page of a sort, calling a hook after the first page.
  * @param sort The sort name.
- * @param extra More query text, such as `&category=Nature`.
+ * @param extra More query text, such as `&category=Honors`.
  * @param afterFirst Runs after page 1, to change rows mid-scroll.
  * @return The ids per page.
  */
@@ -126,20 +126,20 @@ describe('filters', () => {
   for (const sort of ['changed', 'newest', 'name'] as const) {
     it(`filters by category under sort=${sort} and pages through it`, async () => {
       // Catches a category filter that is applied after the page is cut, giving short or missing pages.
-      const pages = await walk(sort, '&category=Nature')
+      const pages = await walk(sort, '&category=Honors') // A current category name.
       expect(pages.map((ids) => ids.length)).toEqual([50, 10])
-      expect(pages.flat().every((id) => Number(id.slice(5)) % 2 === 0)).toBe(true) // Only even rows are Nature.
+      expect(pages.flat().every((id) => Number(id.slice(5)) % 2 === 0)).toBe(true) // Only even rows are Honors.
     })
 
     it(`searches words in any order under sort=${sort}, together with a category`, async () => {
       // Catches a search that is a phrase match, or that ignores the category.
       await insertItems([
-        { id: 'rope-work', name: 'Rope Work', category: 'Outreach' },
-        { id: 'work-rope', name: 'Work With Rope', category: 'Nature' },
-        { id: 'knots', name: 'Knots', category: 'Nature' },
+        { id: 'rope-work', name: 'Rope Work', category: 'Shirts' }, // A current category name.
+        { id: 'work-rope', name: 'Work With Rope', category: 'Honors' }, // A current category name.
+        { id: 'knots', name: 'Knots', category: 'Honors' }, // A current category name.
       ])
       expect((await page(`sort=${sort}&q=WORK%20rope`)).body.items.map((h) => h.id).sort()).toEqual(['rope-work', 'work-rope'])
-      expect((await page(`sort=${sort}&q=work%20rope&category=Nature`)).body.items.map((h) => h.id)).toEqual(['work-rope'])
+      expect((await page(`sort=${sort}&q=work%20rope&category=Honors`)).body.items.map((h) => h.id)).toEqual(['work-rope']) // A current category name.
     })
   }
 
@@ -188,7 +188,7 @@ describe('filters', () => {
     const res = await call('/api/items?sort=name')
     const body = (await res.json()) as Record<string, unknown> & { items: Record<string, unknown>[] }
     expect(Object.keys(body).sort()).toEqual(['items', 'nextCursor'])
-    expect(body.items[0]).toEqual({ id: 'item-001', name: 'Item 001', category: 'Outreach', status: 'active', stock: 0, priceCents: 400, image: null, clubAdded: false, createdAt: at(1), modifiedAt: at(1) })
+    expect(body.items[0]).toEqual({ id: 'item-001', name: 'Item 001', category: 'Shirts', subcategoryId: null, subcategory: null, status: 'active', stock: 0, priceCents: 400, image: null, clubAdded: false, createdAt: at(1), modifiedAt: at(1) }) // A current category name.
   })
 
   it('marks a Club-added item with clubAdded', async () => {

@@ -78,7 +78,7 @@ describe('guarded save, one row with two fields', () => {
 describe('the other write routes', () => {
   // Each write route with a body that would succeed.
   const writes: [string, unknown][] = [
-    ['/api/items', { name: 'Camp Shirt', category: 'Shirt', priceCents: 400 }],
+    ['/api/items', { name: 'Camp Shirt', category: 'Shirts', priceCents: 400 }], // An Add with a current category name.
     ['/api/orders/step', { number: 'PF-20261105-ABCD', from: 'new', to: 'paid', restock: false }],
     ['/api/settings', { orderEmailOn: { from: true, to: false } }],
     ['/api/settings/prices', { currency: { from: 'MYR', to: 'SGD' } }],
@@ -86,12 +86,12 @@ describe('the other write routes', () => {
     ['/api/clubs/edit', { id: 1, from: { name: 'A', area: null, language: null, location: null, churchName: null }, to: { name: 'B', area: null, language: null, location: null, churchName: null } }],
     ['/api/clubs/remove', { id: 1, seen: { name: 'A', area: null, language: null, location: null, churchName: null } }],
     ['/api/clubs/order', { from: [1, 2], to: [2, 1] }],
-    ['/api/items/delete', { id: 'knot-tying', seen: { name: 'Knot Tying', category: 'Nature', priceCents: 400, status: 'active', stock: 12, modifiedAt: '2026-11-01T00:00:00.000Z' } }],
+    ['/api/items/delete', { id: 'club-shirt', seen: { name: 'Club Shirt', category: 'Shirts', priceCents: 400, status: 'hidden', stock: 0, modifiedAt: '2026-11-01T00:00:00.000Z' } }], // Matches the seeded Club-added row below.
   ]
 
   it('refuses a foreign Origin and a non-JSON type, before any write', async () => {
     // Catches a new write route that skipped the CSRF checks the save has.
-    await seed()
+    await seedItems([{ id: 'knot-tying', name: 'Knot Tying', status: 'active', stock: 12 }, { id: 'club-shirt', name: 'Club Shirt', category: 'Shirts', issuedBy: 'Club', status: 'hidden', stock: 0, priceCents: 400, modifiedAt: '2026-11-01T00:00:00.000Z', createdAt: '2026-11-01T00:00:00.000Z' }]) // A Club-added row the delete body matches.
     for (const [path, payload] of writes) {
       expect((await postTo(path, payload, { headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json' } })).status, path).toBe(403)
       expect((await postTo(path, payload, { headers: { Origin: 'https://admin.test', 'Content-Type': 'text/plain' } })).status, path).toBe(415)
@@ -99,6 +99,7 @@ describe('the other write routes', () => {
     }
     expect(await fullRowOf('camp-shirt')).toBeNull()
     expect(await fullRowOf('knot-tying')).not.toBeNull()
+    expect(await fullRowOf('club-shirt')).not.toBeNull() // The delete never ran.
   })
 
   it('refuses a body over 64 KB with 413 on the four club write routes', async () => {

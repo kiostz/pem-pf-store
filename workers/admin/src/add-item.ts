@@ -3,10 +3,12 @@
 import type { AdminItem, NewItem } from './admin-types' // The shapes.
 import { itemIdFromName } from './item-id-from-name' // The id rule.
 import { readAdminItems } from './items' // Reads the new row back.
+import { readSubcategories, subcategoryFits } from './subcategories' // The belongs check.
 
 // The outcome of an Add.
 export type AddResult =
   | { kind: 'added'; item: AdminItem } // The new row.
+  | { kind: 'invalid' } // The subcategory does not exist or belongs to another category.
   | { kind: 'name-taken' } // Another item has this name, in any case.
   | { kind: 'id-taken' } // The id and its eight suffixes are all taken.
 
@@ -22,18 +24,19 @@ function reasonOf(error: unknown): string {
 /**
  * Inserts a new Club-added item, trying the id and then `-2` to `-9`.
  * @param db The D1 database.
- * @param input The checked name, category and price.
+ * @param input The checked name, category, price and subcategory.
  * @param now The request's time, written as created_at and modified_at.
- * @return The new row, or why it was not added.
+ * @return The new row, or why it was not added; `invalid` when the subcategory does not fit the category.
  */
 export async function addItem(db: D1Database, input: NewItem, now: string): Promise<AddResult> {
+  if (!subcategoryFits(await readSubcategories(db), input.category, input.subcategoryId ?? null)) return { kind: 'invalid' } // Refused before any write.
   const base = itemIdFromName(input.name) // The id the name makes.
   for (let attempt = 1; attempt <= 9; attempt++) { // The id, then -2 to -9.
     const id = attempt === 1 ? base : `${base}-${attempt}` // This attempt's id.
     try { // A clash throws.
       await db
-        .prepare("INSERT INTO items (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at) VALUES (?, ?, ?, 'Club', 'hidden', 0, ?, ?, ?)")
-        .bind(id, input.name, input.category, input.priceCents, now, now)
+        .prepare("INSERT INTO items (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at, subcategory_id) VALUES (?, ?, ?, 'Club', 'hidden', 0, ?, ?, ?, ?)") // The subcategory is the last value.
+        .bind(id, input.name, input.category, input.priceCents, now, now, input.subcategoryId ?? null) // Absent means null.
         .run() // Hidden, stock 0, issued by the Club.
     } catch (error) { // Refused.
       const reason = reasonOf(error) // Why.

@@ -29,7 +29,7 @@ describe('parseItemQuery', () => {
 
   it('accepts each sort, a category, and a search split into words', () => {
     // Catches a sort or category that is dropped, or a search kept as one string.
-    expect(parse('sort=newest&category=Arts%20and%20Crafts&q=Knot%20Tying')).toEqual({ sort: 'newest', words: ['knot', 'tying'], category: 'Arts and Crafts', cursor: null })
+    expect(parse('sort=newest&category=Honors&q=Knot%20Tying')).toEqual({ sort: 'newest', words: ['knot', 'tying'], category: 'Honors', cursor: null }) // A current category name.
     expect(parse('sort=name')?.sort).toBe('name')
   })
 
@@ -43,6 +43,7 @@ describe('parseItemQuery', () => {
     expect(parse('sort=size')).toBeNull()
     expect(parse('sort=')).toBeNull()
     expect(parse('category=nature')).toBeNull()
+    expect(parse('category=Nature')).toBeNull() // An old name is refused.
     expect(parse('category=Gardening')).toBeNull()
     expect(parse('category=')).toBeNull()
   })
