@@ -9,7 +9,7 @@ describe('read endpoints', () => {
     await env.DB.exec('DELETE FROM items; DELETE FROM clubs; DELETE FROM settings;') // Each test starts empty.
   })
 
-  it('lists active items by name with exactly six fields', async () => {
+  it('lists active items by name with exactly seven fields', async () => { // The /items shape.
     // Catches leaking issued_by, status or skill_level, or a wrong order.
     await addItem({ id: 'b', name: 'Beta', stock: 3, image: '/p/b.png' }) // Sorts second.
     await addItem({ id: 'a', name: 'Alpha', price_cents: 250 }) // Sorts first.
@@ -17,8 +17,8 @@ describe('read endpoints', () => {
     expect(res.status).toBe(200) // Success.
     expectJsonNoStore(res) // Success answers must not be cacheable.
     expect(await res.json()).toEqual([
-      { id: 'a', name: 'Alpha', category: 'Nature', priceCents: 250, stock: 0, image: null },
-      { id: 'b', name: 'Beta', category: 'Nature', priceCents: 400, stock: 3, image: '/p/b.png' },
+      { id: 'a', name: 'Alpha', category: 'Nature', subcategory: null, priceCents: 250, stock: 0, image: null }, // The first row.
+      { id: 'b', name: 'Beta', category: 'Nature', subcategory: null, priceCents: 400, stock: 3, image: '/p/b.png' }, // The second row.
     ]) // Literal expected values.
   })
 

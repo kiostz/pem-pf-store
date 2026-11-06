@@ -22,13 +22,26 @@ describe('GET /shop', () => {
     expect(res.status).toBe(200) // Success.
     expectJsonNoStore(res) // Not cacheable.
     expect(await res.json()).toEqual({
-      items: [{ id: 'a', name: 'Alpha', category: 'Nature', priceCents: 250, stock: 3, image: '/p/a.png' }],
+      items: [{ id: 'a', name: 'Alpha', category: 'Nature', subcategory: null, priceCents: 250, stock: 3, image: '/p/a.png' }], // The one item.
       clubs: [
         { name: 'Zed', area: null, language: null, location: null, churchName: null },
         { name: 'Gilead', area: 'North', language: 'English', location: 'KL', churchName: 'Gilead Church' },
       ],
       settings: { currency: 'MYR' },
     }) // Literal expected body.
+  })
+
+  it('carries the subcategory name for an honor and null for an accessory, on /shop and /items', async () => { // The new column.
+    // catches: a missing subquery, an id served instead of the name, or a hidden item leaking through the new column.
+    await addSettings() // Needed for 200.
+    await addItem({ id: 'knots', name: 'Knot Tying', category: 'Honors', subcategory_id: 5 }) // Id 5 is Nature.
+    await addItem({ id: 'scarf', name: 'Scarf', category: 'Accessories' }) // No subcategory.
+    await addItem({ id: 'ghost', name: 'Ghost', category: 'Honors', subcategory_id: 8, status: 'hidden' }) // Hidden stays hidden.
+    const shop = (await (await call('/shop')).json()) as { items: { id: string; subcategory: string | null }[] } // Combined read.
+    const items = (await (await call('/items')).json()) as { id: string; subcategory: string | null }[] // Items read.
+    const pairs = (rows: { id: string; subcategory: string | null }[]) => rows.map((row) => [row.id, row.subcategory]) // Id and name only.
+    expect(pairs(shop.items)).toEqual([['knots', 'Nature'], ['scarf', null]]) // Name order, literal names; ghost absent.
+    expect(pairs(items)).toEqual([['knots', 'Nature'], ['scarf', null]]) // Same on /items.
   })
 
   it('orders clubs by position, then id', async () => {

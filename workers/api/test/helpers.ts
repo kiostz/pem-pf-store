@@ -150,10 +150,10 @@ export async function seedShop(): Promise<void> {
  * @return Resolves when the row is stored.
  */
 export async function addItem(row: Record<string, unknown>): Promise<void> {
-  const h = { id: 'x', name: 'X', category: 'Nature', issued_by: 'General Conference', status: 'active', stock: 0, price_cents: 400, image: null, ...row } // Defaults plus overrides.
+  const h = { id: 'x', name: 'X', category: 'Nature', issued_by: 'General Conference', status: 'active', stock: 0, price_cents: 400, image: null, subcategory_id: null, ...row } // Defaults plus overrides; no subcategory unless given.
   await env.DB.prepare(
-    'INSERT INTO items (id, name, category, issued_by, skill_level, status, stock, price_cents, image) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)',
-  ).bind(h.id, h.name, h.category, h.issued_by, h.status, h.stock, h.price_cents, h.image).run() // Positional binds.
+    'INSERT INTO items (id, name, category, issued_by, skill_level, status, stock, price_cents, image, subcategory_id) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)', // The subcategory id is last.
+  ).bind(h.id, h.name, h.category, h.issued_by, h.status, h.stock, h.price_cents, h.image, h.subcategory_id).run() // Positional binds.
 }
 
 /**

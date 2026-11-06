@@ -57,6 +57,7 @@ const item = { // one test item
   id: 'knot-tying',
   name: 'Knot Tying',
   category: 'Nature',
+  subcategory: null, // no subcategory
   stock: 10,
   price: 3,
   image: null,

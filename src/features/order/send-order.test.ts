@@ -269,7 +269,7 @@ describe('lookupOrder', () => {
 })
 
 describe('toOrderRequest', () => {
-  const item = { id: 'knot-tying', name: 'Knot Tying', category: 'Nature', stock: 10, price: 3, image: null } as const // one item at RM 3
+  const item = { id: 'knot-tying', name: 'Knot Tying', category: 'Nature', subcategory: null, stock: 10, price: 3, image: null } as const // one item at RM 3
   const lines: OrderLine[] = [{ item, quantity: 3 }] // three of them
   const values = { ...EMPTY_ORDER_FORM, name: ' J. Cruz ', email: 'jc@mail.com', phone: '+60\t12', club: 'Eagles' } // a listed club
 

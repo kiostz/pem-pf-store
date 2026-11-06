@@ -8,6 +8,8 @@ export type Item = {
   name: string
   // Category it belongs to, e.g. "Nature".
   category: string
+  // Subcategory name within the category, e.g. "Nature" under Honors, or null for none.
+  subcategory: string | null
   // Price in ShopSettings.currency's main unit (the API's priceCents divided by 100).
   price: number
   // Units on hand, a whole number of 0 or more.

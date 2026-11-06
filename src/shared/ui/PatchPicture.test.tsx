@@ -15,6 +15,7 @@ function item(image: string | null): Item { // builds an item with an image key
     id: 'knot-tying',
     name: 'Knot Tying',
     category: 'Nature',
+    subcategory: null, // no subcategory
     stock: 10,
     price: 4,
     image,

@@ -4,7 +4,7 @@ import type { ShopClub, ShopItem, ShopLoad, ShopSettings } from './api-types'
 
 // The three public selects, shared by the single endpoints and /shop.
 const ITEMS_SQL =
-  "SELECT id, name, category, price_cents AS priceCents, stock, image FROM items WHERE status = 'active' ORDER BY name COLLATE NOCASE, id" // Hidden items never leave D1; ties by id.
+  "SELECT id, name, category, (SELECT name FROM subcategories WHERE id = items.subcategory_id) AS subcategory, price_cents AS priceCents, stock, image FROM items WHERE status = 'active' ORDER BY name COLLATE NOCASE, id" // Hidden items never leave D1; the subcategory name comes from a primary-key lookup (null for none); ties by id.
 const CLUBS_SQL = 'SELECT name, area, language, location, church_name AS churchName FROM clubs ORDER BY position, id' // Position, ties by id.
 const SETTINGS_SQL = 'SELECT currency FROM settings WHERE id = 1' // The single row.
 
@@ -14,7 +14,7 @@ const SETTINGS_SQL = 'SELECT currency FROM settings WHERE id = 1' // The single 
  * @return The shop items.
  */
 export async function readItems(db: D1Database): Promise<ShopItem[]> {
-  const { results } = await db // Only the six public columns are selected.
+  const { results } = await db // Only the seven public columns are selected.
     .prepare(ITEMS_SQL) // Shared statement text.
     .all<ShopItem>() // Rows typed as the response.
   return results // Column aliases already match the response type.

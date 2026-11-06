@@ -15,6 +15,7 @@ function item(name: string, category = 'Nature'): Item { // builds an item with 
     id: name.toLowerCase().replace(/\W+/g, '-'),
     name,
     category,
+    subcategory: null, // no subcategory
     stock: 10,
     price: 4,
     image: null,

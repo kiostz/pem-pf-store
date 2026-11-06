@@ -11,7 +11,7 @@ import type { Club, Item } from '@/shared/data/types.ts' // the shapes the scree
  * @return the item, RM 4 with 10 in stock and no picture unless extras say otherwise
  */
 export function item(id: string, name: string, extras: Partial<Item> = {}): Item { // builds a listed item with defaults
-  return { id, name, category: 'Recreation', price: 4, stock: 10, image: null, ...extras } // defaults first, then the test's own fields
+  return { id, name, category: 'Recreation', subcategory: null, price: 4, stock: 10, image: null, ...extras } // defaults first, then the test's own fields
 }
 
 /**

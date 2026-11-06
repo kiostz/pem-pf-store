@@ -78,7 +78,7 @@ describe('toSentOrder club', () => {
 })
 
 describe('toEarlierSentOrder', () => {
-  const item = { id: 'knot-tying', name: 'Knot Tying', category: 'Nature', stock: 10, price: 3, image: null } as const // one item
+  const item = { id: 'knot-tying', name: 'Knot Tying', category: 'Nature', subcategory: null, stock: 10, price: 3, image: null } as const // one item
   const birds = { ...item, id: 'birds', name: 'Birds' } as const // another
   const cart: OrderLine[] = [
     { item, quantity: 3 }, // an order line of the first item

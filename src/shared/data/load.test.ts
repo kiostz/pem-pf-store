@@ -61,10 +61,27 @@ describe('loadShop', () => {
     // catches: a field dropped or renamed on the way to the screens
     const loaded = await loadShop(fakeFetch(good))
     expect(loaded).toEqual({
-      items: [{ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', price: 4, stock: 12, image: null }], // one item on the wire
+      items: [{ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', subcategory: null, price: 4, stock: 12, image: null }], // one item on the wire
       clubs: [eagles, gilead],
       settings: { currency: 'MYR' },
     })
+  })
+
+  it('loads a subcategory name or null and treats a missing key as null', async () => { // the new field
+    // catches: the field dropped on the way to the screens, or a Pages-before-Worker deploy gap blanking the shop
+    const loaded = await loadShop( // three rows: a name, null, no key
+      fakeFetch({ ...good, items: [{ ...orderable, id: 'a', subcategory: 'Nature' }, { ...orderable, id: 'b', subcategory: null }, { ...orderable, id: 'c' }] }), // the wire rows
+    )
+    expect(loaded.items.map((item) => item.subcategory)).toEqual(['Nature', null, null]) // name, null, missing as null
+  })
+
+  it.each([ // wrong types
+    ['an empty subcategory', ''], // empty string
+    ['a numeric subcategory', 5], // number
+    ['an object subcategory', {}], // object
+  ])('is failed for %s', async (_label, subcategory) => { // wrong types still fail
+    // catches: a wrong-typed subcategory reaching a card instead of blanking the shop
+    expect(await failureKind(fakeFetch({ ...good, items: [{ ...orderable, subcategory }] }))).toBe('failed') // the load fails
   })
 
   it('turns priceCents into a price whose line total is exactly 115 cents', async () => {
@@ -83,7 +100,7 @@ describe('loadShop', () => {
         settings: { currency: 'MYR', defaultPrice: 400 },
       }),
     )
-    expect(loaded.items[0]).toEqual({ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', price: 4, stock: 0, image: 'items/knot-tying.webp' }) // the loaded item with its picture key
+    expect(loaded.items[0]).toEqual({ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', subcategory: null, price: 4, stock: 0, image: 'items/knot-tying.webp' }) // the loaded item with its picture key
     expect(loaded.settings).toEqual({ currency: 'MYR' })
   })
 

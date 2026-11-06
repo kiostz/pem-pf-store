@@ -5,6 +5,7 @@ export interface ShopItem {
   id: string // Never changes.
   name: string // Shown name.
   category: string // Category label.
+  subcategory: string | null // Subcategory name, or null for none.
   priceCents: number // Whole cents, RM 4.00 is 400.
   stock: number // Units on hand.
   image: string | null // Patch picture path, or none.

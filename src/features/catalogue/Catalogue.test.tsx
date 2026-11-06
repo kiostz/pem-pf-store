@@ -97,6 +97,22 @@ describe('Catalogue', () => {
     expect(within(row).queryByRole('link')).not.toBeInTheDocument()
   })
 
+  it('with the Honors and Accessories data, labels a card Honors, filters on those two and shows All for an old Nature link', async () => { // the new category names
+    // catches: a label or filter built from the subcategory, or an old ?category=Nature link hiding every item
+    serve([ // a /shop answer with the new category names
+      makeItem('knots', 'Knot Tying', { category: 'Honors', subcategory: 'Nature' }), // an honor with a subcategory
+      makeItem('scarf', 'Scarf', { category: 'Accessories' }), // an accessory with none
+    ]) // the shop lists these items
+    render(<CatalogueWithCart initialCategory="Nature" />) // an old link: Nature is no longer a category
+    const row = (await screen.findByText('Knot Tying')).closest('li')! // the honor's card
+    expect(within(row).getByText('Honors')).toBeInTheDocument() // the label is the category
+    expect(within(row).queryByText('Nature')).not.toBeInTheDocument() // the subcategory is not shown
+    const control = screen.getByRole('combobox', { name: 'Category' }) // the filter
+    expect(within(control).getAllByRole('option').map((option) => option.textContent)).toEqual(['All categories', 'Accessories', 'Honors']) // only categories present
+    expect(control).toHaveDisplayValue('All categories') // the old link falls back
+    expect(screen.getByText('Scarf')).toBeInTheDocument() // nothing was hidden
+  })
+
   it('keeps the grid one column below 348 px, where two columns are too narrow for the 134 px stepper', async () => {
     // catches: two columns on a 320 px phone, where the stepper sticks out of its card
     serve([item('Ants', 'Nature')]) // the shop lists these items

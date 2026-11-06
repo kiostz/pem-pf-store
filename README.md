@@ -81,7 +81,7 @@ Migration `0005_subcategories.sql` creates `subcategories` (nine honor areas wit
 
 The API Worker answers JSON with `Cache-Control: no-store`. The four `GET` reads:
 
-- `/items`: active items by name (ignoring case, equal names by id), as `{ id, name, category, priceCents, stock, image }` (RM 4.00 is `400`). Hidden items never appear.
+- `/items`: active items by name (ignoring case, equal names by id), as `{ id, name, category, subcategory, priceCents, stock, image }` (`subcategory` is the subcategory's name, or `null`; RM 4.00 is `400`). Hidden items never appear.
 - `/clubs`: the clubs in their set order, as `{ name, area, language, location, churchName }`.
 - `/settings`: `{ currency }` only.
 - `/shop`: `{ items, clubs, settings }` in one D1 batch, the same three lists as above, so a shop load is one request; a missing settings row answers 500 `server`.

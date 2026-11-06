@@ -79,6 +79,7 @@ function toItem(entry: unknown): Item { // checks one entry and returns an item
     typeof entry.id !== 'string' || entry.id === '' || // id is required
     typeof entry.name !== 'string' || entry.name === '' || // name is required
     typeof entry.category !== 'string' || entry.category === '' || // category is required
+    !(entry.subcategory === undefined || entry.subcategory === null || (typeof entry.subcategory === 'string' && entry.subcategory !== '')) || // a name, null, or a missing key (an older Worker)
     !isCount(entry.priceCents) || // whole cents
     !isCount(entry.stock) || // whole units
     !(entry.image === null || (typeof entry.image === 'string' && entry.image !== '')) // a path or null
@@ -88,6 +89,7 @@ function toItem(entry: unknown): Item { // checks one entry and returns an item
     id: entry.id, // checked above
     name: entry.name, // checked above
     category: entry.category, // checked above
+    subcategory: entry.subcategory ?? null, // a missing key counts as none
     price: entry.priceCents / 100, // major units, as the cart and the order email expect until they move to cents
     stock: entry.stock, // checked above
     image: entry.image !== null && PICTURE_KEY.test(entry.image) ? entry.image : null, // a bad key shows the category mark; it never blanks the shop
