@@ -5,13 +5,13 @@ import type { CartQuantities } from './cart.ts' // the cart's shape
 
 // What every reader of the cart gets.
 export type CartValue = {
-  quantities: CartQuantities // honor id to quantity
-  quantityOf: (honorId: string) => number // 0 when the honor is not in the cart
-  setQuantity: (honorId: string, quantity: number) => void // change one honor, 0 removes it
+  quantities: CartQuantities // item id to quantity
+  quantityOf: (itemId: string) => number // 0 when the item is not in the cart
+  setQuantity: (itemId: string, quantity: number) => void // change one item, 0 removes it
   removeOrderLines: (
     orderLines: Array<{ itemId: string; quantity: number }>,
   ) => void // takes a sent order's quantities out, called once an order is sent
-  takeOutUnavailable: () => void // removes every unavailable honor id in one write; called by Checkout
+  takeOutUnavailable: () => void // removes every unavailable item id in one write; called by Checkout
 }
 
 export const CartContext = createContext<CartValue | null>(null) // null outside a CartProvider

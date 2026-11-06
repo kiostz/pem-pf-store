@@ -71,7 +71,7 @@ describe('loadShop', () => {
     // catches: a float price that loses a cent once it is multiplied back into cents
     const loaded = await loadShop(fakeFetch({ ...good, items: [{ ...orderable, priceCents: 115 }] }))
     expect(loaded.items[0].price).toBe(1.15) // the price in main units
-    expect(lineTotalCents({ honor: loaded.items[0], quantity: 1 })).toBe(115) // the order line total from the loaded item
+    expect(lineTotalCents({ item: loaded.items[0], quantity: 1 })).toBe(115) // the order line total from the loaded item
   })
 
   it('accepts stock 0, a picture path, empty lists and ignores extra keys', async () => {

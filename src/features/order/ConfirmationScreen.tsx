@@ -88,14 +88,14 @@ export function ConfirmationScreen({ onBack }: { onBack: () => void }) {
       <ul className={`${CARD_BOX} overflow-hidden`}>
         {/* one row per order line */}
         {order.lines.map((line) => (
-          // the order line, keyed by honor, with a rule between order lines and kept whole across a printed page break
+          // the order line, keyed by item, with a rule between order lines and kept whole across a printed page break
           <li
             key={line.itemId}
             className="border-border-subtle flex items-start justify-between gap-3 border-b px-4 py-3 last:border-b-0 print:break-inside-avoid"
           >
             {/* the name and the quantity at its price; min-w-0 lets a long name wrap */}
             <div className="min-w-0">
-              {/* the honor */}
+              {/* the item */}
               <span className="font-medium wrap-break-word">{line.name}</span>
               {/* how many, at what price */}
               <span className="text-text-muted block text-sm">{`${line.quantity} × ${money(line.priceCents)}`}</span>

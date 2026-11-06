@@ -39,7 +39,7 @@ export function ItemCard({ item, currency }: { item: Item; currency: string }) {
         <span className="text-text-muted text-[0.8125rem] leading-5 tabular-nums">{`Stock: ${STOCK_FORMAT.format(item.stock)} left`}</span>
       </div>
       <CardQuantity
-        honorName={item.name} // for the labels
+        itemName={item.name} // for the labels
         quantity={quantityOf(item.id)} // 0 when not in the cart
         onChange={(quantity) => setQuantity(item.id, quantity)} // edit the cart
         max={quantityCap(item)} // the stock or 99

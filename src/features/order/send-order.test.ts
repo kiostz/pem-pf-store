@@ -269,8 +269,8 @@ describe('lookupOrder', () => {
 })
 
 describe('toOrderRequest', () => {
-  const honor = { id: 'knot-tying', name: 'Knot Tying', category: 'Nature', stock: 10, price: 3, image: null } as const // one item at RM 3
-  const lines: OrderLine[] = [{ honor, quantity: 3 }] // three of them
+  const item = { id: 'knot-tying', name: 'Knot Tying', category: 'Nature', stock: 10, price: 3, image: null } as const // one item at RM 3
+  const lines: OrderLine[] = [{ item, quantity: 3 }] // three of them
   const values = { ...EMPTY_ORDER_FORM, name: ' J. Cruz ', email: 'jc@mail.com', phone: '+60\t12', club: 'Eagles' } // a listed club
 
   it('sends ids and quantities only, with the buyer on one line and a listed club as not typed', () => {

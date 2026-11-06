@@ -30,14 +30,14 @@ export function CartProvider({ items, children }: { items: Item[] | null; childr
       const { unavailable } = resolveCart(current, items) // what cannot be ordered
       if (unavailable.length === 0) return current // same object: no re-render, no write
       const next = { ...current } // a copy
-      for (const { honorId } of unavailable) delete next[honorId] // out of the cart
+      for (const { itemId } of unavailable) delete next[itemId] // out of the cart
       return next // saved by the effect above
     })
   }, [items]) // the items decide what is unavailable
 
   /**
    * Takes a sent order's lines out of the cart, so only what the buyer added or raised while it was sending stays.
-   * @param orderLines each sent honor and the quantity the order listed
+   * @param orderLines each sent item and the quantity the order listed
    */
   const removeOrderLines = useCallback(
     (orderLines: Array<{ itemId: string; quantity: number }>) =>
@@ -49,9 +49,9 @@ export function CartProvider({ items, children }: { items: Item[] | null; childr
       ), // saved by the effect above
     [], // setQuantities never changes
   )
-  const quantityOf = useCallback((honorId: string) => quantities[honorId] ?? 0, [quantities]) // 0 for absent
+  const quantityOf = useCallback((itemId: string) => quantities[itemId] ?? 0, [quantities]) // 0 for absent
   const setQuantity = useCallback(
-    (honorId: string, quantity: number) => setQuantities((current) => withQuantity(current, honorId, quantity)), // clamp and store
+    (itemId: string, quantity: number) => setQuantities((current) => withQuantity(current, itemId, quantity)), // clamp and store
     [], // setQuantities never changes
   ) // one stable setter
   // the object every reader gets

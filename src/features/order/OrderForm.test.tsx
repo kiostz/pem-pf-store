@@ -53,15 +53,15 @@ afterEach(() => {
 
 const clubs: Club[] = [{ name: 'Eagles', area: null, language: null, location: null, churchName: null }] // one club
 
-const honor = {
+const item = { // one test item
   id: 'knot-tying',
   name: 'Knot Tying',
   category: 'Nature',
   stock: 10,
   price: 3,
   image: null,
-} as const // one honor at RM 3
-const lines: OrderLine[] = [{ honor, quantity: 3 }] // RM 9.00
+} as const // one item at RM 3
+const lines: OrderLine[] = [{ item, quantity: 3 }] // RM 9.00
 
 /**
  * Shows the cart as text and offers the catalogue's edits a buyer can make while an order is sending.
@@ -730,8 +730,8 @@ describe('OrderForm sending', () => {
     await waitFor(() => expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{}}'))
   })
 
-  it('on success keeps an honor the buyer added while the order was sending', async () => {
-    // catches: a successful send that empties the whole cart, so an honor added from the catalogue mid-send is lost unordered
+  it('on success keeps an item the buyer added while the order was sending', async () => { // an item added mid-send stays in the cart
+    // catches: a successful send that empties the whole cart, so an item added from the catalogue mid-send is lost unordered
     let finish: (response: Response) => void = () => {}
     stubFetch(() => new Promise<Response>((resolve) => (finish = resolve)))
     renderForm()
@@ -745,7 +745,7 @@ describe('OrderForm sending', () => {
     )
   })
 
-  it('on success removes only the sent quantity of an honor raised while the order was sending', async () => {
+  it('on success removes only the sent quantity of an item raised while the order was sending', async () => { // only the sent quantity leaves the cart
     // catches: a successful send that drops the extra two Knot Tying the buyer added mid-send
     let finish: (response: Response) => void = () => {}
     stubFetch(() => new Promise<Response>((resolve) => (finish = resolve)))
@@ -1387,7 +1387,7 @@ describe('OrderForm lookup after a lost send', () => {
     // catches: the changed cart's quantities removed for an order that holds fewer
     vi.spyOn(console, 'error').mockImplementation(() => {}) // the failure log
     stubFetch(drop, earlier()) // a drop, then the earlier order
-    renderForm(clubs, () => {}, 5, [{ honor, quantity: 5 }]) // five in the cart and in the order
+    renderForm(clubs, () => {}, 5, [{ item, quantity: 5 }]) // five in the cart and in the order
     fillTickAndSend()
     await screen.findByRole('alert')
     tickAndSend()
@@ -1607,7 +1607,7 @@ describe('OrderForm lookup after a lost send', () => {
     const fetchFn = await sendThenDrop() // three sent, the answer lost
     fireEvent.click(screen.getByRole('button', { name: 'Lower Knot Tying to one' })) // the buyer lowers the line
     cleanup() // the reload
-    renderForm(two, () => {}, 1, [{ honor, quantity: 1 }]) // the cart now holds one
+    renderForm(two, () => {}, 1, [{ item, quantity: 1 }]) // the cart now holds one
     expect(screen.getByLabelText('Name')).toHaveValue('Jo Tan') // refilled from the pending send
     lookupAnswers.push(found()) // the first send had landed
     tickAndSend()

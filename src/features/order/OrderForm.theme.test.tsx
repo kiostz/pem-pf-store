@@ -53,15 +53,15 @@ afterEach(() => {
   window.sessionStorage.clear() // no sent order left
 })
 
-const honor = {
+const item = { // one test item
   id: 'knot-tying',
   name: 'Knot Tying',
   category: 'Nature',
   stock: 10,
   price: 3,
   image: null,
-} as const // one honor at RM 3
-const lines: OrderLine[] = [{ honor, quantity: 3 }] // RM 9.00
+} as const // one item at RM 3
+const lines: OrderLine[] = [{ item, quantity: 3 }] // RM 9.00
 
 /**
  * Shows the cart as text.

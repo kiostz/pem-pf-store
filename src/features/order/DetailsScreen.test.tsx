@@ -38,7 +38,7 @@ afterEach(() => {
 
 /**
  * Stores a cart and renders the details page over it, with the address set to the details page.
- * @param quantities honor id to quantity
+ * @param quantities item id to quantity
  */
 function renderDetails(quantities: Record<string, number>) {
   window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, quantities })) // the saved cart
@@ -85,9 +85,9 @@ describe('DetailsScreen', () => {
     expect(window.location.hash).toBe('#/cart')
   })
 
-  it('goes to the cart for a gone honor as well', () => {
+  it('goes to the cart for a gone item as well', () => { // a gone item sends the buyer to the cart
     // catches: an id missing from the data counted as orderable
-    renderDetails({ 'knot-tying': 1, 'no-such-honor': 2 })
+    renderDetails({ 'knot-tying': 1, 'no-such-item': 2 }) // a cart with one gone item id
     expect(window.location.hash).toBe('#/cart')
   })
 
@@ -114,7 +114,7 @@ describe('DetailsScreen', () => {
     }
   })
 
-  it('stays on #/details while honors are loading', () => {
+  it('stays on #/details while items are loading', () => { // no redirect before the data loads
     // catches: a redirect before the data is known, which would send every reload to the cart
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}')
     window.location.hash = '#/details'
@@ -176,13 +176,13 @@ describe('DetailsScreen', () => {
     expect(retry).toHaveBeenCalledTimes(1)
   })
 
-  it('leaves for the cart and drops the form when the last orderable honor leaves the shop while the page is open', () => {
+  it('leaves for the cart and drops the form when the last orderable item leaves the shop while the page is open', () => { // the cart takes over when the last item goes
     // catches: a form left open over a cart that can no longer be ordered, so a buyer could send a wrong order
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}') // one orderable line
     window.location.hash = '#/details' // as a buyer arrives
     /**
-     * Builds the page over the given honors.
-     * @param list the honors the data holds
+     * Builds the page over the given items.
+     * @param list the items the data holds
      * @return the page
      */
     const page = (list: Item[]) => ( // a page over this list of items
@@ -203,7 +203,7 @@ describe('DetailsScreen', () => {
   })
 
   it('shows no form and does not redirect when the data failed to load', () => {
-    // catches: a form shown with no honors to check against, or a reload with the network down bouncing the buyer
+    // catches: a form shown with no items to check against, or a reload with the network down bouncing the buyer
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}')
     window.location.hash = '#/details'
     render(
@@ -220,8 +220,8 @@ describe('DetailsScreen', () => {
     expect(window.location.hash).toBe('#/details')
   })
 
-  it('sends only the orderable lines after Checkout with an unlisted honor in the cart', async () => {
-    // catches: a wrong order that lists an unlisted honor
+  it('sends only the orderable lines after Checkout with a gone item in the cart', async () => { // the request leaves out a gone item
+    // catches: a wrong order that lists a gone item
     const fetchFn = vi.fn(async () => new Response(
         JSON.stringify({
           number: 'PF-20261102-4K7Q',
@@ -260,7 +260,7 @@ describe('DetailsScreen', () => {
     const body = JSON.parse((fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1].body as string) as {
       lines: Array<{ itemId: string; quantity: number }>
     }
-    expect(body.lines).toEqual([{ itemId: 'knot-tying', quantity: 2 }]) // the unlisted item is not in the request
+    expect(body.lines).toEqual([{ itemId: 'knot-tying', quantity: 2 }]) // the gone item is not in the request
   })
 
   it('is inert and busy while an order is sending, then free', async () => {

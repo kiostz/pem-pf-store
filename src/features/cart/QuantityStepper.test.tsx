@@ -11,7 +11,7 @@ import { QuantityStepper } from './QuantityStepper.tsx' // code under test
  */
 function setup(quantity: number) {
   const onChange = vi.fn() // records every committed quantity
-  render(<QuantityStepper honorName="Knot Tying" quantity={quantity} onChange={onChange} />)
+  render(<QuantityStepper itemName="Knot Tying" quantity={quantity} onChange={onChange} />) // the item name for the labels
   return {
     onChange,
     field: screen.getByRole('textbox', { name: 'Quantity of Knot Tying' }),
@@ -21,7 +21,7 @@ function setup(quantity: number) {
 }
 
 describe('QuantityStepper', () => {
-  it('names the group, the field and the buttons after the honor', () => {
+  it('names the group, the field and the buttons after the item', () => { // the labels carry the item name
     // catches: unlabelled controls a screen reader cannot tell apart row by row
     const { field, fewer, more } = setup(3)
     expect(screen.getByRole('group', { name: 'Quantity of Knot Tying' })).toBeInTheDocument()
@@ -109,7 +109,7 @@ describe('QuantityStepper', () => {
   it('with trashAtOne the first control at 1 is a Remove button that calls onChange(0)', () => {
     // catches: the cart keeping a dead minus at 1, so a buyer cannot remove the line from the stepper
     const onChange = vi.fn() // records every committed quantity
-    render(<QuantityStepper honorName="Knot Tying" quantity={1} onChange={onChange} trashAtOne />)
+    render(<QuantityStepper itemName="Knot Tying" quantity={1} onChange={onChange} trashAtOne />) // the item name for the labels
     fireEvent.click(screen.getByRole('button', { name: 'Remove Knot Tying' }))
     expect(onChange).toHaveBeenCalledWith(0)
     expect(screen.queryByRole('button', { name: 'One fewer Knot Tying' })).not.toBeInTheDocument()
@@ -117,7 +117,7 @@ describe('QuantityStepper', () => {
 
   it('with trashAtOne draws the focus ring of every control in the soft-fill ring colour', () => {
     // catches: the card's blue ring (2.97:1 on the soft fill) staying on the cart's stepper
-    render(<QuantityStepper honorName="Knot Tying" quantity={2} onChange={() => {}} trashAtOne />)
+    render(<QuantityStepper itemName="Knot Tying" quantity={2} onChange={() => {}} trashAtOne />) // the item name for the labels
     for (const control of [
       screen.getByRole('button', { name: 'One fewer Knot Tying' }),
       screen.getByRole('textbox', { name: 'Quantity of Knot Tying' }),
@@ -129,7 +129,7 @@ describe('QuantityStepper', () => {
   it('with trashAtOne the first control at 2 is still One fewer', () => {
     // catches: the trash showing above 1, which would drop a line with two in it
     const onChange = vi.fn() // records every committed quantity
-    render(<QuantityStepper honorName="Knot Tying" quantity={2} onChange={onChange} trashAtOne />)
+    render(<QuantityStepper itemName="Knot Tying" quantity={2} onChange={onChange} trashAtOne />) // the item name for the labels
     fireEvent.click(screen.getByRole('button', { name: 'One fewer Knot Tying' }))
     expect(onChange).toHaveBeenCalledWith(1)
     expect(screen.queryByRole('button', { name: 'Remove Knot Tying' })).not.toBeInTheDocument()
@@ -148,7 +148,7 @@ describe('QuantityStepper with a max below 99', () => {
   it('kills + at the max with a label that says why, and keeps minus working above it', () => {
     // catches: a + that lets a buyer pass the stock, or a minus that is dead on a line already above the stock
     const onChange = vi.fn() // records every committed quantity
-    render(<QuantityStepper honorName="Knot Tying" quantity={12} max={2} onChange={onChange} />)
+    render(<QuantityStepper itemName="Knot Tying" quantity={12} max={2} onChange={onChange} />) // the item name for the labels
     const more = screen.getByRole('button', { name: '2 is the most of Knot Tying' })
     expect(more).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(more)
@@ -157,16 +157,16 @@ describe('QuantityStepper with a max below 99', () => {
     expect(onChange).toHaveBeenCalledWith(11) // minus lowers it a step
   })
 
-  it('says the honor is sold out on a dead + when the max is 0', () => {
+  it('says the item is sold out on a dead + when the max is 0', () => { // the + label when stock is 0
     // catches: a "0 is the most of" label on a line whose stock is gone
-    render(<QuantityStepper honorName="Knot Tying" quantity={3} max={0} onChange={() => {}} />)
+    render(<QuantityStepper itemName="Knot Tying" quantity={3} max={0} onChange={() => {}} />) // the item name for the labels
     expect(screen.getByRole('button', { name: 'Knot Tying is sold out' })).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('clamps a typed number to the max, not to 99', () => {
     // catches: typing 50 into a stock-12 stepper committing 50
     const onChange = vi.fn() // records every committed quantity
-    render(<QuantityStepper honorName="Knot Tying" quantity={1} max={12} onChange={onChange} />)
+    render(<QuantityStepper itemName="Knot Tying" quantity={1} max={12} onChange={onChange} />) // the item name for the labels
     const field = screen.getByRole('textbox', { name: 'Quantity of Knot Tying' })
     fireEvent.change(field, { target: { value: '50' } })
     fireEvent.keyDown(field, { key: 'Enter' })

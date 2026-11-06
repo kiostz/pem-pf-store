@@ -9,7 +9,7 @@ const FADE_IN = 'animate-[fade-in_var(--duration-fast)_var(--ease-out-soft)_both
 
 /**
  * Draws Add at 0 and the stepper from 1.
- * @param honorName the honor's name, used in the labels
+ * @param itemName the item's name, used in the labels
  * @param quantity the quantity now, 0 to 99
  * @param onChange called with the new quantity
  * @param max the most the stepper allows, 99 unless the stock is lower
@@ -17,13 +17,13 @@ const FADE_IN = 'animate-[fade-in_var(--duration-fast)_var(--ease-out-soft)_both
  * @return a 44 px tall box holding Add, the stepper or the Sold out pill
  */
 export function CardQuantity({
-  honorName,
+  itemName, // the item name for the labels
   quantity,
   onChange,
   max = MAX_QUANTITY,
   soldOut = false,
 }: {
-  honorName: string
+  itemName: string // the item name, used in the labels
   quantity: number
   onChange: (quantity: number) => void
   max?: number
@@ -67,13 +67,13 @@ export function CardQuantity({
       ) : inCart ? (
         // key keeps the two controls as separate elements so each plays its entrance.
         <div key="stepper" className={FADE_IN}>
-          <QuantityStepper honorName={honorName} quantity={quantity} onChange={change} max={max} /> {/* − n + */}
+          <QuantityStepper itemName={itemName} quantity={quantity} onChange={change} max={max} /> {/* − n + */}
         </div>
       ) : (
         <button
           key="add"
           type="button" // not a form submit
-          aria-label={`Add ${honorName}`} // names the honor
+          aria-label={`Add ${itemName}`} // names the item
           onClick={() => {
             focusNext.current = 'more' // the Add button is about to unmount
             onChange(1) // the first one

@@ -122,7 +122,7 @@ describe('TabPill', () => {
     expect(tabs().cart).toHaveAccessibleName('Cart, 1 item, estimated total RM 4.00')
   })
 
-  it('stays plain when only an unlisted item is in the cart', () => {
+  it('stays plain when only a gone item is in the cart', () => { // a cart holding only an Unavailable item
     // catches: a grown tab over a cart with nothing to order
     renderPill()
     fireEvent.click(screen.getByText('two not listed'))

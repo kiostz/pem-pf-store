@@ -50,7 +50,7 @@ function isSentOrder(value: unknown): value is SentOrder {
         typeof orderLine.name === 'string' && // its name
         typeof orderLine.quantity === 'number' && // how many
         Number.isFinite(orderLine.quantity) && // a real number
-        typeof orderLine.priceCents === 'number' && // one honor's price
+        typeof orderLine.priceCents === 'number' && // one item's price
         Number.isFinite(orderLine.priceCents) // a real number
       )
     }) // every order line whole

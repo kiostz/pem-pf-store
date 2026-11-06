@@ -78,7 +78,7 @@ export function toEarlierSentOrder(saved: SavedOrder, contacts: Contact[], value
   const now = formContact(values) // what the buyer has typed now
   const sameLines =
     saved.lines.length === lines.length &&
-    saved.lines.every((line) => lines.some((cartLine) => cartLine.honor.id === line.itemId && cartLine.quantity === line.quantity)) // the same items and quantities
+    saved.lines.every((line) => lines.some((cartLine) => cartLine.item.id === line.itemId && cartLine.quantity === line.quantity)) // the same items and quantities
   const formClub = clubText({ ...values, otherClub: oneLine(values.otherClub) }) // the club the form holds
   const sameClub = saved.club === undefined || saved.club === formClub.email // an absent club counts as the form's
   const sameContact = contact !== null && contact.name === now.name && contact.email === now.email && contact.phone === now.phone // the shown contact is the typed one

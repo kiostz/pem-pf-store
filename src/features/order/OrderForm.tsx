@@ -150,7 +150,7 @@ export function OrderForm({
         // a contact already sent under this id is not added twice, so a resend of the same fields keeps one entry
         if (!request.contacts.some((known) => known.name === contact.name && known.email === contact.email && known.phone === contact.phone))
           request.contacts.push(contact) // each distinct contact sent under this id, in send order
-        writePendingSend({ requestId: request.requestId, lines: lines.map((line) => [line.honor.id, line.quantity]), values, contacts: request.contacts }) // a reload before the answer reuses this id
+        writePendingSend({ requestId: request.requestId, lines: lines.map((line) => [line.item.id, line.quantity]), values, contacts: request.contacts }) // a reload before the answer reuses this id
         const { order: saved, kept } = await sendOrder(toOrderRequest(request.requestId, token, lines, values)) // the Worker checks, saves and numbers it
         order = kept === 'this-send' ? toSentOrder(saved, values) : toEarlierSentOrder(saved, request.contacts, values, lines) // an earlier send's order shows as it was saved
       }
@@ -171,7 +171,7 @@ export function OrderForm({
       if (
         error instanceof OrderStockError &&
         error.lines.some((short) => {
-          const cartLine = lines.find((line) => line.honor.id === short.itemId) // the cart's line for it
+          const cartLine = lines.find((line) => line.item.id === short.itemId) // the cart's line for it
           return cartLine !== undefined && (short.stock === null || short.stock < cartLine.quantity) // gone, or short of the quantity
         })
       ) {

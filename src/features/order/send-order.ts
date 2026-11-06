@@ -95,7 +95,7 @@ export function toOrderRequest(
     email: oneLine(values.email), // one line
     phone: oneLine(values.phone), // one line
     club: { name: typed ? oneLine(values.otherClub) : values.club, typed }, // the name, and how it was chosen
-    lines: lines.map((line) => ({ itemId: line.honor.id, quantity: line.quantity })), // ids and quantities only
+    lines: lines.map((line) => ({ itemId: line.item.id, quantity: line.quantity })), // ids and quantities only
   }
 }
 

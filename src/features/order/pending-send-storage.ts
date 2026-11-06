@@ -5,7 +5,7 @@ import type { OrderFormValues } from './order-form.ts' // the form fields kept
 
 export type PendingSend = {
   requestId: string // the id the Worker keys the order on
-  lines: Array<[string, number]> // the cart lines sent: honor id and quantity
+  lines: Array<[string, number]> // the cart lines sent: item id and quantity
   values: OrderFormValues // the form as sent
   contacts: Contact[] // every distinct contact sent under this id, in send order
 } // one send in flight

@@ -14,10 +14,11 @@ function setup(start: number) {
   const onChange = vi.fn() // records every committed quantity
   /** A host that holds the quantity so the control re-renders on a change. */
   function Host() {
-    const [quantity, setQuantity] = useState(start) // the cart's quantity for this honor
+    const [quantity, setQuantity] = useState(start) // the cart's quantity for this item
     return (
       <CardQuantity
-        honorName="Knot Tying"
+        // the item name the stepper labels use
+        itemName="Knot Tying"
         quantity={quantity}
         onChange={(next) => {
           onChange(next) // record
@@ -85,7 +86,8 @@ describe('CardQuantity', () => {
     render(
       <>
         <button type="button">Elsewhere</button>
-        <CardQuantity honorName="Knot Tying" quantity={1} onChange={() => {}} />
+        {/* the item name for the labels */}
+        <CardQuantity itemName="Knot Tying" quantity={1} onChange={() => {}} />
       </>,
     )
     const elsewhere = screen.getByRole('button', { name: 'Elsewhere' })
@@ -102,10 +104,10 @@ describe('CardQuantity with a max or sold out', () => {
   it('stops + at the max and commits a typed number as the max', () => {
     // catches: a card that orders more than the stock
     const onChange = vi.fn() // records every committed quantity
-    const { unmount } = render(<CardQuantity honorName="Knot Tying" quantity={3} max={3} onChange={onChange} />)
+    const { unmount } = render(<CardQuantity itemName="Knot Tying" quantity={3} max={3} onChange={onChange} />) // the item name for the labels
     expect(screen.getByRole('button', { name: '3 is the most of Knot Tying' })).toHaveAttribute('aria-disabled', 'true')
     unmount()
-    render(<CardQuantity honorName="Knot Tying" quantity={1} max={3} onChange={onChange} />)
+    render(<CardQuantity itemName="Knot Tying" quantity={1} max={3} onChange={onChange} />) // the item name for the labels
     const field = screen.getByRole('textbox', { name: 'Quantity of Knot Tying' })
     fireEvent.change(field, { target: { value: '50' } })
     fireEvent.keyDown(field, { key: 'Enter' })
@@ -115,17 +117,17 @@ describe('CardQuantity with a max or sold out', () => {
   it('keeps minus working above the max', () => {
     // catches: a card whose cart holds more than the stock now left and cannot be lowered
     const onChange = vi.fn() // records every committed quantity
-    render(<CardQuantity honorName="Knot Tying" quantity={12} max={2} onChange={onChange} />)
+    render(<CardQuantity itemName="Knot Tying" quantity={12} max={2} onChange={onChange} />) // the item name for the labels
     fireEvent.click(screen.getByRole('button', { name: 'One fewer Knot Tying' }))
     expect(onChange).toHaveBeenCalledWith(11)
   })
 
   it('shows Sold out in place of Add, with no control to focus, even when the cart holds some', () => {
     // catches: an Add on a Sold out card, or a stepper left for a cart item whose stock fell to 0
-    const { rerender } = render(<CardQuantity honorName="Knot Tying" quantity={0} soldOut onChange={() => {}} />)
+    const { rerender } = render(<CardQuantity itemName="Knot Tying" quantity={0} soldOut onChange={() => {}} />) // the item name for the labels
     expect(screen.getByText('Sold out')).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    rerender(<CardQuantity honorName="Knot Tying" quantity={4} soldOut onChange={() => {}} />)
+    rerender(<CardQuantity itemName="Knot Tying" quantity={4} soldOut onChange={() => {}} />) // the item name for the labels
     expect(screen.getByText('Sold out')).toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
   })

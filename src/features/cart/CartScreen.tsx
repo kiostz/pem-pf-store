@@ -21,7 +21,7 @@ import { useCart } from './use-cart.ts' // the cart
 const SKELETON_LINES = 3 // how many skeleton lines the loading state shows
 
 // One line of the card as drawn: an order line or an Unavailable one.
-type ShownLine = { id: string; honor: Item | null; quantity: number; unavailable: boolean } // a shown line holds its item, null when gone
+type ShownLine = { id: string; item: Item | null; quantity: number; unavailable: boolean } // a shown line holds its item, null when gone
 
 // The line just removed, for the note and for Undo; label names it for a screen reader; afterId is the line that followed it.
 type Removal = { id: string; name: string; label: string; quantity: number; keyboard: boolean; afterId: string | null }
@@ -50,17 +50,17 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
   }, [])
 
   const currency = state.status === 'ready' ? state.settings.currency : '' // only read once ready
-  const honors = state.status === 'ready' ? state.items : [] // every item the shop lists
-  const { lines, unavailable } = resolveCart(quantities, honors) // orderable lines A to Z, and what cannot be ordered
+  const items = state.status === 'ready' ? state.items : [] // every item the shop lists
+  const { lines, unavailable } = resolveCart(quantities, items) // orderable lines A to Z, and what cannot be ordered
   const shownLines: ShownLine[] = [
-    ...lines.map((line) => ({ id: line.honor.id, honor: line.honor, quantity: line.quantity, unavailable: false })), // orderable
-    ...unavailable.map(({ honorId }) => ({
-      id: honorId, // the id
-      honor: null, // the shop no longer lists it, so there is no honor to show
-      quantity: quantities[honorId], // kept so Undo can restore it
+    ...lines.map((line) => ({ id: line.item.id, item: line.item, quantity: line.quantity, unavailable: false })), // orderable
+    ...unavailable.map(({ itemId }) => ({ // one shown line per unavailable item id
+      id: itemId, // the id
+      item: null, // the shop no longer lists it, so there is no item to show
+      quantity: quantities[itemId], // kept so Undo can restore it
       unavailable: true, // greyed
     })), // not in the shop
-  ].sort((a, b) => byText(a.honor?.name ?? '￿', b.honor?.name ?? '￿') || byText(a.id, b.id)) // A to Z, gone honors last, equal names by id so Undo restores the old place
+  ].sort((a, b) => byText(a.item?.name ?? '￿', b.item?.name ?? '￿') || byText(a.id, b.id)) // A to Z, gone items last, equal names by id so Undo restores the old place
   const totalCents = estimatedTotalCents(lines) // orderable lines only
   const blocked = lines.some(exceedsStock) // a line above today's stock, or Sold out: Checkout waits for the buyer to fix it
   const refusalShown = refused && (blocked || unavailable.length > 0) // the Worker's refusal note stands: there is a line to fix
@@ -99,8 +99,8 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
     const afterId = shownLines[index + 1]?.id ?? null // the line that follows it
     setRemoval({
       id: line.id,
-      name: line.honor?.name ?? GONE_NAME,
-      label: lineLabel(line.honor, line.id),
+      name: line.item?.name ?? GONE_NAME, // the item name, or the gone name
+      label: lineLabel(line.item, line.id), // the screen reader label of the line
       quantity: line.quantity,
       keyboard,
       afterId,
@@ -199,11 +199,12 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
               {/* The list: its ref is where a line is found for focus. */}
               <ul ref={listRef}>
                 {shownLines.map((shown) => (
-                  // one line per honor, keyed by id
+                  // one line per item, keyed by id
                   <CartLine
                     key={shown.id}
                     id={shown.id}
-                    honor={shown.honor}
+                    // the line shows this item, null when gone
+                    item={shown.item}
                     quantity={shown.quantity}
                     currency={currency}
                     unavailable={shown.unavailable}

@@ -9,8 +9,8 @@ const FADE_MS = 150 // the last part of the hold, spent fading out (the exit dur
 
 /**
  * Draws the note and runs its timer.
- * @param name the removed honor's name, shown in the note
- * @param label the name Undo gives a screen reader; differs from name only for a gone honor, so two notes can be told apart
+ * @param name the removed item's name, shown in the note
+ * @param label the name Undo gives a screen reader; differs from name only for a gone item, so two notes can be told apart
  * @param onUndo called when the buyer presses Undo
  * @param onEnd called once the hold has run out unpaused
  * @param takeFocus true for a keyboard removal: Undo takes focus when the note appears
@@ -77,7 +77,7 @@ export function RemovedNote({
       <button
         ref={undoRef} // for focus
         type="button" // not a form submit
-        aria-label={`Undo removing ${label}`} // names the honor, the gone ones by id
+        aria-label={`Undo removing ${label}`} // names the item, the gone ones by id
         onClick={onUndo} // restore the line
         className="focus-visible:outline-focus-ring rounded-pill min-h-11 shrink-0 px-4 font-bold transition-transform duration-(--duration-press) focus-visible:outline-2 focus-visible:outline-offset-0 active:scale-[0.97]" // 44 px, bold, ring
       >

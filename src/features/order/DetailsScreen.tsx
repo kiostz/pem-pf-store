@@ -22,7 +22,7 @@ export function DetailsScreen({ data }: { data: CatalogueLoad }) {
   const { quantities } = useCart() // the cart
   const { sending, failure } = useOrderForm() // an order is being sent: the page waits; a failed send shows the failure note
   const headingRef = useRef<HTMLHeadingElement>(null) // focused on arrival
-  const ready = state.status === 'ready' // the honors are known
+  const ready = state.status === 'ready' // the items are known
   const { lines, unavailable } = resolveCart(quantities, ready ? state.items : []) // what can be ordered, what cannot
   const mustLeave = ready && (lines.length === 0 || unavailable.length > 0 || lines.some(exceedsStock)) // nothing to order, a line that cannot be ordered, or one above today's stock is still in the cart
 
@@ -31,7 +31,7 @@ export function DetailsScreen({ data }: { data: CatalogueLoad }) {
     headingRef.current?.focus() // the heading has tabIndex -1
   }, [])
 
-  // A page that cannot lead to a right order goes back to the cart (a typed address, a reload, an honor hidden or sold out since).
+  // A page that cannot lead to a right order goes back to the cart (a typed address, a reload, an item hidden or sold out since).
   useEffect(() => {
     if (!mustLeave) return // an order can be sent from here
     if (window.location.hash !== DETAILS_HASH) return // already leaving (a sent order opened the confirmation)

@@ -1,4 +1,4 @@
-// Tests for CartProvider: start from storage, write each change, keep unavailable honors until takeOutUnavailable removes them in one write.
+// Tests for CartProvider: start from storage, write each change, keep unavailable items until takeOutUnavailable removes them in one write.
 
 import { StrictMode } from 'react' // React's double render and double effect run in development
 import { act, fireEvent, render, screen } from '@testing-library/react' // render and query
@@ -88,7 +88,7 @@ describe('CartProvider', () => {
   })
 
   it('removeOrderLines leaves what was added or raised after the order was sent', () => {
-    // catches: a successful send wiping an honor added, or the extra quantity, while the order was on its way
+    // catches: a successful send wiping an item added, or the extra quantity, while the order was on its way
     window.localStorage.setItem(
       CART_STORAGE_KEY,
       '{"version":1,"quantities":{"knot-tying":5,"ants":1,"africa-lore":4}}',
@@ -119,12 +119,12 @@ describe('CartProvider', () => {
 
   it('keeps unavailable ids when items arrive, with no write', () => { // ids missing from the arrived items stay, with no write
     // catches: the old take-out on load, which hides an unavailable line before the buyer sees it
-    const stored = '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-honor":3}}'
+    const stored = '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-item":3}}' // a cart with one gone item id
     window.localStorage.setItem(CART_STORAGE_KEY, stored)
     const setItem = vi.spyOn(Storage.prototype, 'setItem') // counts the writes
     const rerender = renderProvider(null)
     act(() => rerender(items)) // the items arrive
-    expect(screen.getByTestId('quantities')).toHaveTextContent('{"knot-tying":2,"africa-lore":1,"no-such-honor":3}')
+    expect(screen.getByTestId('quantities')).toHaveTextContent('{"knot-tying":2,"africa-lore":1,"no-such-item":3}') // the gone item id is still in the cart
     expect(setItem).not.toHaveBeenCalled()
     expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe(stored)
   })
@@ -149,7 +149,7 @@ describe('CartProvider', () => {
     // catches: an unavailable line left in an order, or a take-out that writes twice or drops an orderable line
     window.localStorage.setItem(
       CART_STORAGE_KEY,
-      '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-honor":3}}',
+      '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-item":3}}', // the stored cart with a gone item id
     )
     const setItem = vi.spyOn(Storage.prototype, 'setItem') // counts the writes
     renderProvider(items) // the loaded items
@@ -162,8 +162,8 @@ describe('CartProvider', () => {
     // catches: a take-out that writes twice when React runs updaters and effects twice
     window.localStorage.setItem(
       CART_STORAGE_KEY,
-      '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-honor":3}}',
-    ) // a stored cart with an unavailable and a missing honor
+      '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-item":3}}', // the stored cart with a gone item id
+    ) // a stored cart with an unavailable and a missing item
     const setItem = vi.spyOn(Storage.prototype, 'setItem') // counts the writes
     render(
       <StrictMode>

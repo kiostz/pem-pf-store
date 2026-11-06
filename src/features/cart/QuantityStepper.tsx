@@ -1,4 +1,4 @@
-// The quantity stepper [ - n + ] for one honor: 0 to 99 by buttons or a typed number, so a buyer can order fast without a keypad detour.
+// The quantity stepper [ - n + ] for one item: 0 to 99 by buttons or a typed number, so a buyer can order fast without a keypad detour.
 
 import { useState } from 'react' // the text being typed
 import { TrashIcon } from './cart-icons.tsx' // the trash at 1
@@ -13,7 +13,7 @@ const CART_BUTTON_BOX = `${CART_CONTROL_BOX} flex items-center justify-center tr
 
 /**
  * Draws the stepper.
- * @param honorName the honor's name, used in the labels
+ * @param itemName the item's name, used in the labels
  * @param quantity the quantity now, 0 to 99 (above max on a cart line whose stock fell)
  * @param onChange called with the new quantity when a button or the typed number commits it
  * @param max the most the + and a typed number allow, 99 unless the stock is lower
@@ -21,13 +21,13 @@ const CART_BUTTON_BOX = `${CART_CONTROL_BOX} flex items-center justify-center tr
  * @return a group with minus, the number field and plus
  */
 export function QuantityStepper({
-  honorName,
+  itemName, // the item name for the labels
   quantity,
   onChange,
   max = MAX_QUANTITY,
   trashAtOne = false,
 }: {
-  honorName: string
+  itemName: string // the item name, used in the labels
   quantity: number
   onChange: (quantity: number) => void
   max?: number
@@ -49,14 +49,14 @@ export function QuantityStepper({
     // One labelled group so a screen reader names all three controls together.
     <div
       role="group" // one named group
-      aria-label={`Quantity of ${honorName}`} // names the honor
+      aria-label={`Quantity of ${itemName}`} // names the item
       className={`rounded-pill flex shrink-0 items-center ${trashAtOne ? 'bg-bg-soft h-9' : 'border-border-subtle bg-bg-surface border'}`} // the cart's pill is 36 px soft; the card's is outlined
     >
       {/* Minus, or the cart's red trash at 1; aria-disabled at 0 so focus stays. */}
       {trashAtOne && (quantity === 1 || max === 0) ? ( // at 1, or on a Sold out line, which can never be ordered
         <button
           type="button" // not a form submit
-          aria-label={`Remove ${honorName}`} // names the honor
+          aria-label={`Remove ${itemName}`} // names the item
           onClick={() => onChange(0)} // a removal, like a typed 0
           className={`${button} text-trash`} // red, not the pill's oxblood
         >
@@ -65,7 +65,7 @@ export function QuantityStepper({
       ) : (
         <button
           type="button" // not a form submit
-          aria-label={`One fewer ${honorName}`} // names the honor
+          aria-label={`One fewer ${itemName}`} // names the item
           aria-disabled={quantity <= 0} // not `disabled`, so focus stays
           onClick={() => quantity > 0 && onChange(quantity - 1)} // does nothing at 0
           className={button}
@@ -77,7 +77,7 @@ export function QuantityStepper({
       <input
         type="text" // a number input would add spinners and accept "e"
         inputMode="numeric" // number keypad on phones
-        aria-label={`Quantity of ${honorName}`} // names the honor
+        aria-label={`Quantity of ${itemName}`} // names the item
         value={draft ?? String(quantity)} // the typing, or the real quantity
         onFocus={(event) => event.target.select()} // typing replaces the number
         onChange={
@@ -90,7 +90,7 @@ export function QuantityStepper({
       {/* Plus: aria-disabled and a new label at the max. */}
       <button
         type="button" // not a form submit
-        aria-label={quantity >= max ? (max === 0 ? `${honorName} is sold out` : `${max} is the most of ${honorName}`) : `One more ${honorName}`} // says why it is dead at the max
+        aria-label={quantity >= max ? (max === 0 ? `${itemName} is sold out` : `${max} is the most of ${itemName}`) : `One more ${itemName}`} // says why it is dead at the max
         aria-disabled={quantity >= max} // not `disabled`, so focus stays
         onClick={() => quantity < max && onChange(quantity + 1)} // does nothing at the max
         className={button}

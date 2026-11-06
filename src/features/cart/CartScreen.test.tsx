@@ -29,7 +29,7 @@ afterEach(() => {
 
 /**
  * Renders the screen over a stored cart, as a reload does.
- * @param quantities honor id to quantity, written to storage first
+ * @param quantities item id to quantity, written to storage first
  * @param data the load, ready by default
  * @param onBack called by Browse more
  */
@@ -48,7 +48,7 @@ function renderScreen(quantities: Record<string, number>, data: CatalogueLoad = 
 
 /**
  * Reads the stored cart.
- * @return honor id to quantity as saved
+ * @return item id to quantity as saved
  */
 function storedCart(): Record<string, number> {
   return (
@@ -60,7 +60,7 @@ function storedCart(): Record<string, number> {
 
 /**
  * Removes a line by its trash as a mouse or finger does.
- * @param name the honor's name
+ * @param name the item's name
  * @param keyboard true for a keyboard press (click detail 0)
  */
 function removeLine(name: string, keyboard = false) {
@@ -237,16 +237,16 @@ describe('CartScreen removal and Undo', () => {
   })
 
   it('focuses a gone line after a pointer removal above it, and its trash after Undo', async () => {
-    // catches: a gone honor's line with no id, so focus falls to the heading or the page (a keyboard buyer stranded)
-    renderScreen({ ants: 1, 'no-such-honor': 2 })
+    // catches: a gone item's line with no id, so focus falls to the heading or the page (a keyboard buyer stranded)
+    renderScreen({ ants: 1, 'no-such-item': 2 }) // a cart with one gone item id
     removeLine('Ants') // pointer; the gone line follows
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Remove Item no longer in the shop (no-such-honor)' })).toHaveFocus(),
+      expect(screen.getByRole('button', { name: 'Remove Item no longer in the shop (no-such-item)' })).toHaveFocus(), // the gone item's Remove button has focus
     )
-    removeLine('Item no longer in the shop (no-such-honor)', true) // keyboard: focus on Undo
-    fireEvent.click(screen.getByRole('button', { name: 'Undo removing Item no longer in the shop (no-such-honor)' }))
+    removeLine('Item no longer in the shop (no-such-item)', true) // keyboard: focus on Undo
+    fireEvent.click(screen.getByRole('button', { name: 'Undo removing Item no longer in the shop (no-such-item)' })) // Undo for the gone item's line
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Remove Item no longer in the shop (no-such-honor)' })).toHaveFocus(),
+      expect(screen.getByRole('button', { name: 'Remove Item no longer in the shop (no-such-item)' })).toHaveFocus(), // the gone item's Remove button has focus again
     )
   })
 
@@ -350,7 +350,7 @@ describe('CartScreen removal and Undo', () => {
 })
 
 describe('CartScreen Unavailable lines', () => {
-  it('shows a Hidden honor, which the shop no longer lists, greyed with the tag, "Not in your total", a Remove button and no stepper', () => {
+  it('shows a Hidden item, which the shop no longer lists, greyed with the tag, "Not in your total", a Remove button and no stepper', () => { // how a Hidden item's line looks
     // catches: an unavailable line that can still be stepped, or one that is priced into the total
     renderScreen({ 'knot-tying': 2, 'africa-lore': 3 })
     const line = screen.getByText('Item no longer in the shop').closest('li')!
@@ -373,14 +373,14 @@ describe('CartScreen Unavailable lines', () => {
     expect(banner.closest('[role="status"], [role="alert"], [aria-live]')).toBeNull()
   })
 
-  it('counts lines, a gone honor included, and shows a gone honor as "Item no longer in the shop"', () => {
+  it('counts lines, a gone item included, and shows a gone item as "Item no longer in the shop"', () => { // the line count and the gone item's label
     // catches: a gone id vanishing silently, or a count of quantities instead of lines
-    renderScreen({ 'knot-tying': 1, 'africa-lore': 4, 'no-such-honor': 2 })
+    renderScreen({ 'knot-tying': 1, 'africa-lore': 4, 'no-such-item': 2 }) // a cart with two gone item ids
     expect(screen.getByText('2 items are no longer available')).toBeInTheDocument()
-    const line = screen.getAllByText('Item no longer in the shop')[1].closest('li')! // two gone lines, africa-lore then no-such-honor
+    const line = screen.getAllByText('Item no longer in the shop')[1].closest('li')! // two gone lines, africa-lore then no-such-item
     expect(within(line).getByText('Unavailable')).toBeInTheDocument()
     expect(
-      within(line).getByRole('button', { name: 'Remove Item no longer in the shop (no-such-honor)' }),
+      within(line).getByRole('button', { name: 'Remove Item no longer in the shop (no-such-item)' }), // the gone item's Remove button
     ).toBeInTheDocument()
   })
 
@@ -417,11 +417,11 @@ describe('CartScreen Unavailable lines', () => {
 
   it('removing an unavailable line lowers the count and shows the note; at 0 the banner goes', () => {
     // catches: a stale banner, or a removal with no way back
-    renderScreen({ 'knot-tying': 1, 'africa-lore': 4, 'no-such-honor': 2 })
+    renderScreen({ 'knot-tying': 1, 'africa-lore': 4, 'no-such-item': 2 }) // a cart with two gone item ids
     removeLine('Item no longer in the shop (africa-lore)')
     expect(screen.getByText('1 item is no longer available')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Undo removing Item no longer in the shop (africa-lore)' })).toBeInTheDocument()
-    removeLine('Item no longer in the shop (no-such-honor)')
+    removeLine('Item no longer in the shop (no-such-item)') // remove the gone item's line
     expect(screen.queryByText(/no longer available/)).not.toBeInTheDocument()
   })
 
@@ -455,7 +455,7 @@ describe('CartScreen Checkout', () => {
     }
     window.localStorage.setItem(
       CART_STORAGE_KEY,
-      '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-honor":3}}',
+      '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-item":3}}', // the stored cart with a gone item id
     )
     render(
       <CartProvider
@@ -607,9 +607,9 @@ describe('CartScreen stock', () => {
   ] // today's shop
 
   /**
-   * Renders the screen over a stored cart and these honors, in the Details-redirect-free way the cart tests use.
-   * @param quantities honor id to quantity, written to storage first
-   * @param list the honors the shop lists
+   * Renders the screen over a stored cart and these items, in the Details-redirect-free way the cart tests use.
+   * @param quantities item id to quantity, written to storage first
+   * @param list the items the shop lists
    * @return the load it was given
    */
   function renderStocked(quantities: Record<string, number>, list: Item[] = stocked) { // renders over these items

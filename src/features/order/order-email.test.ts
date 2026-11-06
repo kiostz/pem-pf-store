@@ -78,17 +78,17 @@ describe('toSentOrder club', () => {
 })
 
 describe('toEarlierSentOrder', () => {
-  const honor = { id: 'knot-tying', name: 'Knot Tying', category: 'Nature', stock: 10, price: 3, image: null } as const // one item
-  const birds = { ...honor, id: 'birds', name: 'Birds' } as const // another
+  const item = { id: 'knot-tying', name: 'Knot Tying', category: 'Nature', stock: 10, price: 3, image: null } as const // one item
+  const birds = { ...item, id: 'birds', name: 'Birds' } as const // another
   const cart: OrderLine[] = [
-    { honor, quantity: 3 },
-    { honor: birds, quantity: 1 },
+    { item, quantity: 3 }, // an order line of the first item
+    { item: birds, quantity: 1 }, // an order line of the second item
   ] // the cart as the saved order has it
   const contact = { name: 'J. Cruz', email: 'jc@mail.com', phone: '+60 12-345 6789' } // what was sent
 
   it('uses the Worker lines, total and club, and the contact every send carried', () => {
     // catches: the earlier order shown with the changed form's lines or club
-    const order = toEarlierSentOrder({ ...saved, club: 'Sunway' }, [contact], { ...values, club: 'Gilead' }, [{ honor, quantity: 1 }])
+    const order = toEarlierSentOrder({ ...saved, club: 'Sunway' }, [contact], { ...values, club: 'Gilead' }, [{ item, quantity: 1 }]) // an earlier order over one line of the first item
     expect(order).toMatchObject({ number: 'PF-20261102-4K7Q', totalCents: 1200, lines: saved.lines, club: { subject: 'Sunway', email: 'Sunway' }, contact })
   })
 
@@ -110,7 +110,7 @@ describe('toEarlierSentOrder', () => {
 
   it('says changes were not sent when the lines differ', () => {
     // catches: a missing note after the cart was changed
-    expect(toEarlierSentOrder(saved, [contact], values, [{ honor, quantity: 2 }, { honor: birds, quantity: 1 }]).changesNotSent).toBe(true)
+    expect(toEarlierSentOrder(saved, [contact], values, [{ item, quantity: 2 }, { item: birds, quantity: 1 }]).changesNotSent).toBe(true) // the lines of the first item and the second item
   })
 
   it('says changes were not sent when the form holds a contact other than the shown one', () => {

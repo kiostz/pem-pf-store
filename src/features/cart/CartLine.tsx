@@ -11,18 +11,18 @@ import { QuantityStepper } from './QuantityStepper.tsx' // the quantity control
 
 /**
  * Draws one line.
- * @param id the honor id saved in the cart, so a gone honor's line can still be found for focus
- * @param honor the honor on this line, or null when it is gone from the data
+ * @param id the item id saved in the cart, so a gone item's line can still be found for focus
+ * @param item the item on this line, or null when it is gone from the data
  * @param quantity the quantity in the cart
  * @param currency the currency code from the settings
- * @param unavailable true when the honor is gone from the shop: greyed, no stepper, left out of the total
+ * @param unavailable true when the item is gone from the shop: greyed, no stepper, left out of the total
  * @param onChange called with a new quantity from 1 to 99
  * @param onRemove called when the line is removed (trash, or a typed 0), with true when the keyboard did it
  * @return an `li` element
  */
 export function CartLine({
   id,
-  honor,
+  item, // the item on the line
   quantity,
   currency,
   unavailable,
@@ -30,7 +30,7 @@ export function CartLine({
   onRemove,
 }: {
   id: string
-  honor: Item | null // the item behind the line, null once the shop stops listing it
+  item: Item | null // the item behind the line, null once the shop stops listing it
   quantity: number
   currency: string
   unavailable: boolean
@@ -38,13 +38,13 @@ export function CartLine({
   onRemove: (keyboard: boolean) => void
 }) {
   const keyboard = useRef(false) // set by the latest input in this line, read when a removal comes from the stepper
-  const name = honor?.name ?? GONE_NAME // the line's name
-  const over = honor !== null && !unavailable && exceedsStock({ honor, quantity }) // asks for more than is left, or the honor is Sold out
+  const name = item?.name ?? GONE_NAME // the line's name
+  const over = item !== null && !unavailable && exceedsStock({ item, quantity }) // asks for more than is left, or the item is Sold out
   return (
     // The line; the capture handlers note which input is about to cause a removal, before the stepper reacts to it.
     <li
       data-over-stock={over ? 'true' : undefined} // marks a line Checkout must send the buyer back to
-      data-line-id={id} // from the saved id, so a gone honor has one too; lets the screen find the line to focus
+      data-line-id={id} // from the saved id, so a gone item has one too; lets the screen find the line to focus
       onKeyDownCapture={() => (keyboard.current = true)} // a key press (Enter in the field, Enter or Space on the trash)
       onClickCapture={(event) => (keyboard.current = event.detail === 0)} // a keyboard-made click has detail 0
       onBlurCapture={() => (keyboard.current = false)} // a field committed by leaving it
@@ -52,10 +52,10 @@ export function CartLine({
     >
       {/* Picture or category mark in its rounded box; greyed when unavailable. */}
       <div className={`${CART_PICTURE_BOX} ${unavailable ? 'opacity-50 grayscale' : ''}`}>
-        {honor === null ? (
-          <div className="bg-bg-soft size-full" /> /* a plain soft box for a gone honor */
+        {item === null ? ( // a gone item has no data to show
+          <div className="bg-bg-soft size-full" /> /* a plain soft box for a gone item */
         ) : (
-          <PatchPicture item={honor} /> /* the line's picture comes from the item */
+          <PatchPicture item={item} /> /* the line's picture comes from the item */
         )}
       </div>
       {/* Two lines: name and total, then "each" and the stepper (or the tag and the trash). */}
@@ -69,7 +69,7 @@ export function CartLine({
           ) : (
             <span className="shrink-0 font-bold tabular-nums">
               {/* the line total from the item's price */}
-              {formatPrice(lineTotalCents({ honor: honor as Item, quantity }) / 100, currency)}
+              {formatPrice(lineTotalCents({ item: item as Item, quantity }) / 100, currency)}
             </span> // the line total
           )}
         </div>
@@ -84,7 +84,7 @@ export function CartLine({
               <span className="bg-bg-soft rounded-pill flex size-9 items-center justify-center">
                 <button
                   type="button" // not a form submit
-                  aria-label={`Remove ${lineLabel(honor, id)}`} // names the line, a gone one by id
+                  aria-label={`Remove ${lineLabel(item, id)}`} // names the line, a gone one by id
                   onClick={() => onRemove(keyboard.current)} // keyboard or pointer, as noted above
                   className="text-trash focus-visible:outline-focus-ring rounded-pill flex size-11 shrink-0 items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-0 active:scale-[0.97]" // 44 px tap area over the 36 px disc
                 >
@@ -99,15 +99,15 @@ export function CartLine({
                 <span className="text-danger text-[0.8125rem] font-medium">
                   {/* Sold out, or how many are left. */}
                   {/* stock note from the item */}
-                  {(honor as Item).stock === 0 ? 'Sold out' : `Only ${(honor as Item).stock} left`}
+                  {(item as Item).stock === 0 ? 'Sold out' : `Only ${(item as Item).stock} left`}
                 </span>
               ) : (
-                <span className="text-text-muted text-[0.8125rem]">{`${formatPrice((honor as Item).price, currency)} each`}</span> // one's price, 13 px
+                <span className="text-text-muted text-[0.8125rem]">{`${formatPrice((item as Item).price, currency)} each`}</span> // one's price, 13 px
               )}{' '}
               <QuantityStepper
-                honorName={name} // for the labels
+                itemName={name} // for the labels
                 quantity={quantity} // the cart's quantity
-                max={quantityCap(honor as Item)} // + stops at the stock
+                max={quantityCap(item as Item)} // + stops at the stock
                 trashAtOne // the cart's look: trash at 1
                 onChange={(next) => (next === 0 ? onRemove(keyboard.current) : onChange(next))} // 0 is a removal, like the trash
               />

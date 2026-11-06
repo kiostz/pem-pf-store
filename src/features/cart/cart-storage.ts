@@ -44,18 +44,18 @@ export function readCart(storage?: Storage): CartQuantities {
     return {} // one cart lost
   }
   const kept: CartQuantities = {} // only the usable values
-  for (const [honorId, value] of Object.entries(quantities)) {
+  for (const [itemId, value] of Object.entries(quantities)) { // each item id in the cart with its quantity
     // check each stored value
     if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0)
       continue // zero, negative, fractional and non-numbers are dropped
-    kept[honorId] = clampQuantity(value) // over 99 becomes 99
+    kept[itemId] = clampQuantity(value) // over 99 becomes 99
   }
   return kept // the cleaned cart
 }
 
 /**
  * Stores the cart.
- * @param quantities honor id to quantity
+ * @param quantities item id to quantity
  * @param storage where to write; the browser's localStorage by default
  * @return nothing; a failing storage gives a warning and the cart stays in memory
  */
