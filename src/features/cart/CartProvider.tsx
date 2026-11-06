@@ -1,7 +1,7 @@
 // The cart state, shared by the row steppers and the cart bar, so one edit shows everywhere; kept in localStorage across reloads. Unavailable ids stay until Checkout takes them out.
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react' // context and state
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { resolveCart, setQuantity as withQuantity, type CartQuantities } from './cart.ts' // the quantity rules
 import { readCart, writeCart } from './cart-storage.ts' // the stored cart
 import { CartContext } from './use-cart.ts' // the context this provider fills
@@ -12,7 +12,7 @@ import { CartContext } from './use-cart.ts' // the context this provider fills
  * @param children the screens that read or edit the cart
  * @return the provider element
  */
-export function CartProvider({ honors, children }: { honors: Honor[] | null; children: ReactNode }) {
+export function CartProvider({ honors, children }: { honors: Item[] | null; children: ReactNode }) { // the items decide what is unavailable
   const [initial] = useState(readCart) // read once, at start
   const [quantities, setQuantities] = useState<CartQuantities>(initial) // the cart
   // Save each change; the first run is the start, which changes nothing, so a stored value stays untouched until the buyer edits; runs on every cart change.

@@ -1,6 +1,6 @@
 // Search, category filter and A to Z sort for the catalogue, as plain functions so the screen only renders their result.
 
-import type { Honor } from '@/shared/data/types.ts' // the shape of one honor
+import type { Item } from '@/shared/data/types.ts' // the shape of one item
 import { byText } from '@/shared/sort/sort-by-name.ts' // A to Z compare
 
 // What the buyer has typed and picked; a null category is All categories.
@@ -13,9 +13,9 @@ export type CatalogueFilter = { query: string; category: string | null }
  * @return the matching honors in their input order
  */
 export function filterHonors(
-  honors: Honor[], // every honor the shop lists
+  honors: Item[], // every item the shop lists
   filter: CatalogueFilter, // the typed query and chosen category
-): Honor[] {
+): Item[] { // the matching items
   const words = filter.query.toLowerCase().split(/\s+/).filter(Boolean) // blank input gives no words
   return honors.filter(
     (honor) =>
@@ -29,7 +29,7 @@ export function filterHonors(
  * @param honors every honor the shop lists
  * @return each category of a listed honor, once, A to Z
  */
-export function categoryNames(honors: Honor[]): string[] {
+export function categoryNames(honors: Item[]): string[] { // the items to take categories from
   return [
     // the option names
     ...new Set(honors.map((h) => h.category)),

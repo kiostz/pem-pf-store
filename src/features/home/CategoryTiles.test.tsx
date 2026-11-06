@@ -2,7 +2,7 @@
 
 import { fireEvent, render, screen } from '@testing-library/react' // render and query
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
-import type { Honor } from '@/shared/data/types.ts' // the shape of an item
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { honor as makeHonor } from '@/test/shop-fetch.ts' // the honor builder
 import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' // the load the tiles receive
 import { CategoryTiles } from './CategoryTiles.tsx' // code under test
@@ -13,7 +13,7 @@ import { CategoryTiles } from './CategoryTiles.tsx' // code under test
  * @param category its category
  * @return the item
  */
-function honor(name: string, category: string): Honor {
+function honor(name: string, category: string): Item { // builds an item in a category
   return makeHonor(name.toLowerCase(), name, { category }) // the id from the name
 }
 
@@ -22,9 +22,9 @@ function honor(name: string, category: string): Honor {
  * @param honors the items
  * @return the load
  */
-function ready(honors: Honor[]): CatalogueLoad {
+function ready(honors: Item[]): CatalogueLoad { // a ready load over these items
   return {
-    state: { status: 'ready', honors, settings: { currency: 'MYR' }, clubs: [] },
+    state: { status: 'ready', items: honors, settings: { currency: 'MYR' }, clubs: [] }, // the ready state holds the items
     showSkeleton: false,
     retry: () => {}, applyStock: () => {},
   } as CatalogueLoad

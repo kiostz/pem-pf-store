@@ -4,12 +4,12 @@ import { fireEvent, render, screen, within } from '@testing-library/react' // re
 import { describe, expect, it } from 'vitest' // test API
 import { CartProvider } from '@/features/cart/CartProvider.tsx' // the state the pill reads
 import { useCart } from '@/features/cart/use-cart.ts' // reads and sets the cart
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { honor } from '@/test/shop-fetch.ts' // the honor builder
 import { PILL_DOCK, PILL_SURFACE } from '@/shared/ui/floating-pill-box.ts' // the shared pill classes
 import { TabPill } from './TabPill.tsx' // code under test
 
-const honors: Honor[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')] // two listed at RM 4; africa-lore is not listed, like a Hidden honor
+const honors: Item[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')] // two listed at RM 4; africa-lore is not listed, like a Hidden item
 
 /**
  * Renders the pill with buttons that set quantities.
@@ -20,7 +20,7 @@ function renderPill({
   current = 'catalogue',
   honorList = honors,
   shopHref = '#/shop',
-}: { current?: 'home' | 'catalogue'; honorList?: Honor[] | null; shopHref?: string } = {}) {
+}: { current?: 'home' | 'catalogue'; honorList?: Item[] | null; shopHref?: string } = {}) { // the options type: the items may be null while loading
   /**
    * Test buttons that stand in for the steppers.
    * @return one button per quantity change

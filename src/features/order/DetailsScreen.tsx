@@ -23,7 +23,7 @@ export function DetailsScreen({ data }: { data: CatalogueLoad }) {
   const { sending, failure } = useOrderForm() // an order is being sent: the page waits; a failed send shows the failure note
   const headingRef = useRef<HTMLHeadingElement>(null) // focused on arrival
   const ready = state.status === 'ready' // the honors are known
-  const { lines, unavailable } = resolveCart(quantities, ready ? state.honors : []) // what can be ordered, what cannot
+  const { lines, unavailable } = resolveCart(quantities, ready ? state.items : []) // what can be ordered, what cannot
   const mustLeave = ready && (lines.length === 0 || unavailable.length > 0 || lines.some(exceedsStock)) // nothing to order, a line that cannot be ordered, or one above today's stock is still in the cart
 
   // Arriving keyboard and screen-reader users start at the heading.

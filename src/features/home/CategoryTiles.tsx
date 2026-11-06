@@ -20,7 +20,7 @@ const SKELETON_TILES = 3 // how many skeleton tiles the loading state shows
  */
 export function CategoryTiles({ data }: { data: CatalogueLoad }) {
   const { state, showSkeleton, retry } = data // load state, skeleton gate and retry
-  const categories = state.status === 'ready' ? categoryNames(state.honors) : [] // switched-on categories A to Z
+  const categories = state.status === 'ready' ? categoryNames(state.items) : [] // switched-on categories A to Z
   return (
     // Out to the screen edges so the row scrolls under the page's gutter; vertical room so a focus ring is not clipped.
     <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 py-1">

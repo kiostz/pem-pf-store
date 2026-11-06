@@ -1,4 +1,4 @@
-// Tests for formatPrice: the price text shown on every honor row, in the currency set in settings.
+// Tests for formatPrice: the price text shown on every item row, in the currency set in settings.
 
 import { describe, expect, it } from 'vitest' // test API
 import { formatPrice } from './price.ts' // code under test

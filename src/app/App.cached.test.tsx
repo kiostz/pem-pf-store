@@ -25,7 +25,7 @@ vi.mock('@/features/catalogue/use-catalogue-data.ts', async () => {
   const loaded = {
     state: {
       status: 'ready',
-      honors: [honor('knot-tying', 'Knot Tying')], // Africa Lore is not listed, like a Hidden honor
+      items: [honor('knot-tying', 'Knot Tying')], // Africa Lore is not listed, like a Hidden item
       settings: { currency: 'MYR' },
       clubs: [],
     },

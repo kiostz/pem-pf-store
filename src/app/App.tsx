@@ -149,7 +149,8 @@ export function App() {
   }
 
   return (
-    <CartProvider honors={data.state.status === 'ready' ? data.state.honors : null}>
+    // the cart provider gets the loaded items, null until they arrive
+    <CartProvider honors={data.state.status === 'ready' ? data.state.items : null}>
       <OrderFormProvider>
         <div className="bg-bg-app text-text-default min-h-screen">
           <AppHeader
@@ -185,7 +186,7 @@ export function App() {
           {(route === 'home' || route === 'catalogue') && (
             <TabPill
               current={route} // the tab for this screen
-              honors={data.state.status === 'ready' ? data.state.honors : null} // the Cart tab counts once they have loaded
+              honors={data.state.status === 'ready' ? data.state.items : null} // the Cart tab counts once they have loaded
               currency={data.state.status === 'ready' ? data.state.settings.currency : null} // and prices once they have
               shopHref={shopHash(shop.category)} // the Shop tab reopens the last Shop address
               cartLinkRef={cartTabRef} // focused on return from the cart

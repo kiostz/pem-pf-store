@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react' // the removal, focus moves and the heading focus
 import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' // the load the app hands over
 import { useOrderForm } from '@/features/order/use-order-form.ts' // whether a send is running
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { DETAILS_HASH } from '@/shared/routes.ts' // the details page's address
 import { ACTION_BOX } from '@/shared/ui/button-box.ts' // the retry button
 import { byText } from '@/shared/sort/sort-by-name.ts' // names A to Z
@@ -21,7 +21,7 @@ import { useCart } from './use-cart.ts' // the cart
 const SKELETON_LINES = 3 // how many skeleton lines the loading state shows
 
 // One line of the card as drawn: an order line or an Unavailable one.
-type ShownLine = { id: string; honor: Honor | null; quantity: number; unavailable: boolean }
+type ShownLine = { id: string; honor: Item | null; quantity: number; unavailable: boolean } // a shown line holds its item, null when gone
 
 // The line just removed, for the note and for Undo; label names it for a screen reader; afterId is the line that followed it.
 type Removal = { id: string; name: string; label: string; quantity: number; keyboard: boolean; afterId: string | null }
@@ -50,7 +50,7 @@ export function CartScreen({ data, onBack }: { data: CatalogueLoad; onBack: () =
   }, [])
 
   const currency = state.status === 'ready' ? state.settings.currency : '' // only read once ready
-  const honors = state.status === 'ready' ? state.honors : [] // every honor the shop lists
+  const honors = state.status === 'ready' ? state.items : [] // every item the shop lists
   const { lines, unavailable } = resolveCart(quantities, honors) // orderable lines A to Z, and what cannot be ordered
   const shownLines: ShownLine[] = [
     ...lines.map((line) => ({ id: line.honor.id, honor: line.honor, quantity: line.quantity, unavailable: false })), // orderable

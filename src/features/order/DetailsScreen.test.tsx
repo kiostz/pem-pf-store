@@ -7,7 +7,7 @@ import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // where the 
 import { CartProvider } from '@/features/cart/CartProvider.tsx' // the cart state
 import { CartScreen } from '@/features/cart/CartScreen.tsx' // Checkout lives here
 import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' // the load the screen receives
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { honor } from '@/test/shop-fetch.ts' // the honor builder
 import { PILL_DOCK } from '@/shared/ui/floating-pill-box.ts' // the dock Send order floats in
 import { DetailsScreen } from './DetailsScreen.tsx' // code under test
@@ -22,10 +22,10 @@ vi.mock('@/features/order/Captcha.tsx', () => ({
   ),
 }))
 
-const honors: Honor[] = [honor('knot-tying', 'Knot Tying')] // Knot Tying listed; africa-lore is not, like a Hidden honor
+const honors: Item[] = [honor('knot-tying', 'Knot Tying')] // Knot Tying listed; africa-lore is not, like a Hidden item
 
 const ready: CatalogueLoad = {
-  state: { status: 'ready', honors, settings: { currency: 'MYR' }, clubs: [] },
+  state: { status: 'ready', items: honors, settings: { currency: 'MYR' }, clubs: [] }, // the ready state holds the items
   showSkeleton: false,
   retry: () => {}, applyStock: () => {},
 } // the load as the app hands it over
@@ -91,14 +91,15 @@ describe('DetailsScreen', () => {
 
   it('goes to the cart when a line is above today\'s stock or Sold out, and leaves the stored cart alone', () => {
     // catches: a typed address or reload carrying an over-stock line into an order
-    const low: Honor[] = [honor('knot-tying', 'Knot Tying', { stock: 2 }), honor('ants', 'Ants', { stock: 0 })] // two short of the cart
+    const low: Item[] = [honor('knot-tying', 'Knot Tying', { stock: 2 }), honor('ants', 'Ants', { stock: 0 })] // two short of the cart
     for (const quantities of [{ 'knot-tying': 3 }, { 'knot-tying': 1, ants: 1 }]) {
       window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, quantities })) // the saved cart
       window.location.hash = '#/details' // as a buyer arrives
       const { unmount } = render(
         <CartProvider honors={low}>
           <OrderFormProvider>
-            <DetailsScreen data={{ ...ready, state: { ...ready.state, honors: low } as typeof ready.state }} />
+            {/* the ready state with the short items */}
+            <DetailsScreen data={{ ...ready, state: { ...ready.state, items: low } as typeof ready.state }} />
           </OrderFormProvider>
         </CartProvider>,
       )
@@ -174,10 +175,11 @@ describe('DetailsScreen', () => {
      * @param list the honors the data holds
      * @return the page
      */
-    const page = (list: Honor[]) => (
+    const page = (list: Item[]) => ( // a page over this list of items
       <CartProvider honors={list}>
         <OrderFormProvider>
-          <DetailsScreen data={{ ...ready, state: { ...ready.state, honors: list } as typeof ready.state }} />
+          {/* the ready state with the listed items */}
+          <DetailsScreen data={{ ...ready, state: { ...ready.state, items: list } as typeof ready.state }} />
         </OrderFormProvider>
       </CartProvider>
     ) // the page for one data load

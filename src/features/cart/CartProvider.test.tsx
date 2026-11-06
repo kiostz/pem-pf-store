@@ -3,13 +3,13 @@
 import { StrictMode } from 'react' // React's double render and double effect run in development
 import { act, fireEvent, render, screen } from '@testing-library/react' // render and query
 import { beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { honor } from '@/test/shop-fetch.ts' // the honor builder
 import { CART_STORAGE_KEY } from './cart-storage.ts' // the key under test
 import { CartProvider } from './CartProvider.tsx' // code under test
 import { useCart } from './use-cart.ts' // reads the cart
 
-const honors: Honor[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')] // Africa Lore is not listed, like a Hidden honor
+const honors: Item[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')] // Africa Lore is not listed, like a Hidden item
 
 /**
  * Shows the cart as text and offers one button to change it.
@@ -41,13 +41,13 @@ function Probe() {
  * @param honorsNow the honors prop
  * @return RTL's rerender, which keeps the probe
  */
-function renderProvider(honorsNow: Honor[] | null) {
+function renderProvider(honorsNow: Item[] | null) { // the items prop, null while loading
   const view = render(
     <CartProvider honors={honorsNow}>
       <Probe />
     </CartProvider>,
   )
-  return (next: Honor[] | null) =>
+  return (next: Item[] | null) => // rerenders with the next items
     view.rerender(
       <CartProvider honors={next}>
         <Probe />

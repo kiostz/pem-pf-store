@@ -1,8 +1,8 @@
-// Loads the honors, the settings and the clubs from the API Worker's one /shop request for the catalogue, with the loader delay, the 30 second cap, retry and stale-attempt guard, so every screen that lists honors shares one pattern.
+// Loads the items, the settings and the clubs from the API Worker's one /shop request for the catalogue, with the loader delay, the 30 second cap, retry and stale-attempt guard, so every screen that lists items shares one pattern.
 
 import { useCallback, useEffect, useState } from 'react' // state and the load effect
 import { loadShop, ShopLoadError, type ShopLoadFailure } from '@/shared/data/load.ts' // the one request and its error kinds
-import type { ClubList, Honor, ShopSettings } from '@/shared/data/types.ts' // the shapes of the shop's data
+import type { ClubList, Item, ShopSettings } from '@/shared/data/types.ts' // the shapes of the shop's data
 
 const LOADER_DELAY_MS = 300 // how long a load runs before the skeleton may show
 const LOAD_TIMEOUT_MS = 30_000 // how long a load may run before it counts as failed
@@ -11,14 +11,14 @@ const LOAD_TIMEOUT_MS = 30_000 // how long a load may run before it counts as fa
 export type CatalogueData =
   | { status: 'loading' } // the request is running
   | { status: 'error'; reason: ShopLoadFailure } // busy (429) or failed (anything else, including the 30 s cap)
-  | { status: 'ready'; honors: Honor[]; settings: ShopSettings; clubs: ClubList } // the answer arrived
+  | { status: 'ready'; items: Item[]; settings: ShopSettings; clubs: ClubList } // the answer arrived
 
-// What useCatalogueData returns, passed to every screen that lists honors.
+// What useCatalogueData returns, passed to every screen that lists items.
 export type CatalogueLoad = ReturnType<typeof useCatalogueData>
 
 /**
- * Loads honors, settings and clubs in one request; any failure is one error with a reason.
- * @return the load state, whether the skeleton may show, retry to load again, and applyStock to patch the loaded honors after a refused order
+ * Loads items, settings and clubs in one request; any failure is one error with a reason.
+ * @return the load state, whether the skeleton may show, retry to load again, and applyStock to patch the loaded items after a refused order
  */
 export function useCatalogueData(): {
   state: CatalogueData
@@ -43,9 +43,9 @@ export function useCatalogueData(): {
       setState({ status: 'error', reason: 'failed' }) // show the error
     }, LOAD_TIMEOUT_MS)
     loadShop(fetch, controller.signal) // the one request
-      .then(({ honors, settings, clubs }) => {
+      .then(({ items, settings, clubs }) => { // the loaded items arrive with settings and clubs
         // the answer arrived
-        if (!finished) setState({ status: 'ready', honors, settings, clubs }) // show the data unless this attempt is over
+        if (!finished) setState({ status: 'ready', items, settings, clubs }) // show the data unless this attempt is over
       })
       .catch((error: unknown) => {
         // the request failed
@@ -77,18 +77,18 @@ export function useCatalogueData(): {
   }, [])
 
   /**
-   * Patches the loaded honors with what the Worker said was short: a number sets the stock, null removes the honor (not for sale). Does nothing unless the data is ready.
+   * Patches the loaded items with what the Worker said was short: a number sets the stock, null removes the item (not for sale). Does nothing unless the data is ready.
    * @param refused the lines the Worker refused
    */
   const applyStock = useCallback((refused: Array<{ itemId: string; stock: number | null }>) => {
     setState((current) => {
       if (current.status !== 'ready') return current // nothing loaded to patch
-      const honors = current.honors.flatMap((honor) => {
-        const line = refused.find((other) => other.itemId === honor.id) // the Worker's word on this honor, if any
-        if (!line) return [honor] // untouched
-        return line.stock === null ? [] : [{ ...honor, stock: line.stock }] // gone from the shop, or the stock it has now
+      const items = current.items.flatMap((item) => { // each loaded item
+        const line = refused.find((other) => other.itemId === item.id) // the Worker's word on this item, if any
+        if (!line) return [item] // untouched
+        return line.stock === null ? [] : [{ ...item, stock: line.stock }] // gone from the shop, or the stock it has now
       }) // the patched list
-      return { ...current, honors } // same settings and clubs
+      return { ...current, items } // same settings and clubs
     })
   }, [])
 

@@ -1,7 +1,7 @@
 // Test helpers for the shop's one /shop request: an honor builder and a fetch fake, so no test hand-writes the response shape.
 
 import { vi } from 'vitest' // the mock function
-import type { Club, Honor } from '@/shared/data/types.ts' // the shapes the screens use
+import type { Club, Item } from '@/shared/data/types.ts' // the shapes the screens use
 
 /**
  * Builds one honor as the screens see it.
@@ -10,7 +10,7 @@ import type { Club, Honor } from '@/shared/data/types.ts' // the shapes the scre
  * @param extras fields to replace, such as price or stock
  * @return the honor, RM 4 with 10 in stock and no picture unless extras say otherwise
  */
-export function honor(id: string, name: string, extras: Partial<Honor> = {}): Honor {
+export function honor(id: string, name: string, extras: Partial<Item> = {}): Item { // builds a listed item with defaults
   return { id, name, category: 'Recreation', price: 4, stock: 10, image: null, ...extras } // defaults first, then the test's own fields
 }
 
@@ -21,7 +21,7 @@ export function honor(id: string, name: string, extras: Partial<Honor> = {}): Ho
  * @param currency the currency code
  * @return the body, with every price turned into whole cents
  */
-export function shopBody(honors: Honor[], clubs: Club[] = [], currency = 'MYR') {
+export function shopBody(honors: Item[], clubs: Club[] = [], currency = 'MYR') { // the items for the /shop body
   return {
     items: honors.map(({ price, ...rest }) => ({ ...rest, priceCents: Math.round(price * 100) })), // the wire shape has cents
     clubs, // already the wire shape
@@ -36,6 +36,6 @@ export function shopBody(honors: Honor[], clubs: Club[] = [], currency = 'MYR') 
  * @param other answers any request that is not the shop's (such as the order send; it also gets the request's init), or returns undefined to let the shop answer
  * @return the fake, to install with vi.stubGlobal and to count calls on
  */
-export function shopFetch(honors: Honor[], clubs: Club[] = [], other?: (url: string, init?: RequestInit) => Response | Promise<Response> | undefined) {
+export function shopFetch(honors: Item[], clubs: Club[] = [], other?: (url: string, init?: RequestInit) => Response | Promise<Response> | undefined) { // the items for the canned fetch
   return vi.fn(async (url: string, init?: RequestInit) => (await other?.(url, init)) ?? new Response(JSON.stringify(shopBody(honors, clubs)))) // the other answer if there is one, else the canned shop body
 }

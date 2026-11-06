@@ -310,7 +310,7 @@ export function ItemSheet({
                   {preview !== null ? (
                     <img src={preview.url} alt="The new picture" width={112} height={112} className="size-28 shrink-0 object-contain" /> // the 200 px result, before it is saved
                   ) : (
-                    <PatchPicture honor={item} size="card" pictureBase={PICTURE_BASE} /> // what is stored now
+                    <PatchPicture item={item} size="card" pictureBase={PICTURE_BASE} /> // what is stored now
                   )}
                   <div className="flex min-w-0 flex-col items-start gap-2">
                     {preview === null ? (

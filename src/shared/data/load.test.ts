@@ -57,11 +57,11 @@ describe('loadShop', () => {
     expect(fetchFn).toHaveBeenCalledWith('/api/shop', { signal: controller.signal })
   })
 
-  it('returns honors, clubs and settings', async () => {
+  it('returns items, clubs and settings', async () => { // the answer holds items
     // catches: a field dropped or renamed on the way to the screens
     const loaded = await loadShop(fakeFetch(good))
     expect(loaded).toEqual({
-      honors: [{ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', price: 4, stock: 12, image: null }],
+      items: [{ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', price: 4, stock: 12, image: null }], // one item on the wire
       clubs: [eagles, gilead],
       settings: { currency: 'MYR' },
     })
@@ -70,8 +70,8 @@ describe('loadShop', () => {
   it('turns priceCents into a price whose line total is exactly 115 cents', async () => {
     // catches: a float price that loses a cent once it is multiplied back into cents
     const loaded = await loadShop(fakeFetch({ ...good, items: [{ ...orderable, priceCents: 115 }] }))
-    expect(loaded.honors[0].price).toBe(1.15)
-    expect(lineTotalCents({ honor: loaded.honors[0], quantity: 1 })).toBe(115)
+    expect(loaded.items[0].price).toBe(1.15) // the price in main units
+    expect(lineTotalCents({ honor: loaded.items[0], quantity: 1 })).toBe(115) // the order line total from the loaded item
   })
 
   it('accepts stock 0, a picture path, empty lists and ignores extra keys', async () => {
@@ -83,7 +83,7 @@ describe('loadShop', () => {
         settings: { currency: 'MYR', defaultPrice: 400 },
       }),
     )
-    expect(loaded.honors[0]).toEqual({ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', price: 4, stock: 0, image: 'items/knot-tying.webp' })
+    expect(loaded.items[0]).toEqual({ id: 'knot-tying', name: 'Knot Tying', category: 'Recreation', price: 4, stock: 0, image: 'items/knot-tying.webp' }) // the loaded item with its picture key
     expect(loaded.settings).toEqual({ currency: 'MYR' })
   })
 
@@ -94,7 +94,7 @@ describe('loadShop', () => {
     const loaded = await loadShop(
       fakeFetch({ items: [...keys, ...bad, null].map((image, n) => ({ ...orderable, id: `row-${n}`, image })), clubs: [], settings: { currency: 'MYR' } }),
     )
-    expect(loaded.honors.map((honor) => honor.image)).toEqual([...keys, ...bad.map(() => null), null])
+    expect(loaded.items.map((item) => item.image)).toEqual([...keys, ...bad.map(() => null), null]) // each item's picture key, null when bad
   })
 
   it('is failed for an image that is not a string', async () => {

@@ -1,7 +1,7 @@
 // One line of the cart card: an order line with its stepper, or an Unavailable line with its tag and trash, so a buyer can change a quantity or remove what is no longer sold.
 
 import { useRef } from 'react' // whether the last input was the keyboard
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { formatPrice } from '@/shared/format/price.ts' // "RM 4.00"
 import { PatchPicture } from '@/shared/ui/PatchPicture.tsx' // picture or category mark
 import { TrashIcon } from './cart-icons.tsx' // the trash on an Unavailable line
@@ -30,7 +30,7 @@ export function CartLine({
   onRemove,
 }: {
   id: string
-  honor: Honor | null
+  honor: Item | null // the item behind the line, null once the shop stops listing it
   quantity: number
   currency: string
   unavailable: boolean
@@ -55,7 +55,7 @@ export function CartLine({
         {honor === null ? (
           <div className="bg-bg-soft size-full" /> /* a plain soft box for a gone honor */
         ) : (
-          <PatchPicture honor={honor} />
+          <PatchPicture item={honor} /> /* the line's picture comes from the item */
         )}
       </div>
       {/* Two lines: name and total, then "each" and the stepper (or the tag and the trash). */}
@@ -68,7 +68,8 @@ export function CartLine({
             <span className="text-text-muted shrink-0 text-sm">Not in your total</span> // where the total was
           ) : (
             <span className="shrink-0 font-bold tabular-nums">
-              {formatPrice(lineTotalCents({ honor: honor as Honor, quantity }) / 100, currency)}
+              {/* the line total from the item's price */}
+              {formatPrice(lineTotalCents({ honor: honor as Item, quantity }) / 100, currency)}
             </span> // the line total
           )}
         </div>
@@ -97,15 +98,16 @@ export function CartLine({
                 // In words as well as red, in the place of one's price.
                 <span className="text-danger text-[0.8125rem] font-medium">
                   {/* Sold out, or how many are left. */}
-                  {(honor as Honor).stock === 0 ? 'Sold out' : `Only ${(honor as Honor).stock} left`}
+                  {/* stock note from the item */}
+                  {(honor as Item).stock === 0 ? 'Sold out' : `Only ${(honor as Item).stock} left`}
                 </span>
               ) : (
-                <span className="text-text-muted text-[0.8125rem]">{`${formatPrice((honor as Honor).price, currency)} each`}</span> // one's price, 13 px
+                <span className="text-text-muted text-[0.8125rem]">{`${formatPrice((honor as Item).price, currency)} each`}</span> // one's price, 13 px
               )}{' '}
               <QuantityStepper
                 honorName={name} // for the labels
                 quantity={quantity} // the cart's quantity
-                max={quantityCap(honor as Honor)} // + stops at the stock
+                max={quantityCap(honor as Item)} // + stops at the stock
                 trashAtOne // the cart's look: trash at 1
                 onChange={(next) => (next === 0 ? onRemove(keyboard.current) : onChange(next))} // 0 is a removal, like the trash
               />

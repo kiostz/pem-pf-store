@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest' // test API and moc
 import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' // the load the screen receives
 import { OrderFormProvider } from '@/features/order/OrderFormProvider.tsx' // the form state the screen reads
 import { useOrderForm } from '@/features/order/use-order-form.ts' // starts a send
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { honor } from '@/test/shop-fetch.ts' // the honor builder
 import { CART_STORAGE_KEY } from './cart-storage.ts' // where the cart is kept
 import { CartProvider } from './CartProvider.tsx' // the state the screen edits
@@ -14,10 +14,10 @@ import { CartScreen } from './CartScreen.tsx' // code under test
 import { PILL_DOCK } from '@/shared/ui/floating-pill-box.ts' // the dock the pill and the note share
 import { useCart } from './use-cart.ts' // reads the cart
 
-const honors: Honor[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants', { price: 3.5 })] // Knot Tying RM 4.00 and Ants RM 3.50; africa-lore is not listed, like a Hidden honor
+const honors: Item[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants', { price: 3.5 })] // Knot Tying RM 4.00 and Ants RM 3.50; africa-lore is not listed, like a Hidden item
 
 const ready: CatalogueLoad = {
-  state: { status: 'ready', honors, settings: { currency: 'MYR' }, clubs: [] },
+  state: { status: 'ready', items: honors, settings: { currency: 'MYR' }, clubs: [] }, // the ready state holds the items
   showSkeleton: false,
   retry: () => {}, applyStock: () => {},
 } // the load as the app hands it over
@@ -590,7 +590,7 @@ describe('CartScreen floating pill', () => {
 })
 
 describe('CartScreen stock', () => {
-  const stocked: Honor[] = [
+  const stocked: Item[] = [ // items with set stock
     honor('knot-tying', 'Knot Tying', { stock: 2 }), // below what the cart holds
     honor('ants', 'Ants', { stock: 0 }), // Sold out
     honor('birds', 'Birds', { stock: 12 }), // plenty
@@ -602,9 +602,9 @@ describe('CartScreen stock', () => {
    * @param list the honors the shop lists
    * @return the load it was given
    */
-  function renderStocked(quantities: Record<string, number>, list: Honor[] = stocked) {
+  function renderStocked(quantities: Record<string, number>, list: Item[] = stocked) { // renders over these items
     const data: CatalogueLoad = {
-      state: { status: 'ready', honors: list, settings: { currency: 'MYR' }, clubs: [] },
+      state: { status: 'ready', items: list, settings: { currency: 'MYR' }, clubs: [] }, // the ready state holds the items
       showSkeleton: false,
       retry: () => {}, applyStock: () => {},
     } // the load as the app hands it over

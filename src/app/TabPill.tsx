@@ -4,7 +4,7 @@ import { useState, type MouseEvent, type Ref } from 'react' // the grown flag's 
 import { CartIcon } from '@/features/cart/cart-icons.tsx' // the Cart tab's icon
 import { cartCount, estimatedTotalCents, resolveCart } from '@/features/cart/cart.ts' // the cart maths
 import { useCart } from '@/features/cart/use-cart.ts' // the cart
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { formatPrice } from '@/shared/format/price.ts' // "RM 20.00"
 import { CART_HASH, HOME_HASH } from '@/shared/routes.ts' // the Home and cart addresses
 import { PILL_DOCK, PILL_SURFACE } from '@/shared/ui/floating-pill-box.ts' // the one pill shape
@@ -32,7 +32,7 @@ export function TabPill({
   onOpenCart,
 }: {
   current: 'home' | 'catalogue' // which tab is the current page
-  honors: Honor[] | null // every honor, null while loading
+  honors: Item[] | null // every item, null while loading
   currency: string | null // the currency code, null while loading
   shopHref: string // the last Shop address
   cartLinkRef?: Ref<HTMLAnchorElement> // for focus on return

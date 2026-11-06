@@ -1,6 +1,6 @@
 // Reads the shop's one API answer (/shop) at run time and checks it where it enters, so the data stays out of the JS bundle and every screen shares one fetch-and-check path.
 
-import type { Club, ClubList, Honor, ShopSettings } from './types.ts' // the shapes of one honor, the clubs and the settings
+import type { Club, ClubList, Item, ShopSettings } from './types.ts' // the shapes of one item, the clubs and the settings
 
 // Why a load failed: the API's rate limit asked the buyer to wait, or anything else.
 export type ShopLoadFailure = 'busy' | 'failed'
@@ -68,12 +68,12 @@ function isCount(value: unknown): value is number {
 const PICTURE_KEY = /^items\/[a-z0-9]+(-[a-z0-9]+)*\.(webp|png)$/
 
 /**
- * Checks one item of the answer and turns it into an honor.
+ * Validates one entry of the parsed answer and builds the item from it.
  * @param entry one item of the parsed answer
- * @return the honor, with the price in main units
+ * @return the item, with the price in main units
  * @throws ShopLoadError (failed) when a field is missing or has the wrong type; extra keys are ignored
  */
-function toHonor(entry: unknown): Honor {
+function toItem(entry: unknown): Item { // checks one entry and returns an item
   if (
     !isRecord(entry) || // not an object
     typeof entry.id !== 'string' || entry.id === '' || // id is required
@@ -98,13 +98,13 @@ function toHonor(entry: unknown): Honor {
  * Fetches the shop's items, clubs and settings in one request.
  * @param fetchFn the fetch to use; tests pass a fake
  * @param signal aborts the request, for the 30 second cap
- * @return the honors, the clubs and the settings
+ * @return the items, the clubs and the settings
  * @throws ShopLoadError busy on a 429; failed on a network error, an abort, any other status, a body that is not JSON or any invalid field
  */
 export async function loadShop(
   fetchFn: typeof fetch = fetch,
   signal?: AbortSignal,
-): Promise<{ honors: Honor[]; clubs: ClubList; settings: ShopSettings }> {
+): Promise<{ items: Item[]; clubs: ClubList; settings: ShopSettings }> { // the items, clubs and settings
   let response: Response // the API's answer
   try {
     response = await fetchFn(`${import.meta.env.VITE_API_URL}/shop`, { signal }) // one GET, same origin in dev through the proxy
@@ -134,7 +134,7 @@ export async function loadShop(
   )
     throw new ShopLoadError('failed', 'Could not load the shop: the club list is not valid') // a bad entry or a repeated name
   return {
-    honors: body.items.map(toHonor), // each item checked
+    items: body.items.map(toItem), // each item checked
     clubs: body.clubs, // checked above
     settings: { currency: body.settings.currency }, // only the field the shop uses
   }

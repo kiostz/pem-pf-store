@@ -1,7 +1,7 @@
 // Tests for the catalogue's search, category filter and category list over plain honor arrays.
 
 import { describe, expect, it } from 'vitest' // test API
-import type { Honor } from '@/shared/data/types.ts' // the honor shape
+import type { Item } from '@/shared/data/types.ts' // the item shape
 import { honor as makeHonor } from '@/test/shop-fetch.ts' // the honor builder
 import { categoryNames, filterHonors } from './filter.ts' // code under test
 
@@ -11,7 +11,7 @@ import { categoryNames, filterHonors } from './filter.ts' // code under test
  * @param category category name
  * @return a complete honor
  */
-function honor(name: string, category = 'Nature'): Honor {
+function honor(name: string, category = 'Nature'): Item { // builds an item with defaults
   return makeHonor(name.toLowerCase().replace(/\W+/g, '-'), name, { category }) // id from the name, fixed values for the rest
 }
 

@@ -40,7 +40,7 @@ export function Catalogue({
   const searchRef = useRef<HTMLInputElement>(null) // the search box, focused by Clear filters
   const listRef = useRef<HTMLDivElement>(null) // the list, scrolled to its top on a category change
   const toolbarRef = useRef<HTMLDivElement>(null) // the sticky toolbar, measured so the list top can clear it
-  const allHonors = state.status === 'ready' ? state.honors : [] // every honor in the file
+  const allHonors = state.status === 'ready' ? state.items : [] // every item in the file
   const switchedOn = filterHonors(allHonors, { query: '', category: null }) // what the buyer may see at all
   const category = requestedCategory !== null && categoryNames(allHonors).includes(requestedCategory) ? requestedCategory : null // an unknown, blank or not yet loaded category is All categories
   const matches = filterHonors(allHonors, { query, category }) // what the search and the category leave

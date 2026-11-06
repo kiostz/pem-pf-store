@@ -1,6 +1,6 @@
 // Cart maths: quantity rules, the A to Z order lines and exact money in cents, so every screen shows the same numbers.
 
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { sortByName } from '@/shared/sort/sort-by-name.ts' // names A to Z
 
 export const MAX_QUANTITY = 99 // the most of one honor in a cart
@@ -12,15 +12,15 @@ export const GONE_NAME = 'Item no longer in the shop' // what a line shows when 
  * @param honorId the id saved in the cart
  * @return the honor's name, or the gone name with the id
  */
-export function lineLabel(honor: Honor | null, honorId: string): string {
+export function lineLabel(honor: Item | null, honorId: string): string { // the item, null when gone
   return honor?.name ?? `${GONE_NAME} (${honorId})` // the id tells gone lines apart
 }
 
-// Honor id to quantity, 1 to 99; 0 is never kept.
+// Item id to quantity, 1 to 99; 0 is never kept.
 export type CartQuantities = Record<string, number>
 
 // One honor and its quantity in the cart.
-export type OrderLine = { honor: Honor; quantity: number }
+export type OrderLine = { honor: Item; quantity: number } // an order line is an item and its quantity
 
 /**
  * Forces a quantity into the whole numbers 0 to a maximum.
@@ -38,7 +38,7 @@ export function clampQuantity(value: number, max: number = MAX_QUANTITY): number
  * @param honor the honor
  * @return the lower of 99 and its stock
  */
-export function quantityCap(honor: Honor): number {
+export function quantityCap(honor: Item): number { // the cap comes from the item's stock
   return Math.min(MAX_QUANTITY, honor.stock) // never more than is left, never more than 99
 }
 
@@ -79,7 +79,7 @@ export function setQuantity(
  */
 export function resolveCart(
   quantities: CartQuantities,
-  honors: Honor[],
+  honors: Item[], // every listed item
 ): {
   lines: OrderLine[]
   unavailable: Array<{ honorId: string }>

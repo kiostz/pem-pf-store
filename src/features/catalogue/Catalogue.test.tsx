@@ -5,7 +5,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react' 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // where the cart is kept
 import { CartProvider } from '@/features/cart/CartProvider.tsx' // the cart state the steppers edit
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { honor as makeHonor, shopBody, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
 import { Catalogue } from './Catalogue.tsx' // code under test
 import { useCatalogueData } from './use-catalogue-data.ts' // the load the catalogue now receives
@@ -18,7 +18,8 @@ function CatalogueWithCart({ initialCategory = null, onSelect }: { initialCatego
   const data = useCatalogueData() // the one load
   const [category, setCategory] = useState<string | null>(initialCategory) // stands in for the address, which App owns
   return (
-    <CartProvider honors={data.state.status === 'ready' ? data.state.honors : null}>
+    // the cart provider gets the loaded items
+    <CartProvider honors={data.state.status === 'ready' ? data.state.items : null}>
       <Catalogue
         data={data}
         category={category}
@@ -46,7 +47,7 @@ function honor(name: string, category: string, image: string | null = null) {
  * Makes the global fetch answer with the /shop body for these honors.
  * @param honors the honors the shop lists
  */
-function serve(honors: Honor[]) {
+function serve(honors: Item[]) { // serve these items
   vi.stubGlobal('fetch', shopFetch(honors)) // one answer for the one request
 }
 
@@ -163,7 +164,7 @@ describe('Catalogue', () => {
 
   it('renders all 299 honors at once, with no Load more and lazy pictures', async () => {
     // catches: pagination or a Load more button creeping back, rows dropped at full size, or pictures that load eagerly
-    serve(Array.from({ length: 299 }, (_, i) => honor(`Honor ${i}`, 'Nature', `items/honor-${i}.png`))) // 299 honors with R2 keys
+    serve(Array.from({ length: 299 }, (_, i) => honor(`Item ${i}`, 'Nature', `items/item-${i}.png`))) // 299 items with R2 keys
     render(<CatalogueWithCart />)
     expect(await screen.findByText('299 items')).toBeInTheDocument()
     expect(screen.getAllByRole('listitem')).toHaveLength(299)

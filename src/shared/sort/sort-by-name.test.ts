@@ -1,16 +1,16 @@
 // Tests for the shared A to Z name sort that both the catalogue and the cart use.
 
 import { describe, expect, it } from 'vitest' // test API
-import type { Honor } from '@/shared/data/types.ts' // the honor shape
+import type { Item } from '@/shared/data/types.ts' // the item shape
 import { byText, sortByName } from './sort-by-name.ts' // code under test
 
 /**
- * Builds an honor with defaults.
+ * Builds an item with defaults.
  * @param name display name
  * @param category category name
- * @return a complete honor
+ * @return a complete item
  */
-function honor(name: string, category = 'Nature'): Honor {
+function item(name: string, category = 'Nature'): Item { // builds an item with defaults
   return {
     id: name.toLowerCase().replace(/\W+/g, '-'),
     name,
@@ -22,13 +22,13 @@ function honor(name: string, category = 'Nature'): Honor {
 }
 
 describe('sortByName', () => {
-  it('puts unsorted honors from several categories A to Z by name', () => {
+  it('puts unsorted items from several categories A to Z by name', () => {
     const list = [
-      honor('Leaves', 'Nature'),
-      honor('Ants', 'Nature'),
-      honor('Knot Tying', 'Recreation'),
-      honor('Braiding - Advanced', 'Arts and Crafts'),
-    ] // four honors out of order
+      item('Leaves', 'Nature'), // an item in Nature
+      item('Ants', 'Nature'), // an item in Nature
+      item('Knot Tying', 'Recreation'), // an item in Recreation
+      item('Braiding - Advanced', 'Arts and Crafts'), // an item in Arts and Crafts
+    ] // four items out of order
     expect(sortByName(list).map((h) => h.name)).toEqual([
       'Ants',
       'Braiding - Advanced',
@@ -38,7 +38,7 @@ describe('sortByName', () => {
   })
 
   it('puts a short name before the longer name that starts with it', () => {
-    const list = [honor('Braiding - Advanced'), honor('Braiding')] // longer first
+    const list = [item('Braiding - Advanced'), item('Braiding')] // longer first
     expect(sortByName(list).map((h) => h.name)).toEqual([
       'Braiding',
       'Braiding - Advanced',
@@ -46,12 +46,12 @@ describe('sortByName', () => {
   })
 
   it('leaves the input array as it was', () => {
-    const list = [honor('B'), honor('A')] // out of order
+    const list = [item('B'), item('A')] // out of order
     sortByName(list) // the result is not used
     expect(list.map((h) => h.name)).toEqual(['B', 'A']) // catches an in-place sort that reorders the caller's array
   })
 
-  it('returns an empty list for no honors', () => {
+  it('returns an empty list for no items', () => {
     expect(sortByName([])).toEqual([]) // catches a crash on an empty list
   })
 })

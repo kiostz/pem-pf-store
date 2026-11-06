@@ -1,7 +1,7 @@
 // Data shapes: what the shop reads from the API Worker.
 
-// One honor as the shop shows it, from the API Worker's /shop.
-export type Honor = {
+// One item as the shop shows it, from the API Worker's /shop.
+export type Item = {
   // Slug of the name; never changes once created.
   id: string
   // Display name, e.g. "Knot Tying".

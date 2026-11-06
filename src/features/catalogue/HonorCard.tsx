@@ -1,6 +1,6 @@
 // One honor in the catalogue grid: picture, name, Category label, price, stock and Add (or Sold out), so a buyer can scan by picture and order from the card.
 
-import type { Honor } from '@/shared/data/types.ts' // the shape of an honor
+import type { Item } from '@/shared/data/types.ts' // the shape of an item
 import { formatPrice } from '@/shared/format/price.ts' // "RM 4.00"
 import { useCart } from '@/features/cart/use-cart.ts' // the cart the card edits
 import { CardQuantity } from '@/features/cart/CardQuantity.tsx' // Add, the stepper or Sold out
@@ -16,7 +16,7 @@ const STOCK_FORMAT = new Intl.NumberFormat('en-US') // 1,200: a thousands separa
  * @param currency the currency code from the settings
  * @return an `li` element: picture on top, then the wrapping name, the Category label, the price, the stock line and the Add control at the bottom
  */
-export function HonorCard({ honor, currency }: { honor: Honor; currency: string }) {
+export function HonorCard({ honor, currency }: { honor: Item; currency: string }) { // the card shows one item
   const { quantityOf, setQuantity } = useCart() // this honor's quantity and how to change it
   const soldOut = honor.stock === 0 // nothing left to sell
   return (
@@ -24,7 +24,8 @@ export function HonorCard({ honor, currency }: { honor: Honor; currency: string 
     <li className={CARD_BOX}>
       {/* Picture or category mark, 112 px square; greyed when Sold out (the text keeps full strength, so its contrast holds). */}
       <div className={soldOut ? 'opacity-50 grayscale' : ''}>
-        <PatchPicture honor={honor} size="card" />
+        {/* the card's picture comes from the item */}
+        <PatchPicture item={honor} size="card" />
       </div>
       {/* The text grows so Add sits at the same height on every card in a row. */}
       <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
