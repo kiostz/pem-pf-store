@@ -1,6 +1,6 @@
 // Clubs the admin tests share, shaped like the Admin Worker's answers, so each test file builds on the same ten clubs.
 
-import type { AdminClub } from '../../../workers/admin/src/admin-types.ts' // the shared shape
+import type { AdminClub } from '../../workers/admin/src/admin-types.ts' // the shared shape
 
 /**
  * Builds one club with sensible defaults.

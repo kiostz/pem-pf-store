@@ -3,7 +3,7 @@
 import type {
   AdminItem,
   AdminMeta,
-} from '../../../workers/admin/src/admin-types.ts' // the shared shapes
+} from '../../workers/admin/src/admin-types.ts' // the shared shapes
 
 /**
  * Builds one row with sensible defaults.

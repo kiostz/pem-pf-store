@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest' // test API
 import type { OrderLine } from '@/features/cart/cart.ts' // an order line
-import { toEarlierSentOrder, toSentOrder } from './order-email.ts' // code under test
+import { toEarlierSentOrder, toSentOrder } from './sent-order.ts' // code under test
 import { EMPTY_ORDER_FORM, type OrderFormValues } from './order-form.ts' // the form values
 import type { SavedOrder } from './send-order.ts' // what the Worker answers
 

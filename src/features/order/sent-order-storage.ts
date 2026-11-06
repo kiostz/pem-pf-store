@@ -1,6 +1,6 @@
 // Keeps the sent order in sessionStorage so the confirmation survives a reload in the same tab, and goes when the tab closes.
 
-import type { SentOrder } from './order-email.ts' // the stored shape
+import type { SentOrder } from './sent-order.ts' // the stored shape
 
 export const SENT_ORDER_STORAGE_KEY = 'pem-pf-store:sent-order' // repo name in the key: the site origin is shared by the account's other sites
 const SENT_ORDER_VERSION = 3 // the stored format; versions 1 and 2 are still read

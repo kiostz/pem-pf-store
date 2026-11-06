@@ -15,23 +15,29 @@ Open the address Vite prints. For the production build: `npm run build && npm ru
 
 The shop reads its items, clubs and settings from the API Worker's `/shop`, one request per load, with a 30 second limit. `VITE_API_URL` holds the Worker's address: the live Worker in `.env`, and `/api` in `.env.development`. `npm run dev` proxies `/api` to the local API Worker on http://localhost:8787, so start that first (`npm run dev` in `workers/`, see "Workers"); with it stopped the shop shows "We couldn't load the shop." `npm run preview` serves the production build, which asks the live Worker, and the Worker allows only the live site's address, so the shop can't load from `localhost` there.
 
-### Stock on screen, and the order of the first pushes
+### Stock on screen
 
-Each card shows "Stock: N left"; at 0 it shows Sold out in place of Add, and the steppers stop at the stock. A cart line above today's stock, or Sold out, is marked in red and blocks Checkout until the buyer lowers or removes it (their saved cart is never changed for them). Home ends with an "Admin" link to the live Admin Worker. While the shop loads, Shop, Cart and Details show grey skeletons after 300 ms.
+Each card shows "Stock: N left"; at 0 it shows Sold out in place of Add, and the steppers stop at the stock. A cart line above today's stock, or Sold out, is marked in red and blocks Checkout until the buyer lowers or removes it (their saved cart is never changed for them). Home ends with an "Admin" link to the live Admin Worker. While the shop loads, Shop, Cart and Details show grey skeletons after 300 ms. Orders go through the API Worker (see "Endpoints"), so a sent order lowers stock by itself.
 
-Before the first push of this work, as the owner:
+### The first push to the live site (the owner, once)
 
-1. Enter the real stock in the live admin (stock starts at 0, so every card would read Sold out until then).
-2. Push the Worker change and wait for "Deploy API Worker" to finish, so `/shop` is live.
-3. Then push the site. Pushing both at once can put Pages live before `/shop`, and the shop shows "We couldn't load the shop." for about a minute.
+Work after the last push is committed on `main` and not yet pushed; the user pushes, never a script. Run the deploy checklist first, then in this order:
 
-Orders now go through the API Worker (see "Endpoints"), so a sent order lowers stock by itself. Push order for the owner: create the Turnstile widget for `kiostz.github.io` in Cloudflare and paste its sitekey into `.env` (the production build fails while it is missing or still the placeholder, so a failed Pages build keeps the old site live); `wrangler secret put TURNSTILE_SECRET` and `ORDER_EMAIL_TO`; Email Routing on `stardew.win` with the club inbox verified; `npm run db:migrate:remote` in `workers/`; push the Worker change and wait for "Deploy API Worker"; then push the site. Until then the live shop still sends through Web3Forms.
+1. Connect `pictures.stardew.win` to the R2 bucket and check a picture opens (steps 1 and 2 of "Switch pictures to R2").
+2. The GitHub deploy token needs R2 access before the first push, because the Admin Worker deploys with the R2 binding. If "Deploy Admin Worker" fails on it, add that one permission and run the job again.
+3. Push the API Worker's order lookup by request id (`0caa8c3`) by its id: `git push origin 0caa8c3:main`. It carries all the work before it too (pictures from R2, admin orders with the nightly cron, clubs and settings). Wait for Pages, the API Worker and the Admin Worker to pass.
+4. Right after that Pages deploy, run the picture-key rewrite (steps 4 to 6 of "Switch pictures to R2"). Under Triggers, the API Worker should now show the `0 19 * * *` cron. Then push the shop's lookup before a resend (`47c8373`): `git push origin 47c8373:main`, and wait for Pages. The lookup route it calls is already live from step 3.
+5. Rename the database to `items`, in this order. Pick a quiet hour, not within 30 minutes of 19:00 UTC. In `workers/`, run `npx wrangler d1 time-travel info pem-pathfinder-store` and keep the bookmark. Count the rows with `npx wrangler d1 execute pem-pathfinder-store --remote --config api/wrangler.jsonc --command "SELECT (SELECT count(*) FROM honors) h, (SELECT count(*) FROM orders) o, (SELECT count(*) FROM order_lines) l, (SELECT count(*) FROM orders WHERE buyer_name IS NULL OR buyer_email IS NULL OR buyer_phone IS NULL) nb"` and note them; `nb` must be 0 (see the `0004` paragraph below). Run `npm run db:migrate:remote`; if it errors, nothing changed, so do not push, and report. Then push the remaining commits at once and wait for Deploy API Worker, Deploy Admin Worker and Pages. Between the migration and the deploys the live shop shows "We couldn't load the shop." for a short while, and no order can be saved.
+6. Check the live shop loads, the order counts match the counts taken before, and the admin Orders tab shows buyers.
+7. If a deploy fails, never restore for a single failure: if only Pages or only one Worker failed, open the run in the Actions tab and press "Re-run failed jobs", because the Worker that did deploy already saves orders on `items`, and a restore would delete them and break it. Restore only when both Deploy API Worker and Deploy Admin Worker failed (both old Workers still run) and no order has arrived since the migration: `npx wrangler d1 time-travel restore pem-pathfinder-store --bookmark=<the bookmark>`.
+
+Until step 5 has run on the live database, `npm run db:export:remote` fails there (it reads `--table items`, which the live database does not have yet). To refill a local database before that, export with the old table name `honors`.
 
 ## Order form settings
 
 The order form reads two keys from the committed `.env` files, which are public by design:
 
-- `VITE_TURNSTILE_SITEKEY`: `.env` holds the live widget's sitekey (a placeholder until the owner creates the widget); `.env.development` holds Cloudflare's published always-passing test sitekey, so the widget works on `localhost`.
+- `VITE_TURNSTILE_SITEKEY`: `.env` holds the live widget's sitekey; `.env.development` holds Cloudflare's published always-passing test sitekey, so the widget works on `localhost`.
 - `VITE_API_URL`: where `POST /orders` goes, the same address the shop reads from.
 
 To try the whole order flow locally, start the API Worker (`npm run dev` in `workers/`, with `api/.dev.vars` copied from the example) and the shop (`npm run dev`). Send order then goes through the Vite proxy to the local Worker, which checks the captcha with Cloudflare's test secret, saves the order in the local D1, lowers stock and writes the order email to a file whose path it prints. Use made-up buyer details. For a failed-captcha check, put Cloudflare's always-fail test secret `2x0000000000000000000000000000000AA` in `api/.dev.vars` and restart the Worker.
@@ -76,7 +82,7 @@ The shop's backend lives in `workers/`, its own npm project (Node 24). Root `npm
     npm run db:migrate:local
     npm run dev
 
-Before `npm run dev`, copy `api/.dev.vars.example` to `api/.dev.vars` (git-ignored): it holds Cloudflare's published Turnstile test secret, a made-up club inbox and `SHOP_ORIGIN=http://localhost:5173`, so the local Worker accepts orders from the dev server. Run `npm run db:migrate:local` again after pulling: migration `0002` adds `orders.request_id`, and `0003` gives every honor `created_at` and `modified_at` (all existing rows get `2026-11-01T00:00:00.000Z`), makes names unique ignoring case, and adds five more indexes, which the admin list reads in order (the unique name index is the sixth). `npm run dev` serves the API Worker at http://localhost:8787. `api/wrangler.jsonc` holds an all-zero `database_id` until the owner creates the real database; local runs ignore it. Migrations are in `workers/migrations/`; an applied migration is never edited, a change is a new file.
+Before `npm run dev`, copy `api/.dev.vars.example` to `api/.dev.vars` (git-ignored): it holds Cloudflare's published Turnstile test secret, a made-up club inbox and `SHOP_ORIGIN=http://localhost:5173`, so the local Worker accepts orders from the dev server. Run `npm run db:migrate:local` again after pulling: migration `0002` adds `orders.request_id`, and `0003` gives every honor `created_at` and `modified_at` (all existing rows get `2026-11-01T00:00:00.000Z`), makes names unique ignoring case, and adds five more indexes, which the admin list reads in order (the unique name index is the sixth). `npm run dev` serves the API Worker at http://localhost:8787. `api/wrangler.jsonc` holds the live database's `database_id` (not a secret); local runs ignore it. Migrations are in `workers/migrations/`; an applied migration is never edited, a change is a new file.
 
     npm test
     npm run typecheck
@@ -118,7 +124,7 @@ Paths match exactly, so `/items/` is 404. Errors are a short code only: 404 `not
 
 ### Admin Worker (local)
 
-`workers/admin/` is the Admin Worker: the admin page (the Items screen) and the admin API behind Cloudflare Access. Every path answers 403 unless Access signed in an admin whose email is in `ADMIN_EMAILS`. Locally `wrangler dev` simulates Access (`access.dev` in `admin/wrangler.jsonc`), reading `workers/admin/.dev.vars` (git-ignored). Create it once:
+`workers/admin/` is the Admin Worker: the admin page (four tabs: Items, Orders, Clubs and Settings) and the admin API behind Cloudflare Access. Every path answers 403 unless Access signed in an admin whose email is in `ADMIN_EMAILS`. Locally `wrangler dev` simulates Access (`access.dev` in `admin/wrangler.jsonc`), reading `workers/admin/.dev.vars` (git-ignored). Create it once:
 
     ACCESS_AUD=local-dev
     ADMIN_EMAILS=admin@example.test, second@example.test
@@ -150,7 +156,7 @@ To undo a bad deploy: run `npx wrangler rollback --config api/wrangler.jsonc` fr
 
 The Admin Worker (`pem-pathfinder-store-admin`) reuses the `CLOUDFLARE_API_TOKEN` secret and the database from the API Worker steps above. `.github/workflows/deploy-admin-worker.yml` runs on a push to `main` that touches `workers/`, `src/`, `admin.html`, `vite.admin.config.ts`, the root `package.json` or lockfile, a `tsconfig*.json`, or `.nvmrc`. A test job with no secrets installs the root and `workers/` dependencies, builds the admin page, runs typecheck and tests, and uploads the built page. Only if they pass, a deploy job installs `workers/` with `npm ci --ignore-scripts` (no package script ever runs next to the token), downloads that page and runs `wrangler deploy --config admin/wrangler.jsonc`. Only `main` deploys, even from the Run workflow button. Until the token secret exists the deploy job skips with a notice. The push also runs the API workflow, which has its own tests and deploy.
 
-The first deploy refuses every request: `ACCESS_AUD` in `admin/wrangler.jsonc` is a placeholder until step 3. In order:
+`ACCESS_AUD` in `admin/wrangler.jsonc` is already the live Access application's tag. To set the Worker up again (a new account or application), a first deploy refuses every request until step 3. In order:
 
 1. Pushing this workflow to `main` runs "Deploy Admin Worker". In the Actions tab, check that it ran and deployed; if it skipped (no token yet) or did not run, run it by hand once (Run workflow on `main`). The Worker goes live and refuses everything: its address, `https://pem-pathfinder-store-admin.<account>.workers.dev`, answers 403. If it answers 200, roll back now (see the last paragraph).
 2. In the Cloudflare dashboard, open Workers & Pages, then `pem-pathfinder-store-admin`, then "Protect this Worker behind Access". Use one policy that allows only the admins' emails, the One-time PIN login and a 1-month session.

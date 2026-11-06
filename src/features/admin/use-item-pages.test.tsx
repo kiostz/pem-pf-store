@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react' // hook rendering
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
-import { makeItem } from './item-fixtures.ts' // row builder
+import { makeItem } from '@/test/item-fixtures.ts' // row builder
 import { useItemPages } from './use-item-pages.ts' // the code under test
 
 const page = (ids: string[], nextCursor: string | null = null) =>

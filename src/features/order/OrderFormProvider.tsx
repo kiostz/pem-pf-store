@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react' // state, refs and context
 import { useCart } from '@/features/cart/use-cart.ts' // a changed cart ends the last failure's alert
 import { EMPTY_ORDER_FORM, type OrderField, type OrderFormValues } from './order-form.ts' // the form's shapes
-import type { Contact } from './order-email.ts' // one send's contact
+import type { Contact } from './sent-order.ts' // one send's contact
 import { OrderFormContext } from './use-order-form.ts' // the context this provider fills
 import { readPendingSend } from './pending-send-storage.ts' // a send a reload cut off
 

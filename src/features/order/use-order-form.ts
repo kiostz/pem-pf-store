@@ -1,7 +1,7 @@
 // The order form's context and its hook, in their own file so OrderFormProvider.tsx exports only a component.
 
 import { createContext, useContext, type RefObject } from 'react' // context, its reader and the ref type
-import type { Contact } from './order-email.ts' // one send's contact
+import type { Contact } from './sent-order.ts' // one send's contact
 import type { OrderField, OrderFormValues } from './order-form.ts' // the form's shapes
 
 // What every reader of the form gets.

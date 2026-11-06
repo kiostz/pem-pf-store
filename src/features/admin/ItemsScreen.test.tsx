@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test
 import type { AdminItem } from '../../../workers/admin/src/admin-types.ts' // the row shape
 import { AdminApp } from './AdminApp.tsx' // the whole page, for the wording check
 import { ItemsScreen } from './ItemsScreen.tsx' // the code under test
-import { meta, rows } from './item-fixtures.ts' // shared data
+import { meta, rows } from '@/test/item-fixtures.ts' // shared data
 import type { ResizeDeps } from './resize-picture.ts' // the passed-in browser pieces
 
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response> // answers one request

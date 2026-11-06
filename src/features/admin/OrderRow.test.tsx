@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { useState } from 'react' // a host that keeps the order
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API
 import { OrderRow } from './OrderRow.tsx' // the code under test
-import { makeOrder, orderAt } from './order-fixtures.ts' // order builders
+import { makeOrder, orderAt } from '@/test/order-fixtures.ts' // order builders
 
 const order = makeOrder({ number: 'PF-20261105-AAAA' }) // a New order with details
 

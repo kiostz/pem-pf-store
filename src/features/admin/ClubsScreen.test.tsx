@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API
 import type { AdminClub } from '../../../workers/admin/src/admin-types.ts' // the club shape
 import { SIGNED_OUT_NOTE } from './admin-api.ts' // the 403 line
-import { clubs, makeClub } from './club-fixtures.ts' // shared clubs
+import { clubs, makeClub } from '@/test/club-fixtures.ts' // shared clubs
 import { ClubsScreen } from './ClubsScreen.tsx' // the code under test
 
 type Post = (path: string, body: Record<string, unknown>) => Response | Promise<Response> // answers one write

@@ -2,7 +2,7 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react' // hook rendering
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API
-import { clubs } from './club-fixtures.ts' // shared clubs
+import { clubs } from '@/test/club-fixtures.ts' // shared clubs
 import { useClubs } from './use-clubs.ts' // the code under test
 
 const fields = { name: 'Lions', area: null, language: null, location: null, churchName: null } // a new club's fields

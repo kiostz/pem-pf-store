@@ -12,7 +12,7 @@ import {
   toItemChanges,
   type PendingChanges,
 } from './pending-changes.ts' // the code under test
-import { makeItem } from './item-fixtures.ts' // row builder
+import { makeItem } from '@/test/item-fixtures.ts' // row builder
 
 const knot = makeItem({
   id: 'knot-tying',

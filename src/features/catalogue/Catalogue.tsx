@@ -135,7 +135,7 @@ export function Catalogue({
       )}
       {/* Announced politely when loading gives way to the count, the empty message or the error. */}
       <div aria-live="polite">
-        {/* The count line, the empty message when nothing is switched on, or the no-match message. */}
+        {/* The count line, the empty message when nothing is Active, or the no-match message. */}
         {state.status === 'ready' && (
           <p className={`${COUNT_BOX} text-text-muted animate-fade-in`}>
             {/* The three messages share one line so the live region announces whichever applies. */}

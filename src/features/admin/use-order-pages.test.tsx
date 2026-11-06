@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react' // hook rendering
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
-import { orderAt } from './order-fixtures.ts' // order builder
+import { orderAt } from '@/test/order-fixtures.ts' // order builder
 import { useOrderPages } from './use-order-pages.ts' // the code under test
 
 const page = (numbers: string[], nextCursor: string | null = null) =>

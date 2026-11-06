@@ -1,6 +1,6 @@
 // The category tiles: a sideways row of links in each category's patch colour that open Shop on that category, with the row's own loading, error and empty states so Home never waits on the load.
 
-import { categoryNames } from '@/features/catalogue/filter.ts' // switched-on categories, A to Z
+import { categoryNames } from '@/features/catalogue/filter.ts' // Active categories, A to Z
 import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' // the load, made by the app
 import { shopHash } from '@/shared/routes.ts' // the filtered shop's address
 import { PILL_BOX } from '@/shared/ui/button-box.ts' // the pill shape of the actions
@@ -20,7 +20,7 @@ const SKELETON_TILES = 3 // how many skeleton tiles the loading state shows
  */
 export function CategoryTiles({ data }: { data: CatalogueLoad }) {
   const { state, showSkeleton, retry } = data // load state, skeleton gate and retry
-  const categories = state.status === 'ready' ? categoryNames(state.items) : [] // switched-on categories A to Z
+  const categories = state.status === 'ready' ? categoryNames(state.items) : [] // Active categories A to Z
   return (
     // Out to the screen edges so the row scrolls under the page's gutter; vertical room so a focus ring is not clipped.
     <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 py-1">
@@ -43,7 +43,7 @@ export function CategoryTiles({ data }: { data: CatalogueLoad }) {
           </button>
         </div>
       )}
-      {/* Nothing switched on. */}
+      {/* Nothing Active. */}
       {state.status === 'ready' && categories.length === 0 && (
         <p className="text-text-muted px-1">Nothing is in the shop yet. Check back soon.</p>
       )}

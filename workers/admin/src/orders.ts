@@ -83,7 +83,7 @@ export async function readOrderPage(db: D1Database, query: OrderQuery): Promise<
   const [orderResult, lineResult] = await db.batch<RawOrder | RawLine>([
     db.prepare(sql).bind(...params), // The orders.
     db // The lines statement over the same page.
-      .prepare(`SELECT l.order_id AS orderId, l.item_id AS itemId, l.name, l.quantity, l.price_cents AS priceCents, h.id IS NOT NULL AS inShop FROM order_lines l LEFT JOIN items h ON h.id = l.item_id WHERE l.order_id IN (SELECT id FROM (${sql} )) ORDER BY l.order_id, l.rowid`)
+      .prepare(`SELECT l.order_id AS orderId, l.item_id AS itemId, l.name, l.quantity, l.price_cents AS priceCents, i.id IS NOT NULL AS inShop FROM order_lines l LEFT JOIN items i ON i.id = l.item_id WHERE l.order_id IN (SELECT id FROM (${sql} )) ORDER BY l.order_id, l.rowid`)
       .bind(...params), // The lines of the same page, so there is no N+1.
   ])
   const rows = orderResult.results as RawOrder[] // Up to 51.
@@ -118,7 +118,7 @@ export async function changeOrderStep(db: D1Database, change: StepChange): Promi
   if (current.step !== change.from) return { kind: 'conflict', order: current } // Stale before any write.
   const orderId = '(SELECT id FROM orders WHERE number = ?1 AND step = ?2)' // The order, only while it is still at `from`.
   const results = await db.batch<{ restocked: number }>([ // The restock select, the restock update and the step update in one transaction.
-    db.prepare(`SELECT COALESCE(SUM(l.quantity), 0) AS restocked FROM order_lines l JOIN items h ON h.id = l.item_id WHERE l.order_id = ${orderId} AND ?3 = 1`).bind(change.number, change.from, change.restock ? 1 : 0), // Quantity that will go back: lines whose item still exists.
+    db.prepare(`SELECT COALESCE(SUM(l.quantity), 0) AS restocked FROM order_lines l JOIN items i ON i.id = l.item_id WHERE l.order_id = ${orderId} AND ?3 = 1`).bind(change.number, change.from, change.restock ? 1 : 0), // Quantity that will go back: lines whose item still exists.
     db // The restock update.
       .prepare(`UPDATE items SET stock = stock + (SELECT l.quantity FROM order_lines l WHERE l.order_id = ${orderId} AND l.item_id = items.id) WHERE ?3 = 1 AND id IN (SELECT item_id FROM order_lines WHERE order_id = ${orderId})`)
       .bind(change.number, change.from, change.restock ? 1 : 0), // Never touches modified_at or status; Hidden items too.

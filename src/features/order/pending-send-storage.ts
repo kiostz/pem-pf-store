@@ -1,6 +1,6 @@
 // Keeps the send in flight (request id, cart lines sent, form fields) in sessionStorage, so a reload before the Worker's answer reuses the request id and never makes a second order.
 
-import { formContact, type Contact } from './order-email.ts' // one send's contact, and the form's own folding of it
+import { formContact, type Contact } from './sent-order.ts' // one send's contact, and the form's own folding of it
 import type { OrderFormValues } from './order-form.ts' // the form fields kept
 
 export type PendingSend = {

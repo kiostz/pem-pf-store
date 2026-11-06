@@ -16,9 +16,9 @@ import {
   sendItemChanges,
   uploadPicture,
 } from './admin-api.ts' // the code under test
-import { makeClub } from './club-fixtures.ts' // shared clubs
-import { makeItem, meta } from './item-fixtures.ts' // shared rows
-import { makeOrder } from './order-fixtures.ts' // shared orders
+import { makeClub } from '@/test/club-fixtures.ts' // shared clubs
+import { makeItem, meta } from '@/test/item-fixtures.ts' // shared rows
+import { makeOrder } from '@/test/order-fixtures.ts' // shared orders
 
 const knot = makeItem({ id: 'knot-tying', name: 'Knot Tying' }) // a valid row
 

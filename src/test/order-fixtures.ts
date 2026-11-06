@@ -1,6 +1,6 @@
 // Orders the admin tests share, shaped like the Admin Worker's answers, with made-up buyers only.
 
-import type { AdminOrder, OrderStep } from '../../../workers/admin/src/admin-types.ts' // the shared shapes
+import type { AdminOrder, OrderStep } from '../../workers/admin/src/admin-types.ts' // the shared shapes
 
 /**
  * Builds one order with sensible defaults.

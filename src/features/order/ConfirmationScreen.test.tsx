@@ -3,7 +3,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react' // render and query
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { ConfirmationScreen } from './ConfirmationScreen.tsx' // code under test
-import type { SentOrder } from './order-email.ts' // the stored shape
+import type { SentOrder } from './sent-order.ts' // the stored shape
 import { SENT_ORDER_STORAGE_KEY, writeSentOrder } from './sent-order-storage.ts' // fills the stored order
 
 const order: SentOrder = {

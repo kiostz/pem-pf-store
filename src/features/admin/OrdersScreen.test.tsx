@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
 import type { AdminOrder } from '../../../workers/admin/src/admin-types.ts' // the order shape
 import { OrdersScreen } from './OrdersScreen.tsx' // the code under test
-import { orderAt, orders } from './order-fixtures.ts' // shared data
+import { orderAt, orders } from '@/test/order-fixtures.ts' // shared data
 
 type Handler = (url: string) => Response | Promise<Response> // answers one request
 

@@ -3,7 +3,7 @@
 import { fireEvent, render, screen } from '@testing-library/react' // rendering and events
 import { describe, expect, it, vi } from 'vitest' // test API
 import { CancelDialog } from './CancelDialog.tsx' // the code under test
-import { makeOrder } from './order-fixtures.ts' // order builder
+import { makeOrder } from '@/test/order-fixtures.ts' // order builder
 
 const order = makeOrder({ number: 'PF-20261105-ABCD' }) // 3 items, all in the shop
 

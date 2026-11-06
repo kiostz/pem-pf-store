@@ -6,7 +6,7 @@ import {
   SENT_ORDER_STORAGE_KEY,
   writeSentOrder,
 } from './sent-order-storage.ts' // code under test
-import type { SentOrder } from './order-email.ts' // the stored shape
+import type { SentOrder } from './sent-order.ts' // the stored shape
 
 const order: SentOrder = {
   number: 'PF-20261028-4K7Q',

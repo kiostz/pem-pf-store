@@ -2,7 +2,7 @@
 
 import { fireEvent, render, screen } from '@testing-library/react' // rendering and events
 import { describe, expect, it, vi } from 'vitest' // test API
-import { makeClub } from './club-fixtures.ts' // shared clubs
+import { makeClub } from '@/test/club-fixtures.ts' // shared clubs
 import { RemoveClubDialog } from './RemoveClubDialog.tsx' // the code under test
 
 const phoenix = makeClub({ id: 4, name: 'Phoenix Club' }) // the club asked about

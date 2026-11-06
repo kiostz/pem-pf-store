@@ -2,7 +2,7 @@
 
 import { act, fireEvent, render, screen } from '@testing-library/react' // rendering and events
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API
-import { meta } from './item-fixtures.ts' // /api/meta's answer
+import { meta } from '@/test/item-fixtures.ts' // /api/meta's answer
 import { SettingsScreen } from './SettingsScreen.tsx' // the code under test
 
 afterEach(() => {

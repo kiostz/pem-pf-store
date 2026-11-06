@@ -11,7 +11,7 @@ import { PILL_ACTION, PILL_DOCK, PILL_NOTE, PILL_SURFACE } from '@/shared/ui/flo
 import { Captcha, type CaptchaHandle } from './Captcha.tsx' // the Turnstile widget
 import { ClubSelect } from './ClubSelect.tsx' // the club field
 import { FIELD_BOX, FIELD_ERROR, FIELD_LABEL } from './field-box.ts' // the shared field look
-import { formContact, toEarlierSentOrder, toSentOrder, type SentOrder } from './order-email.ts' // the stored order
+import { formContact, toEarlierSentOrder, toSentOrder, type SentOrder } from './sent-order.ts' // the stored order
 import { missingText, validateOrderForm, type OrderField } from './order-form.ts' // the form's rules
 import { lookupOrder, OrderSendError, OrderStockError, sendOrder, toOrderRequest } from './send-order.ts' // the send, the lookup and their failures
 import { clearPendingSend, writePendingSend } from './pending-send-storage.ts' // keeps the send for a reload

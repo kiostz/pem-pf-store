@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest' // test API
 import type { AdminItem } from '../../../workers/admin/src/admin-types.ts' // the row shape
 import { ItemSheet } from './ItemSheet.tsx' // the code under test
-import { makeItem, meta, rows } from './item-fixtures.ts' // shared data
+import { makeItem, meta, rows } from '@/test/item-fixtures.ts' // shared data
 import type { PictureOutcome } from './use-admin-items.ts' // what an upload ends in
 
 const knot = rows[2] // Knot Tying, built in

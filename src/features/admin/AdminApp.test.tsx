@@ -3,9 +3,9 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react' // rendering and events
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
 import { AdminApp } from './AdminApp.tsx' // the code under test
-import { clubs } from './club-fixtures.ts' // shared clubs
-import { meta, rows } from './item-fixtures.ts' // shared items
-import { orders } from './order-fixtures.ts' // shared orders
+import { clubs } from '@/test/club-fixtures.ts' // shared clubs
+import { meta, rows } from '@/test/item-fixtures.ts' // shared items
+import { orders } from '@/test/order-fixtures.ts' // shared orders
 
 beforeEach(() => {
   vi.stubGlobal(

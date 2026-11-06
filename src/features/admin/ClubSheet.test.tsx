@@ -3,7 +3,7 @@
 import { fireEvent, render, screen } from '@testing-library/react' // rendering and events
 import { describe, expect, it, vi } from 'vitest' // test API
 import { SIGNED_OUT_NOTE } from './admin-api.ts' // the 403 line
-import { makeClub } from './club-fixtures.ts' // shared clubs
+import { makeClub } from '@/test/club-fixtures.ts' // shared clubs
 import { ClubSheet, type ClubSheetOutcome } from './ClubSheet.tsx' // the code under test
 
 const phoenix = makeClub({ id: 4, name: 'Phoenix Club', area: 'Klang', churchName: 'Phoenix SDA Church' }) // a club with details
