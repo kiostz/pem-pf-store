@@ -1,7 +1,7 @@
-// Tests parseHonorChanges: what a save may contain, and that anything else is refused whole.
+// Tests parseItemChanges: what a save may contain, and that anything else is refused whole.
 
 import { describe, expect, it } from 'vitest'
-import { parseDeleteRequest, parseHonorChanges, parseNewItem } from '../src/validate-changes'
+import { parseDeleteRequest, parseItemChanges, parseNewItem } from '../src/validate-changes'
 import { parseItemName } from '../src/validate-text'
 
 // One valid change to build variants from.
@@ -12,9 +12,9 @@ const good = { id: 'knot-tying', stock: { from: 3, to: 4 } }
  * @param changes The `changes` array.
  * @return The parsed changes, or null.
  */
-const parse = (changes: unknown) => parseHonorChanges({ changes })
+const parse = (changes: unknown) => parseItemChanges({ changes })
 
-describe('parseHonorChanges', () => {
+describe('parseItemChanges', () => {
   it('accepts a status change, a stock change and both together', () => {
     // Catches a parser that rejects the valid shapes the page sends.
     const both = { id: 'a-1', status: { from: 'active', to: 'hidden' }, stock: { from: 0, to: 9999 } }
@@ -51,7 +51,7 @@ describe('parseHonorChanges', () => {
     expect(parse([{ id: 'a', status: { from: 'Active', to: 'hidden' } }])).toBeNull()
   })
 
-  it('accepts 500 honors and refuses 501', () => {
+  it('accepts 500 items and refuses 501', () => {
     // Catches a missing or off-by-one cap on one save.
     const many = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `h-${i}`, stock: { from: 0, to: 1 } }))
     expect(parse(many(500))).toHaveLength(500)
@@ -65,17 +65,17 @@ describe('parseHonorChanges', () => {
     expect(parse([{ id: 'a', status: { from: 'active', to: 'active' } }])).toBeNull() // No change.
     expect(parse([{ ...good, price: 1 }])).toBeNull() // Extra key on the change.
     expect(parse([{ id: 'a', stock: { from: 1, to: 2, extra: 1 } }])).toBeNull() // Extra key on the field.
-    expect(parseHonorChanges({ changes: [good], extra: 1 })).toBeNull() // Extra key on the body.
+    expect(parseItemChanges({ changes: [good], extra: 1 })).toBeNull() // Extra key on the body.
     expect(parse([])).toBeNull() // Empty.
     expect(parse([{ id: 'a' }])).toBeNull() // Neither status nor stock.
-    expect(parseHonorChanges(null)).toBeNull() // Not an object.
-    expect(parseHonorChanges({})).toBeNull() // No changes key.
-    expect(parseHonorChanges({ changes: 'x' })).toBeNull() // Not an array.
-    expect(parseHonorChanges([good])).toBeNull() // An array, not an object.
+    expect(parseItemChanges(null)).toBeNull() // Not an object.
+    expect(parseItemChanges({})).toBeNull() // No changes key.
+    expect(parseItemChanges({ changes: 'x' })).toBeNull() // Not an array.
+    expect(parseItemChanges([good])).toBeNull() // An array, not an object.
   })
 })
 
-describe('parseHonorChanges: name, category and price', () => {
+describe('parseItemChanges: name, category and price', () => {
   it('accepts each new field alone and all together', () => {
     // Catches a parser that refuses the fields the Edit sheet sends.
     const all = { id: 'a', name: { from: 'Old', to: 'New' }, category: { from: 'Nature', to: 'Shirt' }, priceCents: { from: 400, to: 99999 } }

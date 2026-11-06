@@ -1,12 +1,12 @@
-// Adds a Club-added honor: Hidden, stock 0, a slug id with a -2..-9 suffix on a clash, both times set to the request time.
+// Adds a Club-added item: Hidden, stock 0, a slug id with a -2..-9 suffix on a clash, both times set to the request time.
 
-import type { AdminHonor, NewItem } from './admin-types' // The shapes.
-import { honorId } from './honor-id' // The id rule.
-import { readAdminHonors } from './honors' // Reads the new row back.
+import type { AdminItem, NewItem } from './admin-types' // The shapes.
+import { itemIdFromName } from './item-id-from-name' // The id rule.
+import { readAdminItems } from './items' // Reads the new row back.
 
 // The outcome of an Add.
 export type AddResult =
-  | { kind: 'added'; item: AdminHonor } // The new row.
+  | { kind: 'added'; item: AdminItem } // The new row.
   | { kind: 'name-taken' } // Another item has this name, in any case.
   | { kind: 'id-taken' } // The id and its eight suffixes are all taken.
 
@@ -26,8 +26,8 @@ function reasonOf(error: unknown): string {
  * @param now The request's time, written as created_at and modified_at.
  * @return The new row, or why it was not added.
  */
-export async function addHonor(db: D1Database, input: NewItem, now: string): Promise<AddResult> {
-  const base = honorId(input.name) // The id the name makes.
+export async function addItem(db: D1Database, input: NewItem, now: string): Promise<AddResult> {
+  const base = itemIdFromName(input.name) // The id the name makes.
   for (let attempt = 1; attempt <= 9; attempt++) { // The id, then -2 to -9.
     const id = attempt === 1 ? base : `${base}-${attempt}` // This attempt's id.
     try { // A clash throws.
@@ -41,7 +41,7 @@ export async function addHonor(db: D1Database, input: NewItem, now: string): Pro
       if (reason.includes('items.id')) continue // The id is taken: try the next suffix.
       return { kind: 'name-taken' } // The unique name index.
     }
-    return { kind: 'added', item: (await readAdminHonors(db, [id]))[0] } // Read back with its times.
+    return { kind: 'added', item: (await readAdminItems(db, [id]))[0] } // Read back with its times.
   }
   return { kind: 'id-taken' } // Nine ids used.
 }

@@ -3,14 +3,14 @@
 import { useEffect, useState } from 'react' // which sheet is open, and the pending count report
 import type { PriceSettings } from '../../../workers/admin/src/admin-types.ts' // the saved currency and price
 import { PILL_ACTION, PILL_DOCK, PILL_NOTE } from '@/shared/ui/floating-pill-box.ts' // the floating pill's dock and note shapes
-import { AdminHonorRow } from './AdminHonorRow.tsx' // one row
+import { AdminItemRow } from './AdminItemRow.tsx' // one row
 import { FIELD_BOX, NOTE_BUTTON, SOFT_BUTTON } from './admin-boxes.ts' // shared shapes
 import { ItemSheet } from './ItemSheet.tsx' // Edit and Add
 import { LoadMore } from './LoadMore.tsx' // the end of the list
 import { SavePill } from './SavePill.tsx' // Discard and Save
 import { SortControl } from './SortControl.tsx' // the order
 import type { ResizeDeps } from './resize-picture.ts' // the passed-in browser pieces
-import { useAdminHonors } from './use-admin-honors.ts' // the screen's state
+import { useAdminItems } from './use-admin-items.ts' // the screen's state
 
 const SKELETON_ROWS = 8 // how many skeleton rows the loading state shows
 const TOOLBAR_BOX = 'border-border-subtle bg-bg-app -mx-4 -mt-6 border-b px-4 py-2' // the toolbar's box, flush under the header like the Shop's
@@ -40,7 +40,7 @@ export function ItemsScreen({
   onPendingCount?: (count: number) => void
   prices?: PriceSettings | null
 }) {
-  const items = useAdminHonors() // the screen's state
+  const items = useAdminItems() // the screen's state
   const meta = items.meta === null || !prices ? items.meta : { ...items.meta, ...prices } // a Settings save wins over the first read
   const { pages, pending, conflicts, count, saveState, discarded, changesView } = items // read often
   const [sheet, setSheet] = useState<Sheet | null>(null) // the open sheet
@@ -225,9 +225,9 @@ export function ItemsScreen({
           className={`mt-3 flex flex-col gap-3 transition-opacity duration-(--duration-fast) ${(pageState === 'loading' || pageState === 'error' || pageState === 'signed-out') && !changesView ? 'opacity-50' : ''}`} // dimmed until the new rows land, and after a failed fetch they are the old list
         >
           {shown.map((row) => (
-            <AdminHonorRow
+            <AdminItemRow
               key={row.id} // stable
-              honor={row} // the row as seen
+              item={row} // the row as seen
               pending={pending[row.id]?.edits} // its edits
               conflict={conflicts[row.id]} // its flag
               currency={currency} // for the price
@@ -277,7 +277,7 @@ export function ItemsScreen({
         <ItemSheet
           key={editing.id} // a fresh draft per item
           mode="edit"
-          honor={editing}
+          item={editing}
           pending={pending[editing.id]?.edits}
           categories={meta.categories}
           currency={meta.currency}

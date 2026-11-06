@@ -1,7 +1,7 @@
 // The Items list's paging in one hook: the first page and the next ones from the Admin Worker, the debounced search, the category and sort, and the states a page fetch can be in.
 
 import { useEffect, useRef, useState } from 'react' // state, the timers and refs
-import type { AdminHonor } from '../../../workers/admin/src/admin-types.ts' // the row shape
+import type { AdminItem } from '../../../workers/admin/src/admin-types.ts' // the row shape
 import { loadItemPage, type ItemSort } from './admin-api.ts' // the page call
 
 const SEARCH_PAUSE_MS = 250 // how long typing waits before one search goes out
@@ -34,9 +34,9 @@ const cleanSearch = (text: string): string =>
  * @return the rows, the states and the actions
  */
 export function useItemPages(
-  onFetched: (honors: AdminHonor[]) => void = () => undefined,
+  onFetched: (items: AdminItem[]) => void = () => undefined,
 ) {
-  const [rows, setRows] = useState<AdminHonor[]>([]) // every row loaded so far
+  const [rows, setRows] = useState<AdminItem[]>([]) // every row loaded so far
   const [nextCursor, setNextCursor] = useState<string | null>(null) // where the next page starts
   const [pageState, setPageState] = useState<PageState>('loading') // the fetch
   const [filters, setFilters] = useState<Filters>({
@@ -66,10 +66,10 @@ export function useItemPages(
     }).then((result) => {
       if (controller.signal.aborted) return // a late answer to an old query
       if (result.kind === 'ok') {
-        setRows(result.honors) // the new list
+        setRows(result.items) // the new list
         setNextCursor(result.nextCursor) // where it goes on
         setPageState('idle') // done
-        fetched.current(result.honors) // pending changes rebase
+        fetched.current(result.items) // pending changes rebase
       } else setPageState(result.kind) // signed-out or error
     })
     return () => controller.abort() // stop listening
@@ -189,19 +189,19 @@ export function useItemPages(
       ) // the rows stay, and Load more can ask again once signed in elsewhere
     setRows((current) => {
       const listed = new Set(current.map((row) => row.id)) // ids already shown
-      return [...current, ...result.honors.filter((row) => !listed.has(row.id))] // no repeats when the list moved between pages
+      return [...current, ...result.items.filter((row) => !listed.has(row.id))] // no repeats when the list moved between pages
     })
     setNextCursor(result.nextCursor) // the cursor moves on
     setPageState('idle') // done
-    fetched.current(result.honors) // pending changes rebase
+    fetched.current(result.items) // pending changes rebase
   }
 
   /**
    * Puts newer rows in place of the listed ones, keeping their positions.
-   * @param honors the newer rows
+   * @param items the newer rows
    */
-  const applyRows = (honors: AdminHonor[]) => {
-    const byId = new Map(honors.map((row) => [row.id, row])) // the new rows
+  const applyRows = (items: AdminItem[]) => {
+    const byId = new Map(items.map((row) => [row.id, row])) // the new rows
     setRows((current) => current.map((row) => byId.get(row.id) ?? row)) // replaced where given
   }
 

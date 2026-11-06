@@ -1,9 +1,9 @@
 // The admin's pending changes as plain functions: edits per field kept with a snapshot of the row as the admin saw it, so counting, saving and rebasing never disagree and a row off the loaded page keeps its `from`.
 
 import type {
-  AdminHonor,
-  HonorChange,
-  HonorStatus,
+  AdminItem,
+  ItemChange,
+  ItemStatus,
 } from '../../../workers/admin/src/admin-types.ts' // the row and change shapes
 
 // The fields an admin edits.
@@ -11,13 +11,13 @@ export type ItemEdits = {
   name?: string // the new name
   category?: string // the new category
   priceCents?: number // the new price in whole cents
-  status?: HonorStatus // the new status
+  status?: ItemStatus // the new status
   stock?: number // the new stock
 }
 // Edits not yet saved, by item id: the row as seen, and only the fields that differ from it.
 export type PendingChanges = Record<
   string,
-  { seen: AdminHonor; edits: ItemEdits }
+  { seen: AdminItem; edits: ItemEdits }
 >
 
 const FIELDS = ['name', 'category', 'priceCents', 'status', 'stock'] as const // every editable field, in the request's order
@@ -32,9 +32,9 @@ const FIELDS = ['name', 'category', 'priceCents', 'status', 'stock'] as const //
  */
 export function setEdit<Field extends keyof ItemEdits>(
   pending: PendingChanges, // the edits so far
-  row: AdminHonor, // the row as shown
+  row: AdminItem, // the row as shown
   field: Field, // the field
-  value: AdminHonor[Field], // the wanted value
+  value: AdminItem[Field], // the wanted value
 ): PendingChanges {
   const seen = pending[row.id]?.seen ?? row // the first view is the snapshot
   const edits: ItemEdits = { ...pending[row.id]?.edits } // a copy of the row's edits
@@ -64,13 +64,13 @@ export const countChanges = (pending: PendingChanges): number =>
  * @param pending the edits
  * @return one change per edited row, each `from` taken from the snapshot
  */
-export function toHonorChanges(pending: PendingChanges): HonorChange[] {
+export function toItemChanges(pending: PendingChanges): ItemChange[] {
   return Object.entries(pending).map(([id, { seen, edits }]) => {
     const change: Record<string, unknown> = { id } // the row's change
     for (const field of FIELDS)
       if (edits[field] !== undefined)
         change[field] = { from: seen[field], to: edits[field] } // what was seen and what is wanted
-    return change as unknown as HonorChange // built field by field above
+    return change as unknown as ItemChange // built field by field above
   })
 }
 
@@ -80,9 +80,9 @@ export function toHonorChanges(pending: PendingChanges): HonorChange[] {
  * @param rows the newer rows
  * @return the new pending object, and the rows whose edited field moved
  */
-function rebase(pending: PendingChanges, rows: AdminHonor[]) {
+function rebase(pending: PendingChanges, rows: AdminItem[]) {
   let next = pending // grows row by row
-  const moved: AdminHonor[] = [] // rows whose edited field is not what the admin saw
+  const moved: AdminItem[] = [] // rows whose edited field is not what the admin saw
   for (const row of rows) {
     const entry = pending[row.id] // the row's edits
     if (entry === undefined) continue // nothing pending for it
@@ -115,8 +115,8 @@ function rebase(pending: PendingChanges, rows: AdminHonor[]) {
  */
 export function mergeSaved(
   sent: PendingChanges,
-  saved: AdminHonor[],
-): AdminHonor[] {
+  saved: AdminItem[],
+): AdminItem[] {
   return saved.map((row) => {
     const entry = sent[row.id] // what was sent for the row
     if (entry === undefined) return row // nothing sent: the answer stands
@@ -126,7 +126,7 @@ export function mergeSaved(
     } // the old view with the new change time
     for (const field of FIELDS)
       if (entry.edits[field] !== undefined) merged[field] = row[field] // the saved fields
-    return merged as unknown as AdminHonor // a row again
+    return merged as unknown as AdminItem // a row again
   })
 }
 
@@ -137,9 +137,9 @@ export function mergeSaved(
  * @return the answered rows that hold a different value in any editable field
  */
 export const staleRows = (
-  shown: AdminHonor[],
-  saved: AdminHonor[],
-): AdminHonor[] =>
+  shown: AdminItem[],
+  saved: AdminItem[],
+): AdminItem[] =>
   saved.filter((row) => {
     const mine = shown.find((entry) => entry.id === row.id) // the row as shown
     return (
@@ -155,7 +155,7 @@ export const staleRows = (
  */
 export const applySaved = (
   pending: PendingChanges,
-  saved: AdminHonor[],
+  saved: AdminItem[],
 ): PendingChanges => rebase(pending, saved).pending // flags do not matter after a save
 
 /**
@@ -164,7 +164,7 @@ export const applySaved = (
  * @param fetched the rows of the page
  * @return the new pending object, and the rows to flag because an edited field moved
  */
-export function rebaseOnFetch(pending: PendingChanges, fetched: AdminHonor[]) {
+export function rebaseOnFetch(pending: PendingChanges, fetched: AdminItem[]) {
   const { pending: next, moved } = rebase(pending, fetched) // the rebase
   return { pending: next, flagged: moved } // a difference only in unedited fields updates the snapshot without a flag
 }
@@ -178,7 +178,7 @@ export function rebaseOnFetch(pending: PendingChanges, fetched: AdminHonor[]) {
  */
 export function rebaseAfterConflict(
   pending: PendingChanges,
-  current: AdminHonor[],
+  current: AdminItem[],
   deletedIds: string[],
 ) {
   return {

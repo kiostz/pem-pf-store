@@ -8,10 +8,10 @@ describe('StockStepper', () => {
   it('makes minus at 0 and plus at 9,999 dead, with the reason in the label', () => {
     // Catches a stepper that goes below 0 or past the limit, or a dead button that does not say why.
     const onChange = vi.fn()
-    const { rerender } = render(<StockStepper honorName="Knot Tying" stock={0} onChange={onChange} />)
+    const { rerender } = render(<StockStepper itemName="Knot Tying" stock={0} onChange={onChange} />)
     fireEvent.click(screen.getByRole('button', { name: "Stock can't go below 0" }))
     expect(onChange).not.toHaveBeenCalled()
-    rerender(<StockStepper honorName="Knot Tying" stock={9999} onChange={onChange} />)
+    rerender(<StockStepper itemName="Knot Tying" stock={9999} onChange={onChange} />)
     fireEvent.click(screen.getByRole('button', { name: "Stock can't go above 9,999" }))
     expect(onChange).not.toHaveBeenCalled()
   })
@@ -19,7 +19,7 @@ describe('StockStepper', () => {
   it('steps by one with the two buttons', () => {
     // Catches buttons that step by the wrong amount or in the wrong direction.
     const onChange = vi.fn()
-    render(<StockStepper honorName="Knot Tying" stock={12} onChange={onChange} />)
+    render(<StockStepper itemName="Knot Tying" stock={12} onChange={onChange} />)
     fireEvent.click(screen.getByRole('button', { name: 'One less' }))
     fireEvent.click(screen.getByRole('button', { name: 'One more' }))
     expect(onChange.mock.calls).toEqual([[11], [13]])
@@ -28,7 +28,7 @@ describe('StockStepper', () => {
   it('steps a stock above 9,999 down to 9,999, never to a value the Worker refuses', () => {
     // Catches a minus on a stored 12000 that sends 11999 and fails on every save.
     const onChange = vi.fn()
-    render(<StockStepper honorName="Knot Tying" stock={12000} onChange={onChange} />)
+    render(<StockStepper itemName="Knot Tying" stock={12000} onChange={onChange} />)
     fireEvent.click(screen.getByRole('button', { name: 'One less' }))
     expect(onChange).toHaveBeenCalledWith(9999)
   })
@@ -36,7 +36,7 @@ describe('StockStepper', () => {
   it('commits a typed number on Enter and on blur', () => {
     // Catches typing that is lost when the admin presses Enter or taps away.
     const onChange = vi.fn()
-    render(<StockStepper honorName="Knot Tying" stock={3} onChange={onChange} />)
+    render(<StockStepper itemName="Knot Tying" stock={3} onChange={onChange} />)
     const input = screen.getByRole('textbox', { name: 'Stock of Knot Tying' })
     fireEvent.change(input, { target: { value: '12' } })
     fireEvent.keyDown(input, { key: 'Enter' })
@@ -48,7 +48,7 @@ describe('StockStepper', () => {
   it('clamps 12000 to 9,999 and ignores letters', () => {
     // Catches stock above the Worker's limit being sent, or letters reaching the number.
     const onChange = vi.fn()
-    render(<StockStepper honorName="Knot Tying" stock={3} onChange={onChange} />)
+    render(<StockStepper itemName="Knot Tying" stock={3} onChange={onChange} />)
     const input = screen.getByRole('textbox', { name: 'Stock of Knot Tying' })
     fireEvent.change(input, { target: { value: '1a2' } })
     expect(input).toHaveValue('12')
@@ -60,7 +60,7 @@ describe('StockStepper', () => {
   it('restores the earlier value when the text is cleared, never zeroing the stock', () => {
     // Catches an accidental clear that saves a stock of 0.
     const onChange = vi.fn()
-    render(<StockStepper honorName="Knot Tying" stock={7} onChange={onChange} />)
+    render(<StockStepper itemName="Knot Tying" stock={7} onChange={onChange} />)
     const input = screen.getByRole('textbox', { name: 'Stock of Knot Tying' })
     fireEvent.change(input, { target: { value: '' } })
     fireEvent.blur(input)

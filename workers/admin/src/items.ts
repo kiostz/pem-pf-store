@@ -1,6 +1,6 @@
-// Admin reads and the guarded save: pages of honors for the list, and changes written only if the admin's view is still current.
+// Admin reads and the guarded save: pages of items for the list, and changes written only if the admin's view is still current.
 
-import type { AdminHonor, AdminMeta, AdminPage, HonorChange, SaveResult } from './admin-types' // The shared shapes.
+import type { AdminItem, AdminMeta, AdminPage, ItemChange, SaveResult } from './admin-types' // The shared shapes.
 import { CATEGORIES } from './categories' // The fixed category list.
 import { encodeCursor, type ItemQuery } from './item-query' // The checked query and the cursor codec.
 
@@ -10,18 +10,18 @@ const PAGE_SIZE = 50
 const COLUMNS = "id, name, category, status, stock, price_cents AS priceCents, image, issued_by = 'Club' AS clubAdded, created_at AS createdAt, modified_at AS modifiedAt"
 // The order of a list of named ids (the rows of a save).
 const ORDER = 'ORDER BY name COLLATE NOCASE, id'
-// A statement that raises "integer overflow" (the only way a batch statement can abort the batch) when its honor no longer exists.
+// A statement that raises "integer overflow" (the only way a batch statement can abort the batch) when its item no longer exists.
 const MISSING_GUARD = 'SELECT CASE WHEN EXISTS (SELECT 1 FROM items WHERE id = ?) THEN 0 ELSE abs(-9223372036854775807 - 1) END'
 
 // A row as D1 returns it: the Club flag is 0 or 1.
-type RawHonor = Omit<AdminHonor, 'clubAdded'> & { clubAdded: number }
+type RawItem = Omit<AdminItem, 'clubAdded'> & { clubAdded: number }
 
 /**
  * Turns a raw row into the API shape.
  * @param row The row from D1.
- * @return The honor with a real boolean.
+ * @return The item with a real boolean.
  */
-function toHonor(row: RawHonor): AdminHonor {
+function toItem(row: RawItem): AdminItem {
   return { ...row, clubAdded: row.clubAdded === 1 } // Only the flag changes.
 }
 
@@ -56,15 +56,15 @@ export function pageSql(query: ItemQuery): { sql: string; params: (string | numb
 }
 
 /**
- * Reads one page of the list, hidden honors included.
+ * Reads one page of the list, hidden items included.
  * @param db The D1 database.
  * @param query The checked query.
- * @return Up to 50 honors in the requested order and a cursor for the next page, or null at the end.
+ * @return Up to 50 items in the requested order and a cursor for the next page, or null at the end.
  */
 export async function readAdminPage(db: D1Database, query: ItemQuery): Promise<AdminPage> {
   const { sql, params } = pageSql(query) // The statement.
-  const { results } = await db.prepare(sql).bind(...params).all<RawHonor>() // Up to 51 rows.
-  const items = results.slice(0, PAGE_SIZE).map(toHonor) // The page itself.
+  const { results } = await db.prepare(sql).bind(...params).all<RawItem>() // Up to 51 rows.
+  const items = results.slice(0, PAGE_SIZE).map(toItem) // The page itself.
   const last = items[items.length - 1] // The row the next page follows.
   if (results.length <= PAGE_SIZE || last === undefined) return { items, nextCursor: null } // That was the end.
   const time = query.sort === 'newest' ? last.createdAt : last.modifiedAt // The sort's time.
@@ -84,75 +84,75 @@ export async function readMeta(db: D1Database): Promise<AdminMeta> {
 }
 
 /**
- * Reads honors by id for the admin, hidden ones included.
+ * Reads items by id for the admin, hidden ones included.
  * @param db The D1 database.
  * @param ids The ids to read; ids that do not exist are absent from the answer.
- * @return The honors in name order.
+ * @return The items in name order.
  */
-export async function readAdminHonors(db: D1Database, ids: string[]): Promise<AdminHonor[]> {
-  const { results } = await db.prepare(`SELECT ${COLUMNS} FROM items WHERE id IN (SELECT value FROM json_each(?)) ${ORDER}`).bind(JSON.stringify(ids)).all<RawHonor>() // One parameter whatever the count.
-  return results.map(toHonor) // In list order.
+export async function readAdminItems(db: D1Database, ids: string[]): Promise<AdminItem[]> {
+  const { results } = await db.prepare(`SELECT ${COLUMNS} FROM items WHERE id IN (SELECT value FROM json_each(?)) ${ORDER}`).bind(JSON.stringify(ids)).all<RawItem>() // One parameter whatever the count.
+  return results.map(toItem) // In list order.
 }
 
 /**
- * Tells whether a stored honor differs from what a change says the admin saw.
- * @param honor The stored row.
+ * Tells whether a stored item differs from what a change says the admin saw.
+ * @param item The stored row.
  * @param change The requested change.
  * @return True when any changed field's `from` is no longer the stored value.
  */
-function isStale(honor: AdminHonor, change: HonorChange): boolean {
+function isStale(item: AdminItem, change: ItemChange): boolean {
   return ( // Any one field moving makes the whole row stale.
-    (change.stock !== undefined && change.stock.from !== honor.stock) || // Stock moved.
-    (change.status !== undefined && change.status.from !== honor.status) || // Status moved.
-    (change.name !== undefined && change.name.from !== honor.name) || // Name moved.
-    (change.category !== undefined && change.category.from !== honor.category) || // Category moved.
-    (change.priceCents !== undefined && change.priceCents.from !== honor.priceCents) // Price moved.
+    (change.stock !== undefined && change.stock.from !== item.stock) || // Stock moved.
+    (change.status !== undefined && change.status.from !== item.status) || // Status moved.
+    (change.name !== undefined && change.name.from !== item.name) || // Name moved.
+    (change.category !== undefined && change.category.from !== item.category) || // Category moved.
+    (change.priceCents !== undefined && change.priceCents.from !== item.priceCents) // Price moved.
   )
 }
 
 /**
- * Finds the honors whose stored values differ from what the admin saw.
- * @param current The current rows of the changed honors.
+ * Finds the items whose stored values differ from what the admin saw.
+ * @param current The current rows of the changed items.
  * @param changes The requested changes.
  * @return The current rows that no longer match their `from` values.
  */
-function mismatched(current: AdminHonor[], changes: HonorChange[]): AdminHonor[] {
+function mismatched(current: AdminItem[], changes: ItemChange[]): AdminItem[] {
   const byId = new Map(changes.map((change) => [change.id, change])) // Change per id.
-  return current.filter((honor) => { // Keep the stale ones.
-    const change = byId.get(honor.id) // This honor's change.
-    return change !== undefined && isStale(honor, change) // Only changed honors count.
+  return current.filter((item) => { // Keep the stale ones.
+    const change = byId.get(item.id) // This item's change.
+    return change !== undefined && isStale(item, change) // Only changed items count.
   })
 }
 
 /**
- * Tells whether every changed field of every honor already holds its wanted `to` value.
- * @param current The current rows of the changed honors.
+ * Tells whether every changed field of every item already holds its wanted `to` value.
+ * @param current The current rows of the changed items.
  * @param changes The requested changes.
  * @return True when all changes are already stored.
  */
-function allApplied(current: AdminHonor[], changes: HonorChange[]): boolean {
-  const byId = new Map(current.map((honor) => [honor.id, honor])) // Row per id.
+function allApplied(current: AdminItem[], changes: ItemChange[]): boolean {
+  const byId = new Map(current.map((item) => [item.id, item])) // Row per id.
   return changes.every((change) => { // Every change must be applied.
-    const honor = byId.get(change.id) // The stored row.
+    const item = byId.get(change.id) // The stored row.
     return ( // Compare to the stored row.
-      honor !== undefined && // The row must exist.
-      (change.stock === undefined || change.stock.to === honor.stock) && // Stock is applied.
-      (change.status === undefined || change.status.to === honor.status) && // Status is applied.
-      (change.name === undefined || change.name.to === honor.name) && // Name is applied.
-      (change.category === undefined || change.category.to === honor.category) && // Category is applied.
-      (change.priceCents === undefined || change.priceCents.to === honor.priceCents) // Every changed field equals `to`.
+      item !== undefined && // The row must exist.
+      (change.stock === undefined || change.stock.to === item.stock) && // Stock is applied.
+      (change.status === undefined || change.status.to === item.status) && // Status is applied.
+      (change.name === undefined || change.name.to === item.name) && // Name is applied.
+      (change.category === undefined || change.category.to === item.category) && // Category is applied.
+      (change.priceCents === undefined || change.priceCents.to === item.priceCents) // Every changed field equals `to`.
     )
   })
 }
 
 /**
- * Builds the guarded UPDATE of one honor: a field whose value moved since the read breaks a CHECK.
+ * Builds the guarded UPDATE of one item: a field whose value moved since the read breaks a CHECK.
  * @param db The D1 database.
  * @param change The change.
  * @param now The request's time, written as modified_at.
  * @return The prepared, bound statement.
  */
-function guardedUpdate(db: D1Database, change: HonorChange, now: string): D1PreparedStatement {
+function guardedUpdate(db: D1Database, change: ItemChange, now: string): D1PreparedStatement {
   const sets: string[] = [] // SET clauses.
   const values: (string | number)[] = [] // Their bound values, in order.
   if (change.stock !== undefined) { // A stock change.
@@ -186,7 +186,7 @@ function guardedUpdate(db: D1Database, change: HonorChange, now: string): D1Prep
  * @param changes The requested changes.
  * @return The ids of those changes.
  */
-async function nameTakenIds(db: D1Database, changes: HonorChange[]): Promise<string[]> {
+async function nameTakenIds(db: D1Database, changes: ItemChange[]): Promise<string[]> {
   const taken: string[] = [] // Ids whose name is taken.
   for (const change of changes) { // Each rename.
     if (change.name === undefined) continue // Not a rename.
@@ -201,7 +201,7 @@ async function nameTakenIds(db: D1Database, changes: HonorChange[]): Promise<str
  * @param changes The requested changes.
  * @return The ids of those renames, in change order.
  */
-function duplicateNameIds(changes: HonorChange[]): string[] {
+function duplicateNameIds(changes: ItemChange[]): string[] {
   const renames = changes.filter((change) => change.name !== undefined) // Only renames.
   const counts = new Map<string, number>() // New name, folded, to how many renames want it.
   for (const change of renames) counts.set(change.name!.to.toLowerCase(), (counts.get(change.name!.to.toLowerCase()) ?? 0) + 1) // Count per name (stricter than the index's ASCII fold, never looser).
@@ -213,12 +213,12 @@ function duplicateNameIds(changes: HonorChange[]): string[] {
  * @param db The D1 database.
  * @param now The request's time, written as modified_at of every saved row.
  * @param changes The validated changes.
- * @return `saved` with the new rows; `conflict` with the current rows of the mismatched honors and the ids that are gone; or `name-taken`. Nothing is written unless `saved`.
+ * @return `saved` with the new rows; `conflict` with the current rows of the mismatched items and the ids that are gone; or `name-taken`. Nothing is written unless `saved`.
  */
-export async function saveHonorChanges(db: D1Database, now: string, changes: HonorChange[]): Promise<SaveResult> {
+export async function saveItemChanges(db: D1Database, now: string, changes: ItemChange[]): Promise<SaveResult> {
   const ids = changes.map((change) => change.id) // Ids to read.
-  const current = await readAdminHonors(db, ids) // The first read.
-  const present = new Set(current.map((honor) => honor.id)) // Ids that exist.
+  const current = await readAdminItems(db, ids) // The first read.
+  const present = new Set(current.map((item) => item.id)) // Ids that exist.
   const gone = ids.filter((id) => !present.has(id)) // Deleted by another admin.
   const stale = mismatched(current, changes) // Rows that moved since the admin's view.
   if (stale.length > 0 || gone.length > 0) return { kind: 'conflict', items: stale, deletedIds: gone } // Nothing written.
@@ -227,8 +227,8 @@ export async function saveHonorChanges(db: D1Database, now: string, changes: Hon
   try { // The write.
     await db.batch([...ids.map((id) => db.prepare(MISSING_GUARD).bind(id)), ...changes.map((change) => guardedUpdate(db, change, now))]) // One transaction: a tripped CHECK or a missing row rolls back all.
   } catch (error) { // The write failed.
-    const after = await readAdminHonors(db, ids) // The rows as they are now.
-    const afterIds = new Set(after.map((honor) => honor.id)) // Ids that still exist.
+    const after = await readAdminItems(db, ids) // The rows as they are now.
+    const afterIds = new Set(after.map((item) => item.id)) // Ids that still exist.
     const goneNow = ids.filter((id) => !afterIds.has(id)) // Deleted after the read.
     if (goneNow.length > 0) return { kind: 'conflict', items: mismatched(after, changes), deletedIds: goneNow } // A conflict, nothing written.
     if (allApplied(after, changes)) return { kind: 'saved', items: after } // The write landed and only the answer was lost.
@@ -238,5 +238,5 @@ export async function saveHonorChanges(db: D1Database, now: string, changes: Hon
     if (taken.length > 0) return { kind: 'name-taken', ids: taken } // Yes.
     throw error // No: a real failure, for the handler to answer 500.
   }
-  return { kind: 'saved', items: await readAdminHonors(db, ids) } // The rows as saved.
+  return { kind: 'saved', items: await readAdminItems(db, ids) } // The rows as saved.
 }

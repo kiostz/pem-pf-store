@@ -2,7 +2,7 @@
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react' // rendering and events
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
-import type { AdminHonor } from '../../../workers/admin/src/admin-types.ts' // the row shape
+import type { AdminItem } from '../../../workers/admin/src/admin-types.ts' // the row shape
 import { AdminApp } from './AdminApp.tsx' // the whole page, for the wording check
 import { ItemsScreen } from './ItemsScreen.tsx' // the code under test
 import { meta, rows } from './item-fixtures.ts' // shared data
@@ -11,7 +11,7 @@ import type { ResizeDeps } from './resize-picture.ts' // the passed-in browser p
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response> // answers one request
 type Routes = { pages?: Handler; meta?: Handler; changes?: Handler; add?: Handler; del?: Handler; picture?: Handler } // one handler per route
 
-const pageOf = (items: AdminHonor[], nextCursor: string | null = null) => Response.json({ items, nextCursor }) // a page answer
+const pageOf = (items: AdminItem[], nextCursor: string | null = null) => Response.json({ items, nextCursor }) // a page answer
 
 /**
  * Stubs fetch for every route of the Admin Worker the screen uses.

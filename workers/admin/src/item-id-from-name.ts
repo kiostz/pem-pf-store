@@ -9,7 +9,7 @@ const MAX_ID_LENGTH = 90
  * @param name The item's display name.
  * @return The slug, for example "paper-mache"; "item" when the name has no letters or digits.
  */
-export function honorId(name: string): string {
+export function itemIdFromName(name: string): string {
   const slug = name
     .normalize('NFKD') // Split letters from their accents.
     .replace(/\p{M}/gu, '') // Drop the accents.

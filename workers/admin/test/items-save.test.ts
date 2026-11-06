@@ -3,7 +3,7 @@
 import { env } from 'cloudflare:workers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHandler } from '../src/handler'
-import { saveHonorChanges } from '../src/honors'
+import { saveItemChanges } from '../src/items'
 import { BACKFILL_TIME, call, fullRowOf, insertHonors, pages, postChanges, postTo, rowOf, seedHonors, wire } from './helpers'
 
 beforeEach(async () => {
@@ -30,11 +30,11 @@ function freezeClock(): void {
 }
 
 /**
- * Reads the honors of a save result that is a conflict or a save.
+ * Reads the items of a save result that is a conflict or a save.
  * @param result The result.
- * @return Its honors.
+ * @return Its items.
  */
-function honorsOf(result: Awaited<ReturnType<typeof saveHonorChanges>>) {
+function itemsOf(result: Awaited<ReturnType<typeof saveItemChanges>>) {
   if (result.kind === 'name-taken') throw new Error('unexpected name-taken') // A test bug.
   return result.items
 }
@@ -101,12 +101,12 @@ describe('POST /api/items/changes', () => {
         return env.DB.batch(statements)
       },
     } as unknown as D1Database
-    const result = await saveHonorChanges(racing, NOW, [
+    const result = await saveItemChanges(racing, NOW, [
       { id: 'knot-tying', stock: { from: 12, to: 20 } },
       { id: 'africa-lore', status: { from: 'hidden', to: 'active' } },
     ])
     expect(result.kind).toBe('conflict')
-    expect(honorsOf(result)).toEqual([wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 3 })])
+    expect(itemsOf(result)).toEqual([wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 3 })])
     expect(await rowOf('knot-tying')).toEqual({ stock: 3, status: 'active' }) // The sale stands.
     expect((await rowOf('africa-lore')).status).toBe('hidden') // The whole batch rolled back.
   })
@@ -120,12 +120,12 @@ describe('POST /api/items/changes', () => {
         return env.DB.batch(statements)
       },
     } as unknown as D1Database
-    const result = await saveHonorChanges(racing, NOW, [
+    const result = await saveItemChanges(racing, NOW, [
       { id: 'knot-tying', status: { from: 'active', to: 'hidden' } },
       { id: 'africa-lore', stock: { from: 0, to: 5 } }, // Valid beside it.
     ])
     expect(result.kind).toBe('conflict')
-    expect(honorsOf(result)).toEqual([wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'hidden', stock: 12 })])
+    expect(itemsOf(result)).toEqual([wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'hidden', stock: 12 })])
     expect((await rowOf('africa-lore')).stock).toBe(0) // The whole batch rolled back.
   })
 
@@ -153,12 +153,12 @@ describe('POST /api/items/changes', () => {
         throw new Error('D1_ERROR: connection reset') // ...but the answer is lost.
       },
     } as unknown as D1Database
-    const result = await saveHonorChanges(blip, NOW, [
+    const result = await saveItemChanges(blip, NOW, [
       { id: 'knot-tying', stock: { from: 12, to: 20 } },
       { id: 'africa-lore', status: { from: 'hidden', to: 'active' } },
     ])
     expect(result.kind).toBe('saved')
-    expect(honorsOf(result).map((honor) => [honor.id, honor.stock, honor.status])).toEqual([
+    expect(itemsOf(result).map((item) => [item.id, item.stock, item.status])).toEqual([
       ['africa-lore', 0, 'active'],
       ['knot-tying', 20, 'active'],
     ])
@@ -169,11 +169,11 @@ describe('POST /api/items/changes', () => {
     const res = await postChanges({
       changes: [
         { id: 'knot-tying', stock: { from: 12, to: 20 } },
-        { id: 'no-such-honor', stock: { from: 0, to: 1 } },
+        { id: 'no-such-item', stock: { from: 0, to: 1 } },
       ],
     })
     expect(res.status).toBe(409)
-    expect(await res.json()).toEqual({ error: 'conflict', items: [], deletedIds: ['no-such-honor'] })
+    expect(await res.json()).toEqual({ error: 'conflict', items: [], deletedIds: ['no-such-item'] })
     expect((await rowOf('knot-tying')).stock).toBe(12)
   })
 
@@ -186,7 +186,7 @@ describe('POST /api/items/changes', () => {
         return env.DB.batch(statements)
       },
     } as unknown as D1Database
-    const result = await saveHonorChanges(racing, NOW, [
+    const result = await saveItemChanges(racing, NOW, [
       { id: 'knot-tying', stock: { from: 12, to: 20 } },
       { id: 'africa-lore', stock: { from: 0, to: 5 } },
     ])
@@ -336,7 +336,7 @@ describe('name, category and price', () => {
         return env.DB.batch(statements)
       },
     } as unknown as D1Database
-    const result = await saveHonorChanges(racing, NOW, [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots' } }, { id: 'africa-lore', stock: { from: 0, to: 5 } }])
+    const result = await saveItemChanges(racing, NOW, [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots' } }, { id: 'africa-lore', stock: { from: 0, to: 5 } }])
     expect(result.kind).toBe('conflict')
     expect((await fullRowOf('knot-tying'))!.name).toBe('Renamed')
     expect((await rowOf('africa-lore')).stock).toBe(0)

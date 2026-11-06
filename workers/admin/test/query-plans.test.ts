@@ -3,7 +3,7 @@
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { encodeCursor, parseItemQuery, type ItemQuery } from '../src/item-query'
-import { pageSql } from '../src/honors'
+import { pageSql } from '../src/items'
 import { orderPageSql } from '../src/orders'
 import { parseOrderQuery } from '../src/order-query'
 import { insertHonors, orderNumber, seedHonors, seedOrders, type SeedHonor } from './helpers'

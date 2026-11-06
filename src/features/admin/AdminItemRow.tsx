@@ -1,6 +1,6 @@
 // One row of the Items screen: the item's name (opens the Item sheet), a line "Category · price · changed date", its status control and stock stepper, a Changed label while edited, and the latest values after a conflict.
 
-import type { AdminHonor, HonorStatus } from '../../../workers/admin/src/admin-types.ts' // the row and status types
+import type { AdminItem, ItemStatus } from '../../../workers/admin/src/admin-types.ts' // the row and status types
 import { formatPrice } from '@/shared/format/price.ts' // "RM 25.00"
 import { formatChangedShort } from './admin-dates.ts' // "changed 3 Nov"
 import { describeLatest } from './latest-line.ts' // the "Latest:" text
@@ -10,7 +10,7 @@ import { StockStepper } from './StockStepper.tsx' // the number
 
 /**
  * Draws the row.
- * @param honor the row as the admin saw it
+ * @param item the row as the admin saw it
  * @param pending the admin's unsaved edits to this row, if any
  * @param conflict the row's current values when a save found it changed, to flag
  * @param currency the ISO currency code for the price
@@ -20,8 +20,8 @@ import { StockStepper } from './StockStepper.tsx' // the number
  * @param onStock called with the new stock
  * @return a card with two lines on a phone and one from 768 px
  */
-export function AdminHonorRow({
-  honor,
+export function AdminItemRow({
+  item,
   pending,
   conflict,
   currency,
@@ -30,18 +30,18 @@ export function AdminHonorRow({
   onStatus,
   onStock,
 }: {
-  honor: AdminHonor // the row as seen
+  item: AdminItem // the row as seen
   pending?: ItemEdits // the unsaved edits
-  conflict?: AdminHonor // the current values after a refused save
+  conflict?: AdminItem // the current values after a refused save
   currency: string // the ISO code
   now: Date // the current time
   onOpen: () => void // the name opens the sheet
-  onStatus: (status: HonorStatus) => void // a status pick
+  onStatus: (status: ItemStatus) => void // a status pick
   onStock: (stock: number) => void // a stock commit
 }) {
   const changed = pending !== undefined // the row has an edit
-  const name = pending?.name ?? honor.name // an edited name shows at once
-  const price = formatPrice((pending?.priceCents ?? honor.priceCents) / 100, currency) // the shown price
+  const name = pending?.name ?? item.name // an edited name shows at once
+  const price = formatPrice((pending?.priceCents ?? item.priceCents) / 100, currency) // the shown price
   return (
     // A white card; a pending row also gets an oxblood edge on its start side, so the state is never colour alone (the Changed label says it too).
     <li
@@ -65,7 +65,7 @@ export function AdminHonorRow({
           {name}
         </button>
         <p className="text-text-muted flex flex-wrap items-center gap-x-2 text-sm">
-          {`${pending?.category ?? honor.category} · ${price} · ${formatChangedShort(honor.modifiedAt, now)}`}{' '}
+          {`${pending?.category ?? item.category} · ${price} · ${formatChangedShort(item.modifiedAt, now)}`}{' '}
           {/* the Category label, the price and the date */}
           {
             changed && (
@@ -76,9 +76,9 @@ export function AdminHonorRow({
       </div>
       {/* The two controls on the second line at 375 px, at the end of the one line from 768 px. */}
       <div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
-        <StatusControl honorName={name} status={pending?.status ?? honor.status} onChange={onStatus} />{' '}
+        <StatusControl itemName={name} status={pending?.status ?? item.status} onChange={onStatus} />{' '}
         {/* Active or Hidden */}
-        <StockStepper honorName={name} stock={pending?.stock ?? honor.stock} onChange={onStock} /> {/* the number */}
+        <StockStepper itemName={name} stock={pending?.stock ?? item.stock} onChange={onStock} /> {/* the number */}
       </div>
     </li>
   )

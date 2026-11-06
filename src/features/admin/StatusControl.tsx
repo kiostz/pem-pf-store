@@ -1,22 +1,22 @@
 // The status control: one switch, green and "Active" when buyers can see the item, grey and "Hidden" when not; the word sits beside the switch so it is never colour alone, and a native button gives Space, Enter and the tab stop for free.
 
-import type { HonorStatus } from '../../../workers/admin/src/admin-types.ts' // the two statuses
+import type { ItemStatus } from '../../../workers/admin/src/admin-types.ts' // the two statuses
 
 /**
  * Draws the status control.
- * @param honorName the item's name, used in the accessible name
+ * @param itemName the item's name, used in the accessible name
  * @param status the status now
  * @param onChange called with the other status on each flip
  * @return a switch with the status word beside it
  */
 export function StatusControl({
-  honorName,
+  itemName,
   status,
   onChange,
 }: {
-  honorName: string // the item's name
-  status: HonorStatus // the status now
-  onChange: (status: HonorStatus) => void // called on each flip
+  itemName: string // the item's name
+  status: ItemStatus // the status now
+  onChange: (status: ItemStatus) => void // called on each flip
 }) {
   const active = status === 'active' // on means shown to buyers
   const flip = () => onChange(active ? 'hidden' : 'active') // a flip is the other status
@@ -27,7 +27,7 @@ export function StatusControl({
         type="button" // not a form submit
         role="switch" // an on/off control
         aria-checked={active} // on when Active
-        aria-label={`Active: ${honorName}`} // the name stays the same; aria-checked carries the state
+        aria-label={`Active: ${itemName}`} // the name stays the same; aria-checked carries the state
         onClick={flip} // flips
         className="rounded-pill focus-visible:outline-focus-ring flex h-11 w-11 shrink-0 items-center focus-visible:outline-2 focus-visible:outline-offset-0" // one 44 px target, ring outside it
       >

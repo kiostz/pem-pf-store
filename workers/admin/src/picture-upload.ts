@@ -1,7 +1,7 @@
-// The picture upload of the Admin Worker: checks the file, stores it under a new key and points the honor at it only if the admin saw the current picture.
+// The picture upload of the Admin Worker: checks the file, stores it under a new key and points the item at it only if the admin saw the current picture.
 
-import type { AdminHonor } from './admin-types' // The row shape.
-import { readAdminHonors } from './honors' // Reads the current row.
+import type { AdminItem } from './admin-types' // The row shape.
+import { readAdminItems } from './items' // Reads the current row.
 
 // Largest accepted picture, in bytes.
 export const MAX_PICTURE_BYTES = 256 * 1024
@@ -13,8 +13,8 @@ export type PictureType = 'image/webp' | 'image/png'
 
 // The outcome of an upload.
 export type UploadResult =
-  | { kind: 'saved'; item: AdminHonor } // Stored; the row with its new key.
-  | { kind: 'conflict'; items: AdminHonor[]; deletedIds: string[] } // Nothing stored: the current row, or the id of a deleted one.
+  | { kind: 'saved'; item: AdminItem } // Stored; the row with its new key.
+  | { kind: 'conflict'; items: AdminItem[]; deletedIds: string[] } // Nothing stored: the current row, or the id of a deleted one.
 
 /**
  * Tells whether the first bytes are those of the claimed picture type.
@@ -30,8 +30,8 @@ export function hasSignature(bytes: Uint8Array, type: PictureType): boolean {
 }
 
 /**
- * Builds a new key for an honor's picture.
- * @param id The honor id.
+ * Builds a new key for an item's picture.
+ * @param id The item id.
  * @param type The picture type.
  * @return `items/<id>-<8 random hex>.<webp|png>`.
  */
@@ -55,7 +55,7 @@ async function removeQuietly(bucket: R2Bucket, key: string): Promise<void> {
 }
 
 /**
- * Stores a picture and points the honor at it, guarded by the key the admin saw.
+ * Stores a picture and points the item at it, guarded by the key the admin saw.
  * @param env The database and the picture bucket.
  * @param input The checked id, the key seen (null for none), the type and the bytes.
  * @param now The request time, ISO.
@@ -67,7 +67,7 @@ export async function uploadPicture(
   now: string,
 ): Promise<UploadResult> {
   const { id, seen } = input // The guard.
-  const [current] = await readAdminHonors(env.DB, [id]) // The stored row, if any.
+  const [current] = await readAdminItems(env.DB, [id]) // The stored row, if any.
   if (current === undefined) return { kind: 'conflict', items: [], deletedIds: [id] } // Gone.
   if (current.image !== seen) return { kind: 'conflict', items: [current], deletedIds: [] } // Another picture is there now.
   const key = newKey(id, input.type) // A fresh key, so no cache holds it.
@@ -82,14 +82,14 @@ export async function uploadPicture(
   }
   if (changes === 0) { // Someone changed or deleted the row in between.
     await removeQuietly(env.PICTURES, key) // Drop the new object.
-    const [after] = await readAdminHonors(env.DB, [id]) // Why: gone, or another picture.
+    const [after] = await readAdminItems(env.DB, [id]) // Why: gone, or another picture.
     return after === undefined ? { kind: 'conflict', items: [], deletedIds: [id] } : { kind: 'conflict', items: [after], deletedIds: [] } // Deleted, or the current row.
   }
   if (seen !== null) await removeQuietly(env.PICTURES, seen) // The old object is no longer pointed at.
-  const [honor] = await readAdminHonors(env.DB, [id]) // The saved row.
-  if (honor === undefined) { // Deleted right after the update: nothing points at the new object.
+  const [item] = await readAdminItems(env.DB, [id]) // The saved row.
+  if (item === undefined) { // Deleted right after the update: nothing points at the new object.
     await removeQuietly(env.PICTURES, key) // Drop the new object.
     return { kind: 'conflict', items: [], deletedIds: [id] } // Gone.
   }
-  return { kind: 'saved', item: honor } // Done.
+  return { kind: 'saved', item } // Done.
 }

@@ -13,7 +13,7 @@ import {
   moveClubs,
   removeClub,
   savePrices,
-  sendHonorChanges,
+  sendItemChanges,
   uploadPicture,
 } from './admin-api.ts' // the code under test
 import { makeClub } from './club-fixtures.ts' // shared clubs
@@ -57,7 +57,7 @@ describe('loadItemPage', () => {
       category: 'Recreation',
       cursor: 'c1',
     })
-    expect(result).toEqual({ kind: 'ok', honors: [knot], nextCursor: 'abc' })
+    expect(result).toEqual({ kind: 'ok', items: [knot], nextCursor: 'abc' })
     const calls = spy.mock.calls as unknown as [string, RequestInit][]
     expect(calls[0][0]).toBe(
       '/api/items?sort=newest&q=knot+tying&category=Recreation&cursor=c1',
@@ -137,15 +137,15 @@ describe('loadMeta', () => {
   })
 })
 
-describe('sendHonorChanges', () => {
+describe('sendItemChanges', () => {
   const changes = [{ id: 'knot-tying', stock: { from: 12, to: 5 } }] // one change
 
   it('posts the changes as JSON on the same origin without following redirects', async () => {
     // Catches a save without the JSON type the Worker demands, or one that follows a login redirect.
     const spy = stubFetch(Response.json({ items: [knot] }))
-    expect(await sendHonorChanges(changes)).toEqual({
+    expect(await sendItemChanges(changes)).toEqual({
       kind: 'saved',
-      honors: [knot],
+      items: [knot],
     })
     expect(spy).toHaveBeenCalledWith(
       '/api/items/changes',
@@ -166,9 +166,9 @@ describe('sendHonorChanges', () => {
         { status: 409 },
       ),
     )
-    expect(await sendHonorChanges(changes)).toEqual({
+    expect(await sendItemChanges(changes)).toEqual({
       kind: 'conflict',
-      honors: [knot],
+      items: [knot],
       deletedIds: ['gone'],
     })
     stubFetch(
@@ -177,7 +177,7 @@ describe('sendHonorChanges', () => {
         { status: 409 },
       ),
     )
-    expect(await sendHonorChanges(changes)).toEqual({
+    expect(await sendItemChanges(changes)).toEqual({
       kind: 'name-taken',
       ids: ['knot-tying'],
     })
@@ -186,13 +186,13 @@ describe('sendHonorChanges', () => {
   it('maps signed-out, a 500, an unreadable answer and a network error', async () => {
     // Catches a failure that reads as success.
     stubFetch(Response.json({}, { status: 403 }))
-    expect(await sendHonorChanges(changes)).toEqual({ kind: 'signed-out' })
+    expect(await sendItemChanges(changes)).toEqual({ kind: 'signed-out' })
     stubFetch(Response.json({ error: 'server' }, { status: 500 }))
-    expect(await sendHonorChanges(changes)).toEqual({ kind: 'error' })
+    expect(await sendItemChanges(changes)).toEqual({ kind: 'error' })
     stubFetch(new Response('<html>', { status: 200 }))
-    expect(await sendHonorChanges(changes)).toEqual({ kind: 'error' })
+    expect(await sendItemChanges(changes)).toEqual({ kind: 'error' })
     stubFetch(new TypeError('Failed to fetch'))
-    expect(await sendHonorChanges(changes)).toEqual({ kind: 'error' })
+    expect(await sendItemChanges(changes)).toEqual({ kind: 'error' })
   })
 })
 
@@ -202,7 +202,7 @@ describe('addItem', () => {
   it('posts the item and maps 201, name-taken, id-taken, signed-out and failures', async () => {
     // Catches an Add that cannot tell the two 409s apart, which need different words.
     const spy = stubFetch(Response.json({ item: knot }, { status: 201 }))
-    expect(await addItem(input)).toEqual({ kind: 'added', honor: knot })
+    expect(await addItem(input)).toEqual({ kind: 'added', item: knot })
     expect(spy).toHaveBeenCalledWith(
       '/api/items',
       expect.objectContaining({ method: 'POST', body: JSON.stringify(input) }),
@@ -252,7 +252,7 @@ describe('deleteItem', () => {
     )
     expect(await deleteItem(request)).toEqual({
       kind: 'conflict',
-      honors: [knot],
+      items: [knot],
     })
     stubFetch(Response.json({ error: 'built-in' }, { status: 400 }))
     expect(await deleteItem(request)).toEqual({ kind: 'built-in' })
@@ -294,7 +294,7 @@ describe('uploadPicture', () => {
   it('maps 200 to saved with the checked row, and a row with a wrong image type to error', async () => {
     // Catches a row of the wrong shape entering the list.
     stubFetch(Response.json({ item: withPicture }))
-    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'saved', honor: withPicture })
+    expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'saved', item: withPicture })
     stubFetch(Response.json({ item: { ...knot, image: 7 } }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
   })
@@ -304,13 +304,13 @@ describe('uploadPicture', () => {
     stubFetch(Response.json({ error: 'conflict', items: [withPicture], deletedIds: [] }, { status: 409 }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({
       kind: 'conflict',
-      honors: [withPicture],
+      items: [withPicture],
       deletedIds: [],
     })
     stubFetch(Response.json({ error: 'conflict', items: [], deletedIds: ['knot-tying'] }, { status: 409 }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({
       kind: 'conflict',
-      honors: [],
+      items: [],
       deletedIds: ['knot-tying'],
     })
   })
@@ -432,13 +432,13 @@ describe('answers from an old Worker and orders without a buyer', () => {
     stubFetch(Response.json({ honors: [knot], nextCursor: null }))
     expect(await loadItemPage({ sort: 'changed', q: '', category: null, cursor: null })).toEqual({ kind: 'error' })
     stubFetch(Response.json({ honors: [knot] }))
-    expect(await sendHonorChanges([{ id: 'knot-tying', stock: { from: 1, to: 2 } }])).toEqual({ kind: 'error' })
+    expect(await sendItemChanges([{ id: 'knot-tying', stock: { from: 1, to: 2 } }])).toEqual({ kind: 'error' })
     stubFetch(Response.json({ honor: knot }, { status: 201 }))
     expect(await addItem({ name: 'Knot Tying', category: 'Outdoor', priceCents: 400 })).toEqual({ kind: 'error' })
     stubFetch(Response.json({ honor: knot }))
     expect(await uploadPicture('knot-tying', null, new Blob(['x'], { type: 'image/webp' }))).toEqual({ kind: 'error' })
     stubFetch(Response.json({ error: 'conflict', honors: [knot], deletedIds: [] }, { status: 409 }))
-    expect(await sendHonorChanges([{ id: 'knot-tying', stock: { from: 1, to: 2 } }])).toEqual({ kind: 'error' })
+    expect(await sendItemChanges([{ id: 'knot-tying', stock: { from: 1, to: 2 } }])).toEqual({ kind: 'error' })
     stubFetch(Response.json({ error: 'conflict', honors: [knot], deletedIds: [] }, { status: 409 }))
     expect(await uploadPicture('knot-tying', null, new Blob(['x'], { type: 'image/webp' }))).toEqual({ kind: 'error' })
   })

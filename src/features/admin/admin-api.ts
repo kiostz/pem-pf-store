@@ -2,7 +2,7 @@
 
 import type {
   AdminClub,
-  AdminHonor,
+  AdminItem,
   AdminMeta,
   AdminOrder,
   ClubEdit,
@@ -10,7 +10,7 @@ import type {
   ClubOrder,
   ClubRemove,
   DeleteRequest,
-  HonorChange,
+  ItemChange,
   NewItem,
   OrderStep,
   PriceSettings,
@@ -30,7 +30,7 @@ export type PageRequest = {
 }
 // The result of loading a page.
 export type LoadPageResult =
-  | { kind: 'ok'; honors: AdminHonor[]; nextCursor: string | null }
+  | { kind: 'ok'; items: AdminItem[]; nextCursor: string | null }
   | { kind: 'signed-out' }
   | { kind: 'error' }
 // The result of loading the meta.
@@ -38,24 +38,24 @@ export type LoadMetaResult =
   { kind: 'ok'; meta: AdminMeta } | { kind: 'signed-out' } | { kind: 'error' }
 // The result of sending changes.
 export type SendResult =
-  | { kind: 'saved'; honors: AdminHonor[] }
-  | { kind: 'conflict'; honors: AdminHonor[]; deletedIds: string[] }
+  | { kind: 'saved'; items: AdminItem[] }
+  | { kind: 'conflict'; items: AdminItem[]; deletedIds: string[] }
   | { kind: 'name-taken'; ids: string[] }
   | { kind: 'signed-out' }
   | { kind: 'error' }
 // The result of adding an item.
 export type AddResult =
-  | { kind: 'added'; honor: AdminHonor }
+  | { kind: 'added'; item: AdminItem }
   | { kind: 'name-taken' | 'id-taken' | 'signed-out' | 'error' }
 // The result of uploading a picture.
 export type PictureResult =
-  | { kind: 'saved'; honor: AdminHonor }
-  | { kind: 'conflict'; honors: AdminHonor[]; deletedIds: string[] }
+  | { kind: 'saved'; item: AdminItem }
+  | { kind: 'conflict'; items: AdminItem[]; deletedIds: string[] }
   | { kind: 'signed-out' | 'error' }
 // The result of deleting an item.
 export type DeleteResult =
   | { kind: 'deleted'; deletedId: string }
-  | { kind: 'conflict'; honors: AdminHonor[] }
+  | { kind: 'conflict'; items: AdminItem[] }
   | { kind: 'built-in' | 'signed-out' | 'error' }
 
 /**
@@ -63,7 +63,7 @@ export type DeleteResult =
  * @param value anything
  * @return true for an object with every field in the right type
  */
-function isAdminHonor(value: unknown): value is AdminHonor {
+function isAdminItem(value: unknown): value is AdminItem {
   if (typeof value !== 'object' || value === null) return false // not an object
   const row = value as Record<string, unknown> // read by field
   return (
@@ -85,8 +85,8 @@ function isAdminHonor(value: unknown): value is AdminHonor {
  * @param value anything
  * @return true when every entry is a row
  */
-const isHonorList = (value: unknown): value is AdminHonor[] =>
-  Array.isArray(value) && value.every(isAdminHonor) // an array of rows
+const isItemList = (value: unknown): value is AdminItem[] =>
+  Array.isArray(value) && value.every(isAdminItem) // an array of rows
 
 /**
  * Checks a value is a list of texts.
@@ -188,14 +188,14 @@ export async function loadItemPage(
   const answer = await call(`/api/items?${query}`, { signal: request.signal }) // the request
   if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
   if (answer === null || answer.status !== 200) return { kind: 'error' } // the Worker or the network failed
-  const honors = field(answer.body, 'items') // the rows
+  const items = field(answer.body, 'items') // the rows
   const nextCursor = field(answer.body, 'nextCursor') // where the next page starts
   if (
-    !isHonorList(honors) ||
+    !isItemList(items) ||
     (typeof nextCursor !== 'string' && nextCursor !== null)
   )
     return { kind: 'error' } // a wrong shape is an error
-  return { kind: 'ok', honors, nextCursor } // the page
+  return { kind: 'ok', items, nextCursor } // the page
 }
 
 /**
@@ -221,15 +221,15 @@ export async function loadMeta(): Promise<LoadMetaResult> {
  * @param changes the changes, each with its `from` and `to`
  * @return saved rows, a conflict, a taken name, signed-out, or error
  */
-export async function sendHonorChanges(
-  changes: HonorChange[],
+export async function sendItemChanges(
+  changes: ItemChange[],
 ): Promise<SendResult> {
   const answer = await post('/api/items/changes', { changes }) // the request
   if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
   if (answer === null) return { kind: 'error' } // the network failed
-  const honors = field(answer.body, 'items') // the rows it carries
-  if (answer.status === 200 && isHonorList(honors))
-    return { kind: 'saved', honors } // written
+  const items = field(answer.body, 'items') // the rows it carries
+  if (answer.status === 200 && isItemList(items))
+    return { kind: 'saved', items } // written
   if (
     answer.status === 409 &&
     field(answer.body, 'error') === 'name-taken' &&
@@ -238,12 +238,12 @@ export async function sendHonorChanges(
     return { kind: 'name-taken', ids: field(answer.body, 'ids') as string[] } // nothing written
   if (
     answer.status === 409 &&
-    isHonorList(honors) &&
+    isItemList(items) &&
     isTextList(field(answer.body, 'deletedIds'))
   )
     return {
       kind: 'conflict',
-      honors,
+      items,
       deletedIds: field(answer.body, 'deletedIds') as string[],
     } // nothing written
   return { kind: 'error' } // anything else
@@ -251,16 +251,16 @@ export async function sendHonorChanges(
 
 /**
  * Adds an item; it is saved at once.
- * @param item the name, category and price
+ * @param input the name, category and price
  * @return the added row, a refusal kind, signed-out, or error
  */
-export async function addItem(item: NewItem): Promise<AddResult> {
-  const answer = await post('/api/items', item) // the request
+export async function addItem(input: NewItem): Promise<AddResult> {
+  const answer = await post('/api/items', input) // the request
   if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
   if (answer === null) return { kind: 'error' } // the network failed
-  const honor = field(answer.body, 'item') // the new row
-  if (answer.status === 201 && isAdminHonor(honor))
-    return { kind: 'added', honor } // created
+  const item = field(answer.body, 'item') // the new row
+  if (answer.status === 201 && isAdminItem(item))
+    return { kind: 'added', item } // created
   const code = field(answer.body, 'error') // the Worker's code
   if (answer.status === 409 && (code === 'name-taken' || code === 'id-taken'))
     return { kind: code } // the two refusals
@@ -279,11 +279,11 @@ export async function deleteItem(
   if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
   if (answer === null) return { kind: 'error' } // the network failed
   const deletedId = field(answer.body, 'deletedId') // the id on success
-  const honors = field(answer.body, 'items') // the current rows on a conflict
+  const items = field(answer.body, 'items') // the current rows on a conflict
   if (answer.status === 200 && typeof deletedId === 'string')
     return { kind: 'deleted', deletedId } // gone
-  if (answer.status === 409 && isHonorList(honors))
-    return { kind: 'conflict', honors } // changed since viewing
+  if (answer.status === 409 && isItemList(items))
+    return { kind: 'conflict', items } // changed since viewing
   if (answer.status === 400 && field(answer.body, 'error') === 'built-in')
     return { kind: 'built-in' } // never deleted
   return { kind: 'error' } // anything else
@@ -309,12 +309,12 @@ export async function uploadPicture(
   }) // the bytes, typed as the Worker expects
   if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
   if (answer === null) return { kind: 'error' } // the network failed
-  const honor = field(answer.body, 'item') // the saved row
-  if (answer.status === 200 && isAdminHonor(honor)) return { kind: 'saved', honor } // stored
-  const honors = field(answer.body, 'items') // the current rows on a conflict
+  const item = field(answer.body, 'item') // the saved row
+  if (answer.status === 200 && isAdminItem(item)) return { kind: 'saved', item } // stored
+  const items = field(answer.body, 'items') // the current rows on a conflict
   const deletedIds = field(answer.body, 'deletedIds') // the ids another admin deleted
-  if (answer.status === 409 && isHonorList(honors) && isTextList(deletedIds))
-    return { kind: 'conflict', honors, deletedIds } // nothing stored
+  if (answer.status === 409 && isItemList(items) && isTextList(deletedIds))
+    return { kind: 'conflict', items, deletedIds } // nothing stored
   return { kind: 'error' } // anything else
 }
 

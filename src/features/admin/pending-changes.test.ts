@@ -9,7 +9,7 @@ import {
   rebaseAfterConflict,
   rebaseOnFetch,
   setEdit,
-  toHonorChanges,
+  toItemChanges,
   type PendingChanges,
 } from './pending-changes.ts' // the code under test
 import { makeItem } from './item-fixtures.ts' // row builder
@@ -55,13 +55,13 @@ describe('setEdit', () => {
   })
 })
 
-describe('toHonorChanges', () => {
+describe('toItemChanges', () => {
   it('takes every `from` from the snapshot, per edited field only', () => {
     // Catches a `from` read from a list that has since changed, which would hide a conflict.
     let pending: PendingChanges = {}
     pending = setEdit(pending, knot, 'priceCents', 550)
     pending = setEdit(pending, knot, 'status', 'hidden')
-    expect(toHonorChanges(pending)).toEqual([
+    expect(toItemChanges(pending)).toEqual([
       {
         id: 'knot-tying',
         priceCents: { from: 400, to: 550 },

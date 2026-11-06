@@ -2,10 +2,10 @@
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react' // rendering and events
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest' // test API
-import type { AdminHonor } from '../../../workers/admin/src/admin-types.ts' // the row shape
+import type { AdminItem } from '../../../workers/admin/src/admin-types.ts' // the row shape
 import { ItemSheet } from './ItemSheet.tsx' // the code under test
 import { makeItem, meta, rows } from './item-fixtures.ts' // shared data
-import type { PictureOutcome } from './use-admin-honors.ts' // what an upload ends in
+import type { PictureOutcome } from './use-admin-items.ts' // what an upload ends in
 
 const knot = rows[2] // Knot Tying, built in
 const shirt = rows[1] // Camp Shirt, Club-added
@@ -20,13 +20,13 @@ function openSheet(props: Partial<React.ComponentProps<typeof ItemSheet>> = {}) 
     onDone: vi.fn(),
     onAdd: vi.fn(() => Promise.resolve('added' as const)),
     onDelete: vi.fn(() => Promise.resolve({ kind: 'deleted' as const })),
-    onPicture: vi.fn<(honor: AdminHonor, picture: Blob) => Promise<PictureOutcome>>(() => Promise.resolve('saved')),
+    onPicture: vi.fn<(item: AdminItem, picture: Blob) => Promise<PictureOutcome>>(() => Promise.resolve('saved')),
     onClose: vi.fn(),
   } // the callbacks
   const view = render(
     <ItemSheet
       mode="edit"
-      honor={knot}
+      item={knot}
       categories={meta.categories}
       currency={meta.currency}
       defaultPriceCents={meta.defaultPriceCents}
@@ -42,7 +42,7 @@ describe('Edit sheet', () => {
   it('shows the fields, and Created and Last changed in Malaysia time', () => {
     // Catches UTC times on the sheet, or fields not filled from the row.
     openSheet({
-      honor: makeItem({ ...knot, createdAt: '2026-11-01T00:00:00.000Z', modifiedAt: '2026-11-03T09:05:00.000Z' }),
+      item: makeItem({ ...knot, createdAt: '2026-11-01T00:00:00.000Z', modifiedAt: '2026-11-03T09:05:00.000Z' }),
     })
     expect(screen.getByRole('heading', { name: 'Edit item' })).toBeInTheDocument()
     expect(screen.getByLabelText('Name')).toHaveValue('Knot Tying')
@@ -110,7 +110,7 @@ describe('Edit sheet', () => {
 
   it('opens the Delete dialog for a Club-added row, and deletes after a confirmation', async () => {
     // Catches a delete with no confirmation, or one that leaves the sheet open after it worked.
-    const spies = openSheet({ honor: shirt })
+    const spies = openSheet({ item: shirt })
     fireEvent.click(screen.getByRole('button', { name: 'Delete item' }))
     expect(screen.getByRole('heading', { name: 'Delete Camp Shirt?' })).toBeInTheDocument()
     expect(spies.onDelete).not.toHaveBeenCalled()
@@ -124,7 +124,7 @@ describe('Edit sheet', () => {
 describe('Add sheet', () => {
   it('prefills the price with the default price from /api/meta and says new items start Hidden', () => {
     // Catches a price field that starts empty or at a hard-coded 4.00.
-    openSheet({ mode: 'add', honor: undefined })
+    openSheet({ mode: 'add', item: undefined })
     expect(screen.getByRole('heading', { name: 'Add item' })).toBeInTheDocument()
     expect(screen.getByLabelText('Price (RM)')).toHaveValue('4.50')
     expect(screen.getByText('New items start Hidden with 0 in stock.')).toBeInTheDocument()
@@ -135,7 +135,7 @@ describe('Add sheet', () => {
     // Catches a double click that adds the item twice.
     let finish: (kind: 'added') => void = () => undefined
     const onAdd = vi.fn(() => new Promise<'added'>((resolve) => (finish = resolve)))
-    const spies = openSheet({ mode: 'add', honor: undefined, onAdd })
+    const spies = openSheet({ mode: 'add', item: undefined, onAdd })
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: ' Camp Hat ' } })
     fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Shirt' } })
     const add = screen.getByRole('button', { name: 'Add item' })
@@ -149,7 +149,7 @@ describe('Add sheet', () => {
 
   it('asks for a category before adding', async () => {
     // Catches an Add with no category, which the Worker refuses.
-    const spies = openSheet({ mode: 'add', honor: undefined })
+    const spies = openSheet({ mode: 'add', item: undefined })
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Camp Hat' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add item' }))
     expect(screen.getByText('Choose a category.')).toBeInTheDocument()
@@ -165,7 +165,7 @@ describe('Add sheet', () => {
       ['error', "We couldn't add the item. Try again."],
     ] as const) {
       const onAdd = vi.fn(() => Promise.resolve(outcome))
-      const spies = openSheet({ mode: 'add', honor: undefined, onAdd })
+      const spies = openSheet({ mode: 'add', item: undefined, onAdd })
       fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Camp Hat' } })
       fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Shirt' } })
       await act(async () => void fireEvent.click(screen.getByRole('button', { name: 'Add item' })))
@@ -204,7 +204,7 @@ describe('Picture section', () => {
 
   it('shows the current picture from /pictures, or the Category mark when there is none', () => {
     // Catches a picture loaded from the shop's domain in the admin, or a broken image where there is none.
-    openSheet({ honor: withPicture, pictureDeps })
+    openSheet({ item: withPicture, pictureDeps })
     expect(screen.getByText('Picture')).toBeInTheDocument()
     expect(document.querySelector('dialog img')).toHaveAttribute('src', '/pictures/items/knot-tying.webp')
     expect(screen.getByRole('button', { name: 'Replace picture' })).toBeInTheDocument()
@@ -223,7 +223,7 @@ describe('Picture section', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose picture' }))
     expect(click).toHaveBeenCalledTimes(1) // the hidden file input opened
     cleanup()
-    openSheet({ honor: withPicture, pictureDeps })
+    openSheet({ item: withPicture, pictureDeps })
     fireEvent.click(screen.getByRole('button', { name: 'Replace picture' }))
     expect(click).toHaveBeenCalledTimes(2) // Replace opens it too
     const stuck = { ...pictureDeps, decode: vi.fn(() => new Promise<ImageBitmap>(() => undefined)) } // a resize that never ends
@@ -236,7 +236,7 @@ describe('Picture section', () => {
 
   it('has no Picture section in Add mode', () => {
     // Catches an upload offered for an item that does not exist yet.
-    openSheet({ mode: 'add', honor: undefined, pictureDeps })
+    openSheet({ mode: 'add', item: undefined, pictureDeps })
     expect(screen.queryByText('Picture')).not.toBeInTheDocument()
     expect(document.querySelector('input[type="file"]')).toBeNull()
   })
@@ -277,14 +277,14 @@ describe('Picture section', () => {
 
   it('says Picture saved. and shows the new picture after a save', async () => {
     // Catches a save with no confirmation, or a sheet that keeps showing the old picture.
-    const spies = openSheet({ pictureDeps, honor: withPicture })
+    const spies = openSheet({ pictureDeps, item: withPicture })
     await choose()
     await act(async () => void fireEvent.click(screen.getByRole('button', { name: 'Save picture' })))
     expect(screen.getByRole('status')).toHaveTextContent('Picture saved.')
     spies.rerender(
       <ItemSheet
         mode="edit"
-        honor={{ ...withPicture, image: 'items/knot-tying-1a2b3c4d.webp' }}
+        item={{ ...withPicture, image: 'items/knot-tying-1a2b3c4d.webp' }}
         categories={meta.categories}
         currency={meta.currency}
         defaultPriceCents={meta.defaultPriceCents}

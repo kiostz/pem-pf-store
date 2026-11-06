@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react' // state, the timers and refs
 import type {
-  AdminHonor,
+  AdminItem,
   AdminMeta,
-  HonorStatus,
+  ItemStatus,
   NewItem,
 } from '../../../workers/admin/src/admin-types.ts' // the row shape
-import { addItem, deleteItem, loadMeta, sendHonorChanges, uploadPicture } from './admin-api.ts' // the calls
+import { addItem, deleteItem, loadMeta, sendItemChanges, uploadPicture } from './admin-api.ts' // the calls
 import {
   applySaved,
   countChanges,
@@ -17,7 +17,7 @@ import {
   rebaseOnFetch,
   setEdit,
   staleRows,
-  toHonorChanges,
+  toItemChanges,
   type PendingChanges,
 } from './pending-changes.ts' // the pending-changes functions
 import { useItemPages } from './use-item-pages.ts' // the list's pages
@@ -40,24 +40,24 @@ export type AddOutcome =
 // What a Delete ended in, for the dialog.
 export type DeleteOutcome =
   | { kind: 'deleted' | 'built-in' | 'signed-out' | 'error' }
-  | { kind: 'conflict'; latest: AdminHonor } // the item's current values
+  | { kind: 'conflict'; latest: AdminItem } // the item's current values
 // What a picture upload ended in, for the sheet.
 export type PictureOutcome = 'saved' | 'conflict' | 'signed-out' | 'error'
 // What Discard set aside, so Undo can bring it back.
 type DiscardSnapshot = {
   pending: PendingChanges
-  conflicts: Record<string, AdminHonor>
+  conflicts: Record<string, AdminItem>
 }
 
 /**
  * The state and actions of the Items screen.
  * @return the pages, meta, pending changes, save state, and the actions on them
  */
-export function useAdminHonors() {
+export function useAdminItems() {
   const [pending, setPending] = useState<PendingChanges>({}) // the unsaved edits
   const pendingRef = useRef(pending) // the same edits, read between renders (a save's answer, a page arriving)
-  const [conflicts, setConflicts] = useState<Record<string, AdminHonor>>({}) // the current rows of flagged items
-  const [staleFlags, setStaleFlags] = useState<Record<string, AdminHonor>>({}) // rows flagged because a save's reply differed from what is shown; only a fetch of the row clears them
+  const [conflicts, setConflicts] = useState<Record<string, AdminItem>>({}) // the current rows of flagged items
+  const [staleFlags, setStaleFlags] = useState<Record<string, AdminItem>>({}) // rows flagged because a save's reply differed from what is shown; only a fetch of the row clears them
   const [conflictInfo, setConflictInfo] = useState({
     changed: false,
     deleted: false,
@@ -84,12 +84,12 @@ export function useAdminHonors() {
 
   /**
    * Flags rows with their current values.
-   * @param honors the current rows
+   * @param items the current rows
    */
-  const flag = (honors: AdminHonor[]) =>
+  const flag = (items: AdminItem[]) =>
     setConflicts((current) => ({
       ...current,
-      ...Object.fromEntries(honors.map((honor) => [honor.id, honor])),
+      ...Object.fromEntries(items.map((item) => [item.id, item])),
     })) // the latest values show under the note
 
   /**
@@ -197,9 +197,9 @@ export function useAdminHonors() {
   const edit = <
     Field extends 'name' | 'category' | 'priceCents' | 'status' | 'stock',
   >(
-    row: AdminHonor,
+    row: AdminItem,
     field: Field,
-    value: AdminHonor[Field],
+    value: AdminItem[Field],
   ) => {
     setSnapshot(null) // a new edit closes Undo
     commitPending(setEdit(pendingRef.current, row, field, value)) // record it
@@ -210,7 +210,7 @@ export function useAdminHonors() {
    * @param row the row
    * @param next the wanted status
    */
-  const setStatus = (row: AdminHonor, next: HonorStatus) =>
+  const setStatus = (row: AdminItem, next: ItemStatus) =>
     edit(row, 'status', next)
 
   /**
@@ -218,7 +218,7 @@ export function useAdminHonors() {
    * @param row the row
    * @param next the wanted stock
    */
-  const setStock = (row: AdminHonor, next: number) => edit(row, 'stock', next)
+  const setStock = (row: AdminItem, next: number) => edit(row, 'stock', next)
 
   /**
    * Edits a row's name, category and price from the Item sheet.
@@ -226,7 +226,7 @@ export function useAdminHonors() {
    * @param values the three values the sheet holds
    */
   const setDetails = (
-    row: AdminHonor,
+    row: AdminItem,
     values: { name: string; category: string; priceCents: number },
   ) => {
     setSnapshot(null) // a new edit closes Undo
@@ -244,19 +244,19 @@ export function useAdminHonors() {
     setSaveState('saving') // the pill shows Saving…
     const sentPending = pendingRef.current // what is being sent
     const sent = countChanges(sentPending) // for the note
-    const result = await sendHonorChanges(toHonorChanges(sentPending)) // the one request
+    const result = await sendItemChanges(toItemChanges(sentPending)) // the one request
     if (result.kind === 'saved') {
-      const seen = mergeSaved(sentPending, result.honors) // the saved fields and times only
+      const seen = mergeSaved(sentPending, result.items) // the saved fields and times only
       commitPending(applySaved(pendingRef.current, seen)) // what was written is no longer pending; edits made during the save stay
       pages.applyRows(seen) // the saved rows stay in place until the next fetch
       setConflicts({}) // conflict flags have been dealt with
-      const savedIds = result.honors.map((row) => row.id) // the rows this save answered for
+      const savedIds = result.items.map((row) => row.id) // the rows this save answered for
       setStaleFlags((current) => ({
         ...Object.fromEntries(
           Object.entries(current).filter(([id]) => !savedIds.includes(id)),
         ), // flags of other rows stay
         ...Object.fromEntries(
-          staleRows(seen, result.honors).map((row) => [row.id, row]),
+          staleRows(seen, result.items).map((row) => [row.id, row]),
         ), // a shown value that is out of date gets the same note as a conflict
       }))
       setSavedCount(sent) // for the note
@@ -264,16 +264,16 @@ export function useAdminHonors() {
     } else if (result.kind === 'conflict') {
       const rebased = rebaseAfterConflict(
         pendingRef.current,
-        result.honors,
+        result.items,
         result.deletedIds,
       ) // the current values become the snapshots
       commitPending(rebased.pending) // the admin's edits stay, with `from` rebased
-      pages.applyRows(result.honors) // the list shows the latest values
+      pages.applyRows(result.items) // the list shows the latest values
       pages.removeRows(result.deletedIds) // another admin deleted these
-      flag(result.honors) // flag the refused rows
-      dropStale(result.honors.map((row) => row.id)) // their conflict values replace any older save-raised flag
+      flag(result.items) // flag the refused rows
+      dropStale(result.items.map((row) => row.id)) // their conflict values replace any older save-raised flag
       setConflictInfo({
-        changed: result.honors.length > 0,
+        changed: result.items.length > 0,
         deleted: result.deletedIds.length > 0,
       }) // what the note says
       setSaveState('conflict') // the note
@@ -309,8 +309,8 @@ export function useAdminHonors() {
   const add = async (item: NewItem): Promise<AddOutcome> => {
     const result = await addItem(item) // the one request
     if (result.kind !== 'added') return result.kind // the sheet says why
-    pages.showOnly(result.honor.name) // the new item is the search
-    setNotice(`Added ${result.honor.name}. It's Hidden until you switch it on.`) // the note
+    pages.showOnly(result.item.name) // the new item is the search
+    setNotice(`Added ${result.item.name}. It's Hidden until you switch it on.`) // the note
     return 'added' // the sheet closes
   }
 
@@ -319,7 +319,7 @@ export function useAdminHonors() {
    * @param row the row as shown
    * @return what happened, for the dialog to show
    */
-  const remove = async (row: AdminHonor): Promise<DeleteOutcome> => {
+  const remove = async (row: AdminItem): Promise<DeleteOutcome> => {
     const seen = pendingRef.current[row.id]?.seen ?? row // the guard is what the admin saw
     const result = await deleteItem({
       id: row.id,
@@ -348,12 +348,12 @@ export function useAdminHonors() {
       setNotice(`Deleted ${row.name}.`) // the note
     } else if (result.kind === 'conflict') {
       commitPending(
-        rebaseAfterConflict(pendingRef.current, result.honors, []).pending,
+        rebaseAfterConflict(pendingRef.current, result.items, []).pending,
       ) // the row changed: its edits rebase
-      pages.applyRows(result.honors) // the list shows the latest values
-      flag(result.honors) // and flags them
-      dropStale(result.honors.map((row) => row.id)) // the conflict values replace any older save-raised flag
-      return { kind: 'conflict', latest: result.honors[0] ?? row } // the dialog shows what changed
+      pages.applyRows(result.items) // the list shows the latest values
+      flag(result.items) // and flags them
+      dropStale(result.items.map((row) => row.id)) // the conflict values replace any older save-raised flag
+      return { kind: 'conflict', latest: result.items[0] ?? row } // the dialog shows what changed
     }
     return { kind: result.kind } // the dialog says what happened
   }
@@ -364,10 +364,10 @@ export function useAdminHonors() {
    * @param picture the resized picture
    * @return what happened, for the sheet to show
    */
-  const uploadItemPicture = async (row: AdminHonor, picture: Blob): Promise<PictureOutcome> => {
+  const uploadItemPicture = async (row: AdminItem, picture: Blob): Promise<PictureOutcome> => {
     const result = await uploadPicture(row.id, row.image, picture) // the one request
     if (result.kind === 'saved') {
-      const shown = { ...row, image: result.honor.image, modifiedAt: result.honor.modifiedAt } // only the picture and the change time move, so other shown fields stay as the admin saw them
+      const shown = { ...row, image: result.item.image, modifiedAt: result.item.modifiedAt } // only the picture and the change time move, so other shown fields stay as the admin saw them
       pages.applyRows([shown]) // the row stays in place
       const entry = pendingRef.current[row.id] // the row's unsaved edits, if any
       if (entry !== undefined)
@@ -377,13 +377,13 @@ export function useAdminHonors() {
         }) // the snapshot follows, so a later Delete guard sees the new change time; the edits stay
       setStaleFlags((current) => ({
         ...Object.fromEntries(Object.entries(current).filter(([id]) => id !== row.id)), // this row's old flag goes
-        ...Object.fromEntries(staleRows([shown], [result.honor]).map((stale) => [stale.id, stale])), // a shown value that is out of date gets the same note as a conflict
+        ...Object.fromEntries(staleRows([shown], [result.item]).map((stale) => [stale.id, stale])), // a shown value that is out of date gets the same note as a conflict
       })) // the other flags stay
     } else if (result.kind === 'conflict') {
-      const rebased = rebaseOnFetch(dropIds(pendingRef.current, result.deletedIds), result.honors) // gone items lose their edits; the rest move onto the current rows
+      const rebased = rebaseOnFetch(dropIds(pendingRef.current, result.deletedIds), result.items) // gone items lose their edits; the rest move onto the current rows
       commitPending(rebased.pending) // the edits stay
-      pages.applyRows(result.honors) // the list shows the latest values
-      dropStale(result.honors.map((row) => row.id)) // the latest values replace any older save-raised flag
+      pages.applyRows(result.items) // the list shows the latest values
+      dropStale(result.items.map((row) => row.id)) // the latest values replace any older save-raised flag
       pages.removeRows(result.deletedIds) // another admin deleted these
       if (rebased.flagged.length > 0) flag(rebased.flagged) // an edited field moved
       setConflicts((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !result.deletedIds.includes(id)))) // deleted rows lose their flag

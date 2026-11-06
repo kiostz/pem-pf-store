@@ -9,17 +9,17 @@ const BUTTON_BOX = `${CONTROL_BOX} w-11 rounded-pill transition-transform durati
 
 /**
  * Draws the stepper.
- * @param honorName the item's name, used in the labels
+ * @param itemName the item's name, used in the labels
  * @param stock the stock now
  * @param onChange called with the new stock when a button or the typed number commits it
  * @return a group with minus, the number field and plus
  */
 export function StockStepper({
-  honorName,
+  itemName,
   stock,
   onChange,
 }: {
-  honorName: string // the item's name
+  itemName: string // the item's name
   stock: number // the stock now
   onChange: (stock: number) => void // called on a real change
 }) {
@@ -38,7 +38,7 @@ export function StockStepper({
     // One labelled group so a screen reader names all three controls together.
     <div
       role="group"
-      aria-label={`Stock of ${honorName}`}
+      aria-label={`Stock of ${itemName}`}
       className="border-border-subtle bg-bg-surface rounded-pill flex shrink-0 items-center border"
     >
       {/* Minus: aria-disabled at 0 so focus stays, and the label says why. */}
@@ -55,7 +55,7 @@ export function StockStepper({
       <input
         type="text" // a number input would add spinners and accept "e"
         inputMode="numeric" // number keypad on phones
-        aria-label={`Stock of ${honorName}`} // names the item
+        aria-label={`Stock of ${itemName}`} // names the item
         value={draft ?? String(stock)} // the typing, or the real stock
         onFocus={(event) => event.target.select()} // typing replaces the number
         onChange={(event) => setDraft(event.target.value.replace(/\D/g, '')) /* digits only */}

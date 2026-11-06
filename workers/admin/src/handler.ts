@@ -1,17 +1,17 @@
 // Admin Worker request handler: the Access gate, CSRF checks, router, headers and short error codes.
 
-import { addHonor } from './add-honor' // The Add.
+import { addItem } from './add-item' // The Add.
 import { addClub, editClub, readAdminClubs, removeClub, reorderClubs } from './clubs' // The club reads and writes.
-import { deleteHonor } from './delete-honor' // The Delete.
+import { deleteItem } from './delete-item' // The Delete.
 import { isItemId } from './item-id' // The item id check.
-import { readAdminPage, readMeta, saveHonorChanges } from './honors' // The reads and the guarded save.
+import { readAdminPage, readMeta, saveItemChanges } from './items' // The reads and the guarded save.
 import { changeOrderStep, readOrderPage } from './orders' // The order reads and the step change.
 import { parseOrderQuery } from './order-query' // The order list query validator.
 import { readAdminSettings, saveAdminPrices, saveAdminSettings } from './settings' // The settings read and guarded save.
 import { parseItemQuery } from './item-query' // The list query validator.
 import { hasSignature, MAX_PICTURE_BYTES, type PictureType, uploadPicture } from './picture-upload' // The picture upload.
 import { PICTURE_KEY, readPicture } from './pictures' // The key pattern and the picture read.
-import { parseDeleteRequest, parseHonorChanges, parseNewItem } from './validate-changes' // The body validators.
+import { parseDeleteRequest, parseItemChanges, parseNewItem } from './validate-changes' // The body validators.
 import { parsePricesChange, parseSettingsChange, parseStepChange } from './validate-orders' // The order and settings body validators.
 import { parseClubEdit, parseClubFields, parseClubOrder, parseClubRemove } from './validate-clubs' // The club body validators.
 import type { ClubResult } from './admin-types' // The club write outcome.
@@ -336,16 +336,16 @@ function clubWrite<T>(parse: (body: unknown) => T | null, write: (db: D1Database
 async function postChanges(request: Request, env: Env): Promise<Response> {
   const read = await readJsonBody(request) // The shared checks.
   if ('refusal' in read) return read.refusal // Refused.
-  const changes = parseHonorChanges(read.body) // Null when invalid.
+  const changes = parseItemChanges(read.body) // Null when invalid.
   if (changes === null) return json({ error: 'invalid' }, 400) // Fails validation.
-  const result = await saveHonorChanges(env.DB, new Date().toISOString(), changes) // The guarded save, with one time for the request.
+  const result = await saveItemChanges(env.DB, new Date().toISOString(), changes) // The guarded save, with one time for the request.
   if (result.kind === 'saved') return json({ items: result.items }, 200) // As saved.
   if (result.kind === 'name-taken') return json({ error: 'name-taken', ids: result.ids }, 409) // Nothing written.
   return json({ error: 'conflict', items: result.items, deletedIds: result.deletedIds }, 409) // Current rows and gone ids; nothing written.
 }
 
 /**
- * Handles `POST /api/items`: adds a Club-added honor.
+ * Handles `POST /api/items`: adds a Club-added item.
  * @param request The request.
  * @param env The Worker bindings.
  * @return The response.
@@ -355,13 +355,13 @@ async function postItem(request: Request, env: Env): Promise<Response> {
   if ('refusal' in read) return read.refusal // Refused.
   const input = parseNewItem(read.body) // Null when invalid.
   if (input === null) return json({ error: 'invalid' }, 400) // Fails validation.
-  const result = await addHonor(env.DB, input, new Date().toISOString()) // Both times are this one.
+  const result = await addItem(env.DB, input, new Date().toISOString()) // Both times are this one.
   if (result.kind === 'added') return json({ item: result.item }, 201) // Created.
   return json({ error: result.kind }, 409) // `name-taken` or `id-taken`.
 }
 
 /**
- * Handles `POST /api/items/delete`: deletes a Club-added honor the admin saw unchanged.
+ * Handles `POST /api/items/delete`: deletes a Club-added item the admin saw unchanged.
  * @param request The request.
  * @param env The Worker bindings.
  * @return The response.
@@ -371,7 +371,7 @@ async function postDelete(request: Request, env: Env): Promise<Response> {
   if ('refusal' in read) return read.refusal // Refused.
   const input = parseDeleteRequest(read.body) // Null when invalid.
   if (input === null) return json({ error: 'invalid' }, 400) // Fails validation.
-  const result = await deleteHonor(env.DB, env.PICTURES, input) // The guarded delete.
+  const result = await deleteItem(env.DB, env.PICTURES, input) // The guarded delete.
   if (result.kind === 'deleted') return json({ deletedId: input.id }, 200) // Gone.
   if (result.kind === 'built-in') return json({ error: 'built-in' }, 400) // Never deleted.
   return json({ error: 'conflict', items: result.items }, 409) // Changed since viewing.
@@ -388,7 +388,7 @@ async function postPicture(request: Request, env: Env): Promise<Response> {
   const type = (request.headers.get('Content-Type') ?? '').split(';')[0].trim().toLowerCase() // The media type without parameters.
   if (type !== 'image/webp' && type !== 'image/png') return json({ error: 'picture-only' }, 415) // Forces a CORS preflight for other sites.
   const { searchParams } = new URL(request.url) // The id and the key seen.
-  const id = searchParams.get('id') // The honor.
+  const id = searchParams.get('id') // The item.
   const seen = searchParams.get('seen') // The key the admin saw; empty for none.
   if (id === null || !isItemId(id) || seen === null || (seen !== '' && !PICTURE_KEY.test(seen))) return json({ error: 'invalid' }, 400) // Bad or missing values.
   const bytes = await readLimitedBytes(request, MAX_PICTURE_BYTES) // Capped read.

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react' // the dialog element, focus and the drafts
 import { PatchPicture } from '@/shared/ui/PatchPicture.tsx' // the current picture or its Category mark
-import type { AdminHonor, NewItem } from '../../../workers/admin/src/admin-types.ts' // the row and the new item
+import type { AdminItem, NewItem } from '../../../workers/admin/src/admin-types.ts' // the row and the new item
 import { ACTION_BOX } from '@/shared/ui/button-box.ts' // the shared 44 px pill action
 import { SIGNED_OUT_NOTE } from './admin-api.ts' // the 403 line
 import { formatAdminTime } from './admin-dates.ts' // the times in Malaysia
@@ -12,7 +12,7 @@ import { describeLatest } from './latest-line.ts' // what the item holds now
 import { currencySymbol, formatPriceInput, parsePrice } from './price-input.ts' // the price field
 import type { ItemEdits } from './pending-changes.ts' // the pending edits
 import { browserResizeDeps, resizePicture, type ResizeDeps } from './resize-picture.ts' // shrinks a chosen file
-import type { AddOutcome, DeleteOutcome, PictureOutcome } from './use-admin-honors.ts' // what Add, Delete and a picture save end in
+import type { AddOutcome, DeleteOutcome, PictureOutcome } from './use-admin-items.ts' // what Add, Delete and a picture save end in
 
 const MAX_NAME = 100 // the Worker's limit
 const PICTURE_BASE = '/pictures' // the Admin Worker serves pictures from its own origin
@@ -39,7 +39,7 @@ function checkName(
 /**
  * Draws the sheet.
  * @param mode edit or add
- * @param honor the row being edited (edit only)
+ * @param item the row being edited (edit only)
  * @param pending the row's unsaved edits, shown instead of the stored values (edit only)
  * @param categories the fixed category list
  * @param currency the ISO currency code
@@ -55,7 +55,7 @@ function checkName(
  */
 export function ItemSheet({
   mode,
-  honor,
+  item,
   pending,
   categories,
   currency,
@@ -69,7 +69,7 @@ export function ItemSheet({
   onClose,
 }: {
   mode: 'edit' | 'add' // which sheet
-  honor?: AdminHonor // the row, in edit
+  item?: AdminItem // the row, in edit
   pending?: ItemEdits // its unsaved edits
   categories: string[] // the fixed list
   currency: string // the ISO code
@@ -77,17 +77,17 @@ export function ItemSheet({
   isNameTaken?: (name: string) => boolean // another item has it
   onDone: (values: { name: string; category: string; priceCents: number }) => void // an edit confirmed
   onAdd: (item: NewItem) => Promise<AddOutcome> // an add
-  onDelete: (honor: AdminHonor) => Promise<DeleteOutcome> // a delete
-  onPicture: (honor: AdminHonor, picture: Blob) => Promise<PictureOutcome> // a picture save
+  onDelete: (item: AdminItem) => Promise<DeleteOutcome> // a delete
+  onPicture: (item: AdminItem, picture: Blob) => Promise<PictureOutcome> // a picture save
   pictureDeps?: ResizeDeps // the browser pieces a resize needs
   onClose: () => void // go away
 }) {
   const dialog = useRef<HTMLDialogElement>(null) // the element
   const busy = useRef(false) // a request is running; read between renders so a double click sends once
-  const [name, setName] = useState(mode === 'edit' ? (pending?.name ?? honor!.name) : '') // the name draft
-  const [category, setCategory] = useState(mode === 'edit' ? (pending?.category ?? honor!.category) : '') // the category draft
+  const [name, setName] = useState(mode === 'edit' ? (pending?.name ?? item!.name) : '') // the name draft
+  const [category, setCategory] = useState(mode === 'edit' ? (pending?.category ?? item!.category) : '') // the category draft
   const [priceText, setPriceText] = useState(
-    formatPriceInput(mode === 'edit' ? (pending?.priceCents ?? honor!.priceCents) : defaultPriceCents),
+    formatPriceInput(mode === 'edit' ? (pending?.priceCents ?? item!.priceCents) : defaultPriceCents),
   ) // the price draft
   const [errors, setErrors] = useState<{ name?: string; category?: string; price?: string; form?: string }>({}) // the lines to show
   const [adding, setAdding] = useState(false) // an Add is running
@@ -224,11 +224,11 @@ export function ItemSheet({
 
   /** Saves the previewed picture at once and handles the outcome. */
   const savePicture = async () => {
-    if (pictureBusy.current || preview === null || honor === undefined) return // one request at a time
+    if (pictureBusy.current || preview === null || item === undefined) return // one request at a time
     pictureBusy.current = true // a second click is ignored
     setPictureFailure(null) // an old failure line goes
     setPictureStep('saving') // the button says so
-    const outcome = await onPicture(honor, preview.blob) // the one request
+    const outcome = await onPicture(item, preview.blob) // the one request
     pictureBusy.current = false // free again
     if (!mounted.current) return // the sheet went meanwhile
     if (outcome === 'saved' || outcome === 'conflict') {
@@ -243,10 +243,10 @@ export function ItemSheet({
 
   /** Runs the confirmed delete and handles its outcome. */
   const confirmDelete = async () => {
-    if (busy.current || honor === undefined) return // one request at a time
+    if (busy.current || item === undefined) return // one request at a time
     busy.current = true // a second click is ignored
     setDeleting(true) // the dialog says so
-    const outcome = await onDelete(honor) // the one request
+    const outcome = await onDelete(item) // the one request
     busy.current = false // free again
     setDeleting(false) // the dialog is back
     if (outcome.kind === 'deleted') return onClose() // gone
@@ -301,7 +301,7 @@ export function ItemSheet({
           {/* The three fields; a line under a field says what to fix. */}
           <div className="mt-3 flex flex-col gap-4">
             {/* The picture of an existing item: choose, preview, then save at once. */}
-            {mode === 'edit' && honor !== undefined && (
+            {mode === 'edit' && item !== undefined && (
               <section aria-labelledby="item-picture-label">
                 <p id="item-picture-label" className="mb-1 text-sm font-medium">
                   Picture
@@ -310,7 +310,7 @@ export function ItemSheet({
                   {preview !== null ? (
                     <img src={preview.url} alt="The new picture" width={112} height={112} className="size-28 shrink-0 object-contain" /> // the 200 px result, before it is saved
                   ) : (
-                    <PatchPicture honor={honor} size="card" pictureBase={PICTURE_BASE} /> // what is stored now
+                    <PatchPicture honor={item} size="card" pictureBase={PICTURE_BASE} /> // what is stored now
                   )}
                   <div className="flex min-w-0 flex-col items-start gap-2">
                     {preview === null ? (
@@ -321,7 +321,7 @@ export function ItemSheet({
                         onClick={() => pictureStep !== 'preparing' && fileInput.current?.click()} // opens the file dialog
                         className={SOFT_BUTTON} // the quiet look
                       >
-                        {honor.image === null ? 'Choose picture' : 'Replace picture'}
+                        {item.image === null ? 'Choose picture' : 'Replace picture'}
                       </button>
                     ) : (
                       <>
@@ -446,10 +446,10 @@ export function ItemSheet({
             </div>
           </div>
           {/* The times of an existing item, or what an Add starts with. */}
-          {mode === 'edit' && honor !== undefined ? (
+          {mode === 'edit' && item !== undefined ? (
             <p className="text-text-muted mt-4 text-sm">
-              <span className="block">{`Created ${formatAdminTime(honor.createdAt)}`}</span> {/* one line each */}
-              <span className="block">{`Last changed ${formatAdminTime(honor.modifiedAt)}`}</span>
+              <span className="block">{`Created ${formatAdminTime(item.createdAt)}`}</span> {/* one line each */}
+              <span className="block">{`Last changed ${formatAdminTime(item.modifiedAt)}`}</span>
             </p>
           ) : (
             <p className="text-text-muted mt-4 text-sm">New items start Hidden with 0 in stock.</p>
@@ -468,7 +468,7 @@ export function ItemSheet({
             >
               {mode === 'edit' ? 'Done' : adding ? 'Adding…' : 'Add item'}
             </button>
-            {mode === 'edit' && honor?.clubAdded === true && (
+            {mode === 'edit' && item?.clubAdded === true && (
               // Delete item opens the confirmation dialog.
               <button
                 type="button"
@@ -484,9 +484,9 @@ export function ItemSheet({
           </div>
         </form>
       </dialog>
-      {confirming && honor !== undefined && (
+      {confirming && item !== undefined && (
         <DeleteDialog
-          name={honor.name}
+          name={item.name}
           busy={deleting}
           error={deleteError}
           onConfirm={confirmDelete}

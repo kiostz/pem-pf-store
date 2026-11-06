@@ -1,11 +1,11 @@
 // Validates the body of a save where it enters: strict shape, bounded values, no surprises reach the database.
 
-import type { DeleteRequest, HonorChange, HonorStatus, NewItem } from './admin-types' // The change shapes.
+import type { DeleteRequest, ItemChange, ItemStatus, NewItem } from './admin-types' // The change shapes.
 import { CATEGORIES } from './categories' // The category list.
 import { isItemId } from './item-id' // The item id check.
 import { isCleanText, parseItemName } from './validate-text' // Text rules.
 
-// The most honors one save may hold.
+// The most items one save may hold.
 export const MAX_CHANGES = 500
 // The highest stock the admin may set.
 export const MAX_STOCK = 9999
@@ -64,7 +64,7 @@ function validStock(side: unknown, which: 'from' | 'to'): side is number {
  * @param side The raw status.
  * @return True for `active` or `hidden`.
  */
-function validStatus(side: unknown): side is HonorStatus {
+function validStatus(side: unknown): side is ItemStatus {
   return STATUSES.includes(side) // Exact, case-sensitive.
 }
 
@@ -100,15 +100,15 @@ function validPrice(side: unknown, which: 'from' | 'to'): side is number {
 }
 
 /**
- * Parses one honor's change.
+ * Parses one item's change.
  * @param value The raw change.
  * @return The change, or null when invalid.
  */
-function parseChange(value: unknown): HonorChange | null {
+function parseChange(value: unknown): ItemChange | null {
   if (!isRecord(value) || !onlyKeys(value, ['id', 'status', 'stock', 'name', 'category', 'priceCents'])) return null // No extra keys.
-  const { id } = value // The honor id.
+  const { id } = value // The item id.
   if (!isItemId(id)) return null // Slug only.
-  const change: HonorChange = { id } // Starts with the id only.
+  const change: ItemChange = { id } // Starts with the id only.
   if (value.status !== undefined) { // A status change is present.
     const status = parsePair(value.status, validStatus) // Status pair.
     if (status === null) return null // Invalid status.
@@ -142,11 +142,11 @@ function parseChange(value: unknown): HonorChange | null {
  * @param body The JSON-parsed request body.
  * @return The changes, or null when anything is invalid (the whole save is refused).
  */
-export function parseHonorChanges(body: unknown): HonorChange[] | null {
+export function parseItemChanges(body: unknown): ItemChange[] | null {
   if (!isRecord(body) || !onlyKeys(body, ['changes'])) return null // Only `changes`.
   const { changes } = body // The raw list.
   if (!Array.isArray(changes) || changes.length === 0 || changes.length > MAX_CHANGES) return null // 1 to 500.
-  const parsed: HonorChange[] = [] // The valid changes.
+  const parsed: ItemChange[] = [] // The valid changes.
   for (const raw of changes) { // Each raw change.
     const change = parseChange(raw) // Null when invalid.
     if (change === null) return null // One bad entry refuses all.

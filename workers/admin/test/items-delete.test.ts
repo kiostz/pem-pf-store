@@ -2,7 +2,7 @@
 
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { deleteHonor } from '../src/delete-honor'
+import { deleteItem } from '../src/delete-item'
 import { fullRowOf, postTo, seedHonors, wire } from './helpers'
 
 // The row as the admin saw it.
@@ -123,14 +123,14 @@ function racing(race: () => Promise<unknown>): D1Database {
 describe('the delete statement\'s own guard', () => {
   it('answers conflict with the current row and keeps the item when a sale lands just before the DELETE', async () => {
     // Catches a guard column dropped from the DELETE's WHERE: an item sold a second earlier would be deleted unseen.
-    const result = await deleteHonor(racing(() => env.DB.prepare('UPDATE items SET stock = 3 WHERE id = ?').bind('camp-shirt').run()), env.PICTURES, { id: 'camp-shirt', seen: seen as never })
+    const result = await deleteItem(racing(() => env.DB.prepare('UPDATE items SET stock = 3 WHERE id = ?').bind('camp-shirt').run()), env.PICTURES, { id: 'camp-shirt', seen: seen as never })
     expect(result).toEqual({ kind: 'conflict', items: [wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', status: 'hidden', stock: 3, priceCents: 1500, clubAdded: true, createdAt: seen.modifiedAt, modifiedAt: seen.modifiedAt })] })
     expect(await fullRowOf('camp-shirt')).not.toBeNull()
   })
 
   it('answers deleted when another admin deletes the row in that gap', async () => {
     // Catches a 409 or 500 for an item that is gone, which is the outcome the admin wanted.
-    const result = await deleteHonor(racing(() => env.DB.prepare('DELETE FROM items WHERE id = ?').bind('camp-shirt').run()), env.PICTURES, { id: 'camp-shirt', seen: seen as never })
+    const result = await deleteItem(racing(() => env.DB.prepare('DELETE FROM items WHERE id = ?').bind('camp-shirt').run()), env.PICTURES, { id: 'camp-shirt', seen: seen as never })
     expect(result).toEqual({ kind: 'deleted' })
   })
 })

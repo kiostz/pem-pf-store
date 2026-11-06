@@ -1,7 +1,7 @@
 // Rows and meta the admin tests share, shaped like the Admin Worker's answers, so each test file builds on the same four items.
 
 import type {
-  AdminHonor,
+  AdminItem,
   AdminMeta,
 } from '../../../workers/admin/src/admin-types.ts' // the shared shapes
 
@@ -11,8 +11,8 @@ import type {
  * @return a full row
  */
 export const makeItem = (
-  fields: Partial<AdminHonor> & { id: string },
-): AdminHonor => ({
+  fields: Partial<AdminItem> & { id: string },
+): AdminItem => ({
   name: fields.id, // the id doubles as a name unless given
   category: 'Nature', // a category of the fixed list
   status: 'active', // shown to buyers
@@ -26,7 +26,7 @@ export const makeItem = (
 }) // a full row
 
 // Four rows, one Hidden, one Club-added.
-export const rows: AdminHonor[] = [
+export const rows: AdminItem[] = [
   makeItem({
     id: 'africa-lore',
     name: 'Africa Lore',
