@@ -5,22 +5,22 @@ import { describe, expect, it } from 'vitest' // test API
 import { CartProvider } from '@/features/cart/CartProvider.tsx' // the state the pill reads
 import { useCart } from '@/features/cart/use-cart.ts' // reads and sets the cart
 import type { Item } from '@/shared/data/types.ts' // the shape of an item
-import { honor } from '@/test/shop-fetch.ts' // the honor builder
+import { item } from '@/test/shop-fetch.ts' // the item builder
 import { PILL_DOCK, PILL_SURFACE } from '@/shared/ui/floating-pill-box.ts' // the shared pill classes
 import { TabPill } from './TabPill.tsx' // code under test
 
-const honors: Item[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')] // two listed at RM 4; africa-lore is not listed, like a Hidden item
+const items: Item[] = [item('knot-tying', 'Knot Tying'), item('ants', 'Ants')] // two listed at RM 4; africa-lore is not listed, like a Hidden item
 
 /**
  * Renders the pill with buttons that set quantities.
- * @param options the pill's current tab, honors (null while loading) and shop address
+ * @param options the pill's current tab, items (null while loading) and shop address
  * @return nothing; query the screen
  */
 function renderPill({
   current = 'catalogue',
-  honorList = honors,
+  itemList = items, // the items, null while loading
   shopHref = '#/shop',
-}: { current?: 'home' | 'catalogue'; honorList?: Item[] | null; shopHref?: string } = {}) { // the options type: the items may be null while loading
+}: { current?: 'home' | 'catalogue'; itemList?: Item[] | null; shopHref?: string } = {}) { // the options type: the items may be null while loading
   /**
    * Test buttons that stand in for the steppers.
    * @return one button per quantity change
@@ -39,8 +39,15 @@ function renderPill({
     )
   }
   render(
-    <CartProvider honors={honorList}>
-      <TabPill current={current} honors={honorList} currency={honorList ? 'MYR' : null} shopHref={shopHref} />
+    <CartProvider
+      items={itemList} // the items the pill counts
+    >
+      <TabPill
+        current={current} // the tab the test marks as open
+        items={itemList} // the items the pill counts
+        currency={itemList ? 'MYR' : null} // a currency only once items exist
+        shopHref={shopHref} // where the Shop tab links
+      />
       <Controls />
     </CartProvider>,
   )
@@ -122,9 +129,9 @@ describe('TabPill', () => {
     expect(tabs().cart).toHaveAccessibleName('Cart')
   })
 
-  it('shows the plain tab while the honors are not loaded', () => {
+  it('shows the plain tab while the items are not loaded', () => { // the pill with items still null, as before the data loads
     // catches: a count or a crash before the data arrives
-    renderPill({ honorList: null })
+    renderPill({ itemList: null }) // pill with no items loaded
     expect(tabs().cart).toHaveAccessibleName('Cart')
   })
 

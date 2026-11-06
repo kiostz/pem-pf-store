@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart's key
 import { SENT_ORDER_STORAGE_KEY } from '@/features/order/sent-order-storage.ts' // the stored sent order's key
-import { honor, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
+import { item, shopFetch } from '@/test/shop-fetch.ts' // the item builder and the /shop fake
 import { App } from './App.tsx' // code under test
 
 // The real captcha loads Turnstile's script, which a test must not do; this stand-in ticks on demand.
@@ -49,7 +49,7 @@ function savedFor(init: RequestInit | undefined): Response {
  * @return the fetch stub, to read the order calls
  */
 function serve(orders: (init: RequestInit | undefined) => Promise<Response> | Response = savedFor) {
-  const fetchFn = shopFetch([honor('knot-tying', 'Knot Tying')], [], (url, init) => (url.endsWith('/orders') ? orders(init) : undefined)) // the Worker answers as told, the shop as the shop
+  const fetchFn = shopFetch([item('knot-tying', 'Knot Tying')], [], (url, init) => (url.endsWith('/orders') ? orders(init) : undefined)) // the Worker answers as told, the shop as the shop
   vi.stubGlobal('fetch', fetchFn)
   return fetchFn
 }
@@ -58,7 +58,7 @@ function serve(orders: (init: RequestInit | undefined) => Promise<Response> | Re
 function saveMixedCart() {
   window.localStorage.setItem(
     CART_STORAGE_KEY,
-    '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-honor":3}}',
+    '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-item":3}}', // an id the shop does not list
   ) // 2 orderable, 4 not
 }
 
@@ -76,7 +76,7 @@ function fillAndTick() {
  * @param fetchFn the fetch stub
  * @return the ids of each order request's lines
  */
-function sentHonorIds(fetchFn: ReturnType<typeof serve>): string[][] {
+function sentItemIds(fetchFn: ReturnType<typeof serve>): string[][] {
   const calls = fetchFn.mock.calls as unknown as Array<[string, RequestInit]> // url and init of each call
   return calls
     .filter(([url]) => url.endsWith('/orders')) // the order endpoint only
@@ -110,12 +110,12 @@ describe('App checkout path', () => {
       fireEvent.click(screen.getByRole('button', { name: /^Send order/ }))
     })
     expect(await screen.findByRole('heading', { name: 'Order sent' })).toBeInTheDocument()
-    const sentIds = sentHonorIds(fetchFn)
+    const sentIds = sentItemIds(fetchFn) // the ids the order sent
     expect(sentIds).toHaveLength(2) // the drop and the retry
     for (const ids of sentIds) expect(ids).toEqual(['knot-tying']) // never an unavailable line
     const confirmation = screen.getByRole('main') // the confirmation page
     expect(within(confirmation).queryByText(/Africa Lore/)).not.toBeInTheDocument()
-    expect(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY) ?? '').not.toMatch(/africa-lore|no-such-honor/) // the kept order lists no unavailable line
+    expect(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY) ?? '').not.toMatch(/africa-lore|no-such-item/) // the kept order lists no unavailable line
     expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{}}')
   })
 
@@ -161,7 +161,7 @@ describe('App checkout path', () => {
     render(<App />)
     expect(await screen.findByText('2 items are no longer available')).toBeInTheDocument()
     expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe(
-      '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-honor":3}}',
+      '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-item":3}}', // an id the shop does not list
     ) // nothing was written
   })
 
@@ -275,7 +275,7 @@ describe('App checkout path', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.stubGlobal(
       'fetch',
-      shopFetch([honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')], [], (url) =>
+      shopFetch([item('knot-tying', 'Knot Tying'), item('ants', 'Ants')], [], (url) => // the shop answers with these items
         url.endsWith('/orders')
           ? new Response(JSON.stringify({ error: 'stock', lines: [{ itemId: 'knot-tying', stock: null }] }), { status: 409 })
           : undefined,
@@ -299,7 +299,7 @@ describe('App checkout path', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.stubGlobal(
       'fetch',
-      shopFetch([honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants'), honor('birds', 'Birds')], [], (url) =>
+      shopFetch([item('knot-tying', 'Knot Tying'), item('ants', 'Ants'), item('birds', 'Birds')], [], (url) => // the shop answers with these items
         url.endsWith('/orders')
           ? new Response(
               JSON.stringify({
@@ -336,7 +336,7 @@ describe('App checkout path', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.stubGlobal(
       'fetch',
-      shopFetch([honor('knot-tying', 'Knot Tying', { stock: 1 })], [], (url) =>
+      shopFetch([item('knot-tying', 'Knot Tying', { stock: 1 })], [], (url) => // the shop answers with these items
         url.endsWith('/orders')
           ? new Response(JSON.stringify({ error: 'stock', lines: [{ itemId: 'knot-tying', stock: 0 }] }), { status: 409 })
           : undefined,

@@ -16,7 +16,7 @@ const STACK_BOX = 'flex-col justify-center gap-0.5 text-xs' // icon over label, 
 /**
  * Draws the pill; the current tab is marked, and the Cart tab counts what is orderable.
  * @param current the tab for the screen showing
- * @param honors every honor in the data, or null until it has loaded
+ * @param items every item in the data, or null until it has loaded
  * @param currency the currency code from the settings, or null until it has loaded
  * @param shopHref the last Shop address, so the Shop tab brings back the category
  * @param cartLinkRef lets the app focus the Cart tab when the buyer comes back from the cart
@@ -25,21 +25,21 @@ const STACK_BOX = 'flex-col justify-center gap-0.5 text-xs' // icon over label, 
  */
 export function TabPill({
   current,
-  honors,
+  items, // every item, null while loading
   currency,
   shopHref,
   cartLinkRef,
   onOpenCart,
 }: {
   current: 'home' | 'catalogue' // which tab is the current page
-  honors: Item[] | null // every item, null while loading
+  items: Item[] | null // every item, null while loading
   currency: string | null // the currency code, null while loading
   shopHref: string // the last Shop address
   cartLinkRef?: Ref<HTMLAnchorElement> // for focus on return
   onOpenCart?: (event: MouseEvent<HTMLAnchorElement>) => void // the click, so the app can tell a plain open from a new-tab one
 }) {
   const { quantities } = useCart() // the cart
-  const { lines } = honors ? resolveCart(quantities, honors) : { lines: [] } // order lines A to Z, none until the honors load
+  const { lines } = items ? resolveCart(quantities, items) : { lines: [] } // order lines A to Z, none until the items load
   const count = cartCount(lines) // the Item count
   const totalCents = estimatedTotalCents(lines) // the estimated total
   const grown = lines.length > 0 && currency !== null // only with something orderable

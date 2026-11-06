@@ -100,7 +100,9 @@ describe('OrderForm with a theme change', () => {
     vi.stubGlobal('fetch', fetchMock)
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":3}}') // the cart
     render(
-      <CartProvider honors={null}>
+      <CartProvider
+        items={null} // the items, null while loading
+      >
         <OrderFormProvider>
           <CartProbe />
           <OrderForm

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // where the cart is kept
 import { CartProvider } from '@/features/cart/CartProvider.tsx' // the cart state the steppers edit
 import type { Item } from '@/shared/data/types.ts' // the shape of an item
-import { honor as makeHonor, shopBody, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
+import { item as makeItem, shopBody, shopFetch } from '@/test/shop-fetch.ts' // the item builder and the /shop fake
 import { Catalogue } from './Catalogue.tsx' // code under test
 import { useCatalogueData } from './use-catalogue-data.ts' // the load the catalogue now receives
 
@@ -19,7 +19,7 @@ function CatalogueWithCart({ initialCategory = null, onSelect }: { initialCatego
   const [category, setCategory] = useState<string | null>(initialCategory) // stands in for the address, which App owns
   return (
     // the cart provider gets the loaded items
-    <CartProvider honors={data.state.status === 'ready' ? data.state.items : null}>
+    <CartProvider items={data.state.status === 'ready' ? data.state.items : null}>
       <Catalogue
         data={data}
         category={category}
@@ -33,22 +33,22 @@ function CatalogueWithCart({ initialCategory = null, onSelect }: { initialCatego
 }
 
 /**
- * Builds one honor for the fake shop.
+ * Builds one item for the fake shop.
  * @param name display name
  * @param category its category
  * @param image the picture path, or null for the category mark
- * @return an honor as the shop lists it
+ * @return an item as the shop lists it
  */
-function honor(name: string, category: string, image: string | null = null) {
-  return makeHonor(name.toLowerCase().replace(/\W+/g, '-'), name, { category, image }) // image null by default: the row shows its category mark
+function item(name: string, category: string, image: string | null = null) {
+  return makeItem(name.toLowerCase().replace(/\W+/g, '-'), name, { category, image }) // image null by default: the row shows its category mark
 }
 
 /**
- * Makes the global fetch answer with the /shop body for these honors.
- * @param honors the honors the shop lists
+ * Makes the global fetch answer with the /shop body for these items.
+ * @param items the items the shop lists
  */
-function serve(honors: Item[]) { // serve these items
-  vi.stubGlobal('fetch', shopFetch(honors)) // one answer for the one request
+function serve(items: Item[]) { // serve these items
+  vi.stubGlobal('fetch', shopFetch(items)) // one answer for the one request
 }
 
 const scrollIntoView = vi.fn() // stands in for the scroll jsdom cannot do
@@ -68,13 +68,13 @@ afterEach(() => {
 })
 
 describe('Catalogue', () => {
-  it('lists one flat list with no headings, honors A to Z across categories', async () => {
+  it('lists one flat list with no headings, items A to Z across categories', async () => { // one flat A to Z list across categories
     // catches: file order or category grouping leaking into the list, or a heading left in it
     serve([
-      honor('Leaves', 'Nature'),
-      honor('Knot Tying', 'Recreation'),
-      honor('Ants', 'Nature'),
-      honor('Braiding - Advanced', 'Arts and Crafts'),
+      item('Leaves', 'Nature'), // one test item the shop lists
+      item('Knot Tying', 'Recreation'), // one test item the shop lists
+      item('Ants', 'Nature'), // one test item the shop lists
+      item('Braiding - Advanced', 'Arts and Crafts'), // one test item the shop lists
     ])
     render(<CatalogueWithCart />)
     const list = await screen.findByRole('list')
@@ -89,7 +89,7 @@ describe('Catalogue', () => {
 
   it('shows each card its category label, and the label is not a button', async () => {
     // catches: a missing label, or a label that looks and acts like a control
-    serve([honor('Ants', 'Nature'), honor('Knot Tying', 'Recreation')])
+    serve([item('Ants', 'Nature'), item('Knot Tying', 'Recreation')]) // the shop lists these items
     render(<CatalogueWithCart />)
     const row = (await screen.findByText('Ants')).closest('li')!
     expect(within(row).getByText('Nature')).toBeInTheDocument()
@@ -99,7 +99,7 @@ describe('Catalogue', () => {
 
   it('keeps the grid one column below 348 px, where two columns are too narrow for the 134 px stepper', async () => {
     // catches: two columns on a 320 px phone, where the stepper sticks out of its card
-    serve([honor('Ants', 'Nature')])
+    serve([item('Ants', 'Nature')]) // the shop lists these items
     render(<CatalogueWithCart />)
     await screen.findByText('Ants')
     const classes = screen.getByRole('list').className.split(' ') // the grid's utility classes
@@ -110,16 +110,16 @@ describe('Catalogue', () => {
 
   it('draws the category label in the default text colour, not the muted grey that fails contrast on its chip', async () => {
     // catches: muted text (3.4:1) on the light chip
-    serve([honor('Ants', 'Nature')])
+    serve([item('Ants', 'Nature')]) // the shop lists these items
     render(<CatalogueWithCart />)
     const label = within((await screen.findByText('Ants')).closest('li')!).getByText('Nature') // the chip
     expect(label).toHaveClass('text-text-default')
     expect(label).not.toHaveClass('text-text-muted')
   })
 
-  it('shows each honor name and its price', async () => {
+  it('shows each item name and its price', async () => { // each card shows name and price
     // catches: a missing or unformatted price
-    serve([honor('Knot Tying', 'Recreation')])
+    serve([item('Knot Tying', 'Recreation')]) // the shop lists these items
     render(<CatalogueWithCart />)
     const row = (await screen.findByText('Knot Tying')).closest('li')!
     expect(row).toHaveTextContent(/RM\s?4\.00/)
@@ -127,7 +127,7 @@ describe('Catalogue', () => {
 
   it('shows every card its name, Category label, price and Add, with no stepper', async () => {
     // catches: a stepper on every card before anything is picked, or a card missing one of its four parts
-    serve([honor('Ants', 'Nature'), honor('Knot Tying', 'Recreation')])
+    serve([item('Ants', 'Nature'), item('Knot Tying', 'Recreation')]) // the shop lists these items
     render(<CatalogueWithCart />)
     await screen.findByText('Ants')
     const cards = screen.getAllByRole('listitem')
@@ -143,7 +143,7 @@ describe('Catalogue', () => {
 
   it('keeps a card in the cart showing its stepper after a search hides and shows it again', async () => {
     // catches: a card that forgets its quantity when the search unmounts it
-    serve([honor('Ants', 'Nature'), honor('Knot Tying', 'Recreation')])
+    serve([item('Ants', 'Nature'), item('Knot Tying', 'Recreation')]) // the shop lists these items
     render(<CatalogueWithCart />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add Ants' }))
     const search = screen.getByRole('searchbox', { name: 'Search items' })
@@ -155,16 +155,16 @@ describe('Catalogue', () => {
     expect(screen.getByRole('button', { name: 'Add Knot Tying' })).toBeInTheDocument()
   })
 
-  it('counts the honors, singular for one', async () => {
-    // catches: "1 honors" and a count that includes more than the loaded honors
-    serve([honor('Knot Tying', 'Recreation')])
+  it('counts the items, singular for one', async () => { // the count reads singular for one
+    // catches: "1 items" and a count that includes more than the loaded items
+    serve([item('Knot Tying', 'Recreation')]) // the shop lists these items
     render(<CatalogueWithCart />)
     expect(await screen.findByText('1 item')).toBeInTheDocument()
   })
 
-  it('renders all 299 honors at once, with no Load more and lazy pictures', async () => {
+  it('renders all 299 items at once, with no Load more and lazy pictures', async () => { // all 299 items render at once with lazy pictures
     // catches: pagination or a Load more button creeping back, rows dropped at full size, or pictures that load eagerly
-    serve(Array.from({ length: 299 }, (_, i) => honor(`Item ${i}`, 'Nature', `items/item-${i}.png`))) // 299 items with R2 keys
+    serve(Array.from({ length: 299 }, (_, i) => item(`Item ${i}`, 'Nature', `items/item-${i}.png`))) // 299 items with R2 keys
     render(<CatalogueWithCart />)
     expect(await screen.findByText('299 items')).toBeInTheDocument()
     expect(screen.getAllByRole('listitem')).toHaveLength(299)
@@ -176,14 +176,14 @@ describe('Catalogue', () => {
 
   it('renders every row when every image is null', async () => {
     // catches: rows dropped or broken when no picture exists
-    serve([honor('A', 'Nature'), honor('B', 'Nature'), honor('C', 'Nature')])
+    serve([item('A', 'Nature'), item('B', 'Nature'), item('C', 'Nature')]) // the shop lists these items
     render(<CatalogueWithCart />)
     await screen.findByText('A')
     expect(screen.getAllByRole('listitem')).toHaveLength(3)
     expect(screen.getAllByTestId('category-mark')).toHaveLength(3)
   })
 
-  it('says so when the shop lists no honor', async () => {
+  it('says so when the shop lists no item', async () => { // the message for a shop with no items
     // catches: a blank page when the list is empty
     serve([])
     render(<CatalogueWithCart />)
@@ -232,7 +232,7 @@ describe('Catalogue', () => {
     expect(screen.getByTestId('catalogue-skeleton')).toHaveClass('animate-skeleton')
     first.unmount()
     vi.unstubAllGlobals() // drop the never-answering fetch
-    serve([honor('Knot Tying', 'Recreation')])
+    serve([item('Knot Tying', 'Recreation')]) // one test item the shop lists
     render(<CatalogueWithCart />)
     await screen.findByText('Knot Tying')
     expect(screen.queryByText('Loading the shop')).not.toBeInTheDocument()
@@ -254,10 +254,10 @@ describe('Catalogue', () => {
     const skeletonGridClass = screen.getByTestId('catalogue-skeleton-grid').className // the skeleton's grid
     first.unmount()
     vi.unstubAllGlobals() // drop the never-answering fetch
-    serve([honor('Knot Tying', 'Recreation')])
+    serve([item('Knot Tying', 'Recreation')]) // one test item the shop lists
     render(<CatalogueWithCart />)
     expect(await screen.findByText('1 item')).toHaveClass('mt-3', 'min-h-6')
-    expect(screen.getByRole('listitem').className).toBe(skeletonCardClass) // the honor card and the skeleton card share one box
+    expect(screen.getByRole('listitem').className).toBe(skeletonCardClass) // the item card and the skeleton card share one box
     expect(screen.getByRole('list').className).toBe(skeletonGridClass) // and the grid
   })
 
@@ -266,7 +266,7 @@ describe('Catalogue', () => {
     const fetchFn = vi
       .fn()
       .mockRejectedValueOnce(new TypeError('Failed to fetch')) // the first request fails
-      .mockImplementation(async () => new Response(JSON.stringify(shopBody([honor('Knot Tying', 'Recreation')])))) // the retry succeeds
+      .mockImplementation(async () => new Response(JSON.stringify(shopBody([item('Knot Tying', 'Recreation')])))) // the retry succeeds
     vi.stubGlobal('fetch', fetchFn)
     render(<CatalogueWithCart />)
     expect(
@@ -288,7 +288,7 @@ describe('Catalogue', () => {
     ) // the count line's box
   })
 
-  it('keeps the toolbar space when the shop lists no honor', async () => {
+  it('keeps the toolbar space when the shop lists no item', async () => { // the toolbar keeps its space with no items
     // catches: the empty message landing 61 px above where the skeleton stood
     serve([])
     render(<CatalogueWithCart />)
@@ -299,7 +299,7 @@ describe('Catalogue', () => {
 
   it('has no toolbar space once the real toolbar shows', async () => {
     // catches: a blank 61 px band above the real toolbar
-    serve([honor('Knot Tying', 'Recreation')])
+    serve([item('Knot Tying', 'Recreation')]) // the shop lists these items
     render(<CatalogueWithCart />)
     await screen.findByText('Knot Tying')
     expect(screen.queryByTestId('catalogue-toolbar-space')).not.toBeInTheDocument()
@@ -309,10 +309,10 @@ describe('Catalogue', () => {
     /** Serves a small mixed catalogue and renders the screen once the list is up. */
     async function renderMixed() {
       serve([
-        honor('Knot Tying', 'Recreation'),
-        honor('Braiding - Advanced', 'Arts and Crafts'),
-        honor('Leaves', 'Nature'),
-        honor('Ants', 'Nature'),
+        item('Knot Tying', 'Recreation'), // one test item the shop lists
+        item('Braiding - Advanced', 'Arts and Crafts'), // one test item the shop lists
+        item('Leaves', 'Nature'), // one test item the shop lists
+        item('Ants', 'Nature'), // one test item the shop lists
       ])
       render(<CatalogueWithCart />)
       await screen.findByText('Ants')
@@ -464,7 +464,7 @@ describe('Catalogue', () => {
   describe('category from the address', () => {
     /** Serves Nature and Recreation items. */
     function serveTwoCategories() {
-      serve([honor('Ants', 'Nature'), honor('Knot Tying', 'Recreation')]) // one per category
+      serve([item('Ants', 'Nature'), item('Knot Tying', 'Recreation')]) // one per category
     }
 
     it('shows only the category it is given', async () => {
@@ -503,12 +503,12 @@ describe('Catalogue', () => {
 
 describe('Catalogue stock', () => {
   /**
-   * Builds an honor with a stock.
+   * Builds an item with a stock.
    * @param name display name
    * @param stock how many are left
-   * @return the honor
+   * @return the item
    */
-  const stocked = (name: string, stock: number) => makeHonor(name.toLowerCase().replace(/\W+/g, '-'), name, { stock })
+  const stocked = (name: string, stock: number) => makeItem(name.toLowerCase().replace(/\W+/g, '-'), name, { stock }) // an item with this stock, its id made from its name
 
   it('shows "Stock: N left" under the price, with a thousands separator, on every card', async () => {
     // catches: a missing stock line, or 1200 written without its separator

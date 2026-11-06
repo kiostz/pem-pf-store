@@ -47,7 +47,9 @@ describe('OrderFormProvider', () => {
     ) // the cut-off send
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}') // the line was lowered from 3
     render(
-      <CartProvider honors={null}>
+      <CartProvider
+        items={null} // the items, null while loading
+      >
         <OrderFormProvider>
           <Probe />
         </OrderFormProvider>
@@ -63,7 +65,9 @@ describe('OrderFormProvider', () => {
   it('reset empties every value and hides every error', () => {
     // catches: a sent order's name and email staying in the form for the next buyer on a shared computer
     render(
-      <CartProvider honors={null}>
+      <CartProvider
+        items={null} // the items, null while loading
+      >
         <OrderFormProvider>
           <Probe />
         </OrderFormProvider>
@@ -81,7 +85,9 @@ describe('OrderFormProvider', () => {
   it('reset clears the failure alert, as a new order starts', () => {
     // catches: the last order's "not sent" alert showing above the next order
     render(
-      <CartProvider honors={null}>
+      <CartProvider
+        items={null} // the items, null while loading
+      >
         <OrderFormProvider>
           <Probe />
         </OrderFormProvider>

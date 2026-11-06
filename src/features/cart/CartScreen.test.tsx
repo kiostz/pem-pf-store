@@ -7,17 +7,17 @@ import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' 
 import { OrderFormProvider } from '@/features/order/OrderFormProvider.tsx' // the form state the screen reads
 import { useOrderForm } from '@/features/order/use-order-form.ts' // starts a send
 import type { Item } from '@/shared/data/types.ts' // the shape of an item
-import { honor } from '@/test/shop-fetch.ts' // the honor builder
+import { item } from '@/test/shop-fetch.ts' // the item builder
 import { CART_STORAGE_KEY } from './cart-storage.ts' // where the cart is kept
 import { CartProvider } from './CartProvider.tsx' // the state the screen edits
 import { CartScreen } from './CartScreen.tsx' // code under test
 import { PILL_DOCK } from '@/shared/ui/floating-pill-box.ts' // the dock the pill and the note share
 import { useCart } from './use-cart.ts' // reads the cart
 
-const honors: Item[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants', { price: 3.5 })] // Knot Tying RM 4.00 and Ants RM 3.50; africa-lore is not listed, like a Hidden item
+const items: Item[] = [item('knot-tying', 'Knot Tying'), item('ants', 'Ants', { price: 3.5 })] // Knot Tying RM 4.00 and Ants RM 3.50; africa-lore is not listed, like a Hidden item
 
 const ready: CatalogueLoad = {
-  state: { status: 'ready', items: honors, settings: { currency: 'MYR' }, clubs: [] }, // the ready state holds the items
+  state: { status: 'ready', items, settings: { currency: 'MYR' }, clubs: [] }, // the ready state holds the items
   showSkeleton: false,
   retry: () => {}, applyStock: () => {},
 } // the load as the app hands it over
@@ -36,7 +36,9 @@ afterEach(() => {
 function renderScreen(quantities: Record<string, number>, data: CatalogueLoad = ready, onBack: () => void = () => {}) {
   window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, quantities })) // the saved cart
   render(
-    <CartProvider honors={honors}>
+    <CartProvider
+      items={items} // the items the cart is checked against
+    >
       <OrderFormProvider>
         <CartScreen data={data} onBack={onBack} />
       </OrderFormProvider>
@@ -146,7 +148,9 @@ describe('CartScreen lines', () => {
     }
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}')
     render(
-      <CartProvider honors={honors}>
+      <CartProvider
+        items={items} // the items the cart is checked against
+      >
         <OrderFormProvider>
           <Leaving />
         </OrderFormProvider>
@@ -329,7 +333,9 @@ describe('CartScreen removal and Undo', () => {
     }
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"ants":1,"knot-tying":1}}')
     render(
-      <CartProvider honors={honors}>
+      <CartProvider
+        items={items} // the items the cart is checked against
+      >
         <OrderFormProvider>
           <Leaving />
         </OrderFormProvider>
@@ -452,7 +458,9 @@ describe('CartScreen Checkout', () => {
       '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-honor":3}}',
     )
     render(
-      <CartProvider honors={honors}>
+      <CartProvider
+        items={items} // the items the cart is checked against
+      >
         <OrderFormProvider>
           <Probe />
           <CartScreen data={ready} onBack={() => {}} />
@@ -502,7 +510,9 @@ describe('CartScreen empty, loading and error', () => {
     // catches: a skeleton flash on a fast load, the wrong shape, or a total bar over a loading screen
     const loading: CatalogueLoad = { state: { status: 'loading' }, showSkeleton: false, retry: () => {}, applyStock: () => {} }
     const tree = (data: CatalogueLoad) => (
-      <CartProvider honors={honors}>
+      <CartProvider
+        items={items} // the items the cart is checked against
+      >
         <OrderFormProvider>
           <CartScreen data={data} onBack={() => {}} />
         </OrderFormProvider>
@@ -591,9 +601,9 @@ describe('CartScreen floating pill', () => {
 
 describe('CartScreen stock', () => {
   const stocked: Item[] = [ // items with set stock
-    honor('knot-tying', 'Knot Tying', { stock: 2 }), // below what the cart holds
-    honor('ants', 'Ants', { stock: 0 }), // Sold out
-    honor('birds', 'Birds', { stock: 12 }), // plenty
+    item('knot-tying', 'Knot Tying', { stock: 2 }), // below what the cart holds
+    item('ants', 'Ants', { stock: 0 }), // Sold out
+    item('birds', 'Birds', { stock: 12 }), // plenty
   ] // today's shop
 
   /**
@@ -610,7 +620,9 @@ describe('CartScreen stock', () => {
     } // the load as the app hands it over
     window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, quantities })) // the saved cart
     render(
-      <CartProvider honors={list}>
+      <CartProvider
+        items={list} // the items the cart is checked against
+      >
         <OrderFormProvider>
           <RefusalButton />
           <CartScreen data={data} onBack={() => {}} />

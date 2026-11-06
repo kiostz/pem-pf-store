@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart's key
 import { writeSentOrder } from '@/features/order/sent-order-storage.ts' // fills the stored order
-import { honor, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
+import { item, shopFetch } from '@/test/shop-fetch.ts' // the item builder and the /shop fake
 import { App } from './App.tsx' // code under test
 
 // The real captcha loads Turnstile's script, which a test must not do; this stand-in ticks and expires on demand.
@@ -32,11 +32,11 @@ afterEach(() => {
   window.location.hash = '' // back to the catalogue address
 })
 
-/** Makes the global fetch answer with two honors at RM 4 and the settings. */
-function serveTwoHonors() {
+/** Makes the global fetch answer with two items at RM 4 and the settings. */
+function serveTwoItems() {
   vi.stubGlobal(
     'fetch',
-    shopFetch([honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')]),
+    shopFetch([item('knot-tying', 'Knot Tying'), item('ants', 'Ants')]), // the shop answers with these items
   ) // the shop answers
 }
 
@@ -45,8 +45,8 @@ describe('App', () => {
     // catches: the shell rendering without the catalogue, without its header, or without the theme control in it
     vi.stubGlobal(
       'fetch',
-      shopFetch([honor('knot-tying', 'Knot Tying')]),
-    ) // one honor
+      shopFetch([item('knot-tying', 'Knot Tying')]), // the shop answers with these items
+    ) // one item
     render(<App />)
     const header = screen.getByRole('banner') // the header band
     expect(within(header).getByRole('heading', { name: 'PEM Pathfinder Store' })).toBeInTheDocument()
@@ -59,7 +59,7 @@ describe('App', () => {
     ['#/details', 'Your details'],
   ])('shows Back, a small PEM Pathfinder Store and no theme control in the header of %s', async (hash, title) => {
     // catches: the theme control or the big name leaking onto inner screens, or a screen with no way back in the header
-    serveTwoHonors() // two honors
+    serveTwoItems() // two items
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}') // an orderable line, so the details page stays
     window.location.hash = hash // opened by address
     render(<App />)
@@ -73,7 +73,7 @@ describe('App', () => {
 
   it('has no Back button in the header of the catalogue', async () => {
     // catches: a Back button on the first screen, where there is nothing behind it
-    serveTwoHonors() // two honors
+    serveTwoItems() // two items
     render(<App />)
     expect(within(screen.getByRole('banner')).queryByRole('link', { name: 'Back' })).not.toBeInTheDocument()
     await screen.findByText('Knot Tying') // let the load settle
@@ -81,7 +81,7 @@ describe('App', () => {
 
   it('keeps the header controls off paper and the band readable without its background', async () => {
     // catches: the Back button or theme control printed, or stone title text printed onto white paper
-    serveTwoHonors() // two honors
+    serveTwoItems() // two items
     window.location.hash = '#/order-sent' // opened by address
     const sent = render(<App />)
     const sentBand = screen.getByRole('banner') // the inner-screen band
@@ -97,7 +97,7 @@ describe('App', () => {
 
   it('leads from Back on the confirmation to the catalogue', async () => {
     // catches: a confirmation whose header Back goes nowhere
-    serveTwoHonors() // two honors
+    serveTwoItems() // two items
     window.location.hash = '#/order-sent' // opened by address
     render(<App />)
     fireEvent.click(within(screen.getByRole('banner')).getByRole('link', { name: 'Back' }))
@@ -108,8 +108,8 @@ describe('App', () => {
     // catches: cards and the pill holding separate state, or a Cart tab that never grows
     vi.stubGlobal(
       'fetch',
-      shopFetch([honor('knot-tying', 'Knot Tying')]),
-    ) // one honor at RM 4
+      shopFetch([item('knot-tying', 'Knot Tying')]), // the shop answers with these items
+    ) // one item at RM 4
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
     expect(screen.getByRole('link', { name: 'Cart, 1 item, estimated total RM 4.00' })).toBeInTheDocument()
@@ -153,7 +153,7 @@ describe('App', () => {
 
   it('opens the cart from the Cart tab with its heading focused and the title changed', async () => {
     // catches: a Cart tab that does not lead to the cart, focus left behind, or a stale tab title
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
     expect(document.title).toBe('Shop · PEM Pathfinder Store')
@@ -167,7 +167,7 @@ describe('App', () => {
 
   it('keeps a typed search in the hidden catalogue and focuses the Cart tab on return', async () => {
     // catches: a catalogue that is rebuilt on return and loses the search, or focus dropped on the page
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     render(<App />)
     fireEvent.change(await screen.findByRole('searchbox', { name: 'Search items' }), { target: { value: 'knot' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add Knot Tying' }))
@@ -182,7 +182,7 @@ describe('App', () => {
 
   it('hides the catalogue from readers while the cart shows', async () => {
     // catches: the catalogue staying in the accessibility tree under the cart
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
     fireEvent.click(screen.getByRole('link', { name: /^Cart, / }))
@@ -192,7 +192,7 @@ describe('App', () => {
 
   it('goes home from a cart opened by address, and focuses main when the cart is empty', async () => {
     // catches: Browse more that does nothing without history, or focus lost with an empty cart
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     window.location.hash = '#/cart' // opened by address, not from the catalogue
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Browse more' }))
@@ -203,7 +203,7 @@ describe('App', () => {
 
   it('never calls history back from Browse more on a cart opened by address', async () => {
     // catches: Browse more calling history.back() for a cart the buyer reached by address, which leaves the site
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     window.location.hash = '#/cart' // opened by address
     render(<App />)
     const back = vi.spyOn(window.history, 'back') // count history moves
@@ -225,7 +225,7 @@ describe('App', () => {
     'does not mark a cart entry after a %s on the Cart tab that opens another tab',
     async (_label, eventType, eventInit) => {
       // catches: a stale tab-click flag from this click marking a later address-opened cart, so Back leaves the store
-      serveTwoHonors() // two honors
+      serveTwoItems() // two items
       window.location.hash = '#/cart' // opened by address
       render(<App />) // draw the app
       fireEvent.click(await screen.findByRole('link', { name: 'Back' })) // to the catalogue
@@ -245,7 +245,7 @@ describe('App', () => {
 
   it('goes back in history from a cart opened by the Cart tab', async () => {
     // catches: Browse more pushing a new entry when the Cart tab opened the cart, so back and the link disagree
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
     fireEvent.click(screen.getByRole('link', { name: /^Cart, / }))
@@ -259,7 +259,7 @@ describe('App', () => {
 
   it('saves the catalogue scroll on leaving and restores it on return, and the cart opens at the top', async () => {
     // catches: a scroll listener left running on the cart (saving the clamped 0), or no restore on return
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {}) // jsdom does not scroll
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
@@ -281,8 +281,8 @@ describe('App', () => {
     // catches: an unavailable line hidden on load, or one that stays in the cart that goes to the details page
     vi.stubGlobal(
       'fetch',
-      shopFetch([honor('knot-tying', 'Knot Tying')]),
-    ) // Africa Lore is not listed, like a Hidden honor
+      shopFetch([item('knot-tying', 'Knot Tying')]), // the shop answers with these items
+    ) // Africa Lore is not listed, like a Hidden item
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1,"africa-lore":1}}') // a saved cart holding it
     window.location.hash = '#/cart' // opened by address
     render(<App />)
@@ -301,8 +301,8 @@ describe('App', () => {
     // catches: the details page opening by address with a line that cannot be ordered
     vi.stubGlobal(
       'fetch',
-      shopFetch([honor('knot-tying', 'Knot Tying')]),
-    ) // Africa Lore is not listed, like a Hidden honor
+      shopFetch([item('knot-tying', 'Knot Tying')]), // the shop answers with these items
+    ) // Africa Lore is not listed, like a Hidden item
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1,"africa-lore":1}}')
     window.location.hash = '#/details'
     render(<App />)
@@ -313,7 +313,7 @@ describe('App', () => {
 
   it('opens the details page from Checkout with its title, and Back to cart returns to the cart', async () => {
     // catches: a Checkout that leads nowhere, a stale tab title, or a Back that skips the cart
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
     fireEvent.click(screen.getByRole('link', { name: /^Cart, / }))
@@ -332,7 +332,7 @@ describe('App', () => {
 
   it('goes to the cart from Back to cart on a details page opened by address', async () => {
     // catches: a Back to cart that leaves the store when there is no history behind it
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}')
     window.location.hash = '#/details'
     render(<App />)
@@ -343,14 +343,14 @@ describe('App', () => {
 
   it('takes over scroll restoration so the saved position wins', () => {
     // catches: the browser restoring the scroll after the app and landing on a clamped value
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     render(<App />)
     expect(window.history.scrollRestoration).toBe('manual')
   })
 
-  it('keeps a typed name in the order form while the buyer goes back to add an honor and returns', async () => {
+  it('keeps a typed name in the order form while the buyer goes back to add an item and returns', async () => { // a typed name survives leaving for the shop and coming back
     // catches: form values kept inside the details page, which unmounts when the buyer goes back to the catalogue
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add Knot Tying' }))
     fireEvent.click(screen.getByRole('link', { name: /^Cart, / }))
@@ -367,7 +367,7 @@ describe('App', () => {
 
   it('shows the confirmation at #/order-sent with its heading focused, its title and no pill or catalogue', async () => {
     // catches: the confirmation address opening the catalogue, a stale title, focus left behind, or a pill over the confirmation
-    serveTwoHonors()
+    serveTwoItems() // the shop lists two items
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":2}}') // would grow the Cart tab on the shop
     writeSentOrder({
       number: 'PF-20261028-4K7Q',
@@ -393,7 +393,7 @@ describe('App', () => {
     // catches: pieces that work alone but do not join: the cart not cleared, no confirmation, or the number not shown
     vi.stubGlobal(
       'fetch',
-      shopFetch([honor('knot-tying', 'Knot Tying')], [], (url) =>
+      shopFetch([item('knot-tying', 'Knot Tying')], [], (url) => // the shop answers with these items
         url.endsWith('/orders')
           ? new Response(
               JSON.stringify({
@@ -438,10 +438,10 @@ describe('App', () => {
        * @param category the category
        * @return the item
        */
-      const item = (id: string, name: string, category: string) => honor(id, name, { category }) // one item
+      const itemIn = (id: string, name: string, category: string) => item(id, name, { category }) // one item
       vi.stubGlobal(
         'fetch',
-        shopFetch([item('ants', 'Ants', 'Nature'), item('knot-tying', 'Knot Tying', 'Recreation'), item('camping', 'Camping', 'Recreation')]),
+        shopFetch([itemIn('ants', 'Ants', 'Nature'), itemIn('knot-tying', 'Knot Tying', 'Recreation'), itemIn('camping', 'Camping', 'Recreation')]), // the shop answers with these items
       ) // three items in two categories
     }
 

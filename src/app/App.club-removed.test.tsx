@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react' // rende
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart's key
 import type { Club } from '@/shared/data/types.ts' // the club shape
-import { honor, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
+import { item, shopFetch } from '@/test/shop-fetch.ts' // the item builder and the /shop fake
 import { App } from './App.tsx' // code under test
 
 // The real captcha loads Turnstile's script, which a test must not do; this stand-in ticks on demand.
@@ -34,7 +34,7 @@ const club = (name: string): Club => ({ name, area: null, language: null, locati
  * @return the fetch stub, to read the order calls
  */
 function serve(clubs: Club[], lookup: () => Response = () => Response.json({ found: false }), post: () => Response = () => { throw new TypeError('Failed to fetch') }) {
-  const fetchFn = shopFetch([honor('knot-tying', 'Knot Tying')], clubs, (url) => {
+  const fetchFn = shopFetch([item('knot-tying', 'Knot Tying')], clubs, (url) => { // the shop answers with these items
     if (url.includes('/orders/status/')) return lookup() // the order lookup
     if (url.endsWith('/orders')) return post() // the send: dropped unless a test says otherwise
     return undefined

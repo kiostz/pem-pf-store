@@ -1,15 +1,15 @@
-// The catalogue screen: a sticky search and category toolbar over one A to Z grid of honor cards, plus its loading, error, empty and no-match states.
+// The catalogue screen: a sticky search and category toolbar over one A to Z grid of item cards, plus its loading, error, empty and no-match states.
 
 import { useRef, useState } from 'react' // the filter, and handles on the list and the search box
 import { sortByName } from '@/shared/sort/sort-by-name.ts' // names A to Z
 import { CategoryFilter } from './CategoryFilter.tsx' // the category filter
-import { categoryNames, filterHonors } from './filter.ts' // search and category filter
+import { categoryNames, filterItems } from './filter.ts' // search and category filter
 import { PILL_BOX } from '@/shared/ui/button-box.ts' // the pill shape of the actions
 import { loadErrorText } from '@/shared/ui/load-error-text.ts' // the failed-load message by reason
 import { LoadingStatus } from '@/shared/ui/LoadingStatus.tsx' // what a screen reader hears while loading
 import { SKELETON_PULSE } from '@/shared/ui/skeleton-box.ts' // the skeleton's pulse
-import { HonorCard } from './HonorCard.tsx' // one card
-import { CARD_BOX, CARD_GRID_BOX } from './honor-card-box.ts' // the grid and card boxes, shared with the skeleton
+import { ItemCard } from './ItemCard.tsx' // one card
+import { CARD_BOX, CARD_GRID_BOX } from './item-card-box.ts' // the grid and card boxes, shared with the skeleton
 import { SearchBox } from './SearchBox.tsx' // the labelled search input
 import type { CatalogueLoad } from './use-catalogue-data.ts' // the load, made by the app
 
@@ -20,7 +20,7 @@ const COUNT_BOX = 'mt-3 min-h-6' // the count line's box, shared by the real lin
 const LIST_BOX = 'mt-3' // the grid's top, shared by the real list and the skeleton cards
 
 /**
- * The buyer's list of honors.
+ * The buyer's list of items.
  * @param data the load: state, skeleton gate and retry
  * @param category the category the address names, or null; validated here against the data
  * @param onSelectCategory called with the category picked, or null for All categories
@@ -40,10 +40,10 @@ export function Catalogue({
   const searchRef = useRef<HTMLInputElement>(null) // the search box, focused by Clear filters
   const listRef = useRef<HTMLDivElement>(null) // the list, scrolled to its top on a category change
   const toolbarRef = useRef<HTMLDivElement>(null) // the sticky toolbar, measured so the list top can clear it
-  const allHonors = state.status === 'ready' ? state.items : [] // every item in the file
-  const switchedOn = filterHonors(allHonors, { query: '', category: null }) // what the buyer may see at all
-  const category = requestedCategory !== null && categoryNames(allHonors).includes(requestedCategory) ? requestedCategory : null // an unknown, blank or not yet loaded category is All categories
-  const matches = filterHonors(allHonors, { query, category }) // what the search and the category leave
+  const allItems = state.status === 'ready' ? state.items : [] // every item in the file
+  const switchedOn = filterItems(allItems, { query: '', category: null }) // what the buyer may see at all
+  const category = requestedCategory !== null && categoryNames(allItems).includes(requestedCategory) ? requestedCategory : null // an unknown, blank or not yet loaded category is All categories
+  const matches = filterItems(allItems, { query, category }) // what the search and the category leave
   const sorted = sortByName(matches) // names A to Z
   const filtering = query.trim() !== '' || category !== null // whether any filter is active
   const countText = `${matches.length} ${matches.length === 1 ? 'item' : 'items'}${filtering ? (matches.length === 1 ? ' matches' : ' match') : ''}` // "299 items", "12 items match", "1 item matches"
@@ -82,7 +82,7 @@ export function Catalogue({
             <SearchBox value={query} onChange={setQuery} ref={searchRef} /> {/* the typed query */}
           </div>
           <CategoryFilter
-            categories={categoryNames(allHonors)} // All categories plus these
+            categories={categoryNames(allItems)} // All categories plus these
             selected={category} // the chosen category
             onSelect={selectCategory} // filter and scroll
           />
@@ -110,7 +110,7 @@ export function Catalogue({
             {/* The cards sit where the grid will be. */}
             <div data-testid="catalogue-skeleton-grid" className={`${LIST_BOX} ${CARD_GRID_BOX}`}>
               {Array.from({ length: SKELETON_ROWS }, (_, index) => (
-                // A skeleton card has the same box as an honor card, so the grid does not jump when it loads.
+                // A skeleton card has the same box as an item card, so the grid does not jump when it loads.
                 <div key={index} data-testid="catalogue-skeleton-row" className={CARD_BOX}>
                   {/* Stands where the picture will be: 112 px. */}
                   <div data-skeleton-part="picture" className="bg-border-subtle size-28 shrink-0 rounded-md" />
@@ -172,11 +172,11 @@ export function Catalogue({
       {state.status === 'ready' && (
         // The grid fades in once as a whole; cards do not animate one by one.
         <div ref={listRef} className="animate-fade-in">
-          {/* All switched-on honors at once, A to Z. */}
+          {/* All Active items at once, A to Z. */}
           <ul className={`${LIST_BOX} ${CARD_GRID_BOX}`}>
-            {sorted.map((honor) => (
-              // one card per honor
-              <HonorCard key={honor.id} honor={honor} currency={state.settings.currency} /> // key by id; price in the settings currency
+            {sorted.map((item) => ( // one item per card
+              // one card per item
+              <ItemCard key={item.id} item={item} currency={state.settings.currency} /> // key by id; price in the settings currency
             ))}
           </ul>
         </div>

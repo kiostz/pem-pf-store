@@ -3,10 +3,10 @@
 import { StrictMode } from 'react' // StrictMode runs the load effect twice, leaving one stale attempt
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react' // run the hook
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
-import { honor, shopBody } from '@/test/shop-fetch.ts' // an honor and the /shop body
+import { item, shopBody } from '@/test/shop-fetch.ts' // an item and the /shop body
 import { useCatalogueData } from './use-catalogue-data.ts' // code under test
 
-const knot = honor('knot-tying', 'Knot Tying') // the one honor of the fake shop
+const knot = item('knot-tying', 'Knot Tying') // the one item of the fake shop
 const eagles = { name: 'Eagles', area: null, language: null, location: null, churchName: null } // a valid club
 
 /**
@@ -22,10 +22,10 @@ function serve(answer: (init?: RequestInit) => Promise<Response>) {
 
 /**
  * Builds an answer function that gives 200 with the shop body.
- * @param honors the honors to list
+ * @param items the items to list
  * @return a function that returns the response
  */
-const ok = (honors = [knot]) => async () => new Response(JSON.stringify(shopBody(honors, [eagles]))) // a 200 answer
+const ok = (items = [knot]) => async () => new Response(JSON.stringify(shopBody(items, [eagles]))) // a 200 answer
 
 /** An answer that never arrives, until the request is aborted. */
 const hang = (init?: RequestInit) =>
@@ -149,7 +149,7 @@ describe('useCatalogueData', () => {
         : ok()(), // newer attempt, fast
     )
     /**
-     * Shows the hook's status and honor count, so a plain render inside StrictMode can read them.
+     * Shows the hook's status and item count, so a plain render inside StrictMode can read them.
      * @return a line of text
      */
     function Probe() {
@@ -184,9 +184,9 @@ describe('useCatalogueData', () => {
     expect(renders).toBe(drawnBeforeUnmount) // nothing drew after unmount
     expect(console.error).not.toHaveBeenCalled() // neither the abort nor the cap is logged as a failed load
   })
-  it('applyStock sets a listed honor\'s stock and drops an honor the Worker reported as not for sale', async () => {
-    // catches: a refusal that leaves the cart showing the old stock, or a Hidden honor that stays orderable
-    serve(ok([knot, honor('ants', 'Ants')]))
+  it('applyStock sets a listed item\'s stock and drops an item the Worker reported as not for sale', async () => { // applyStock updates stock and drops null ids
+    // catches: a refusal that leaves the cart showing the old stock, or a Hidden item that stays orderable
+    serve(ok([knot, item('ants', 'Ants')])) // the Worker answers with these items
     const { result } = renderHook(() => useCatalogueData())
     await waitFor(() => expect(result.current.state.status).toBe('ready'))
     act(() => result.current.applyStock([{ itemId: 'knot-tying', stock: 1 }, { itemId: 'ants', stock: null }]))
@@ -198,30 +198,30 @@ describe('useCatalogueData', () => {
     })
   })
 
-  it('applyStock keeps every honor it did not name, in the same order, and ignores an id the shop does not list', async () => {
+  it('applyStock keeps every item it did not name, in the same order, and ignores an id the shop does not list', async () => { // applyStock leaves unnamed items and their order alone
     // catches: a patch that drops or reorders the items the refusal never mentioned, or one that adds an unknown id
-    serve(ok([knot, honor('ants', 'Ants'), honor('birds', 'Birds')]))
+    serve(ok([knot, item('ants', 'Ants'), item('birds', 'Birds')])) // the Worker answers with these items
     const { result } = renderHook(() => useCatalogueData())
     await waitFor(() => expect(result.current.state.status).toBe('ready'))
-    act(() => result.current.applyStock([{ itemId: 'ants', stock: 2 }, { itemId: 'no-such-honor', stock: 5 }]))
+    act(() => result.current.applyStock([{ itemId: 'ants', stock: 2 }, { itemId: 'no-such-item', stock: 5 }])) // an id the shop does not list
     expect(result.current.state).toMatchObject({
       status: 'ready',
-      items: [knot, { ...honor('ants', 'Ants'), stock: 2 }, honor('birds', 'Birds')], // three items before the patch
+      items: [knot, { ...item('ants', 'Ants'), stock: 2 }, item('birds', 'Birds')], // three items before the patch
     })
   })
 
-  it('applyStock keeps an honor whose stock is now 0 in the list, as Sold out, and only a null drops it', async () => {
+  it('applyStock keeps an item whose stock is now 0 in the list, as Sold out, and only a null drops it', async () => { // applyStock keeps stock 0 items and drops only null
     // catches: a falsy check that treats 0 like null, so the last item sold to another buyer vanishes instead of showing Sold out
-    serve(ok([knot, honor('ants', 'Ants')]))
+    serve(ok([knot, item('ants', 'Ants')])) // the Worker answers with these items
     const { result } = renderHook(() => useCatalogueData())
     await waitFor(() => expect(result.current.state.status).toBe('ready'))
     act(() => result.current.applyStock([{ itemId: 'knot-tying', stock: 0 }]))
-    expect(result.current.state).toMatchObject({ items: [{ ...knot, stock: 0 }, honor('ants', 'Ants')] }) // stock patched, untouched items kept
+    expect(result.current.state).toMatchObject({ items: [{ ...knot, stock: 0 }, item('ants', 'Ants')] }) // stock patched, untouched items kept
   })
 
   it('applyStock adds up over two refusals, and an empty one changes nothing', async () => {
     // catches: the second refusal rebuilding from the first load and undoing the first patch, or an empty list wiping the data
-    serve(ok([knot, honor('ants', 'Ants')]))
+    serve(ok([knot, item('ants', 'Ants')])) // the Worker answers with these items
     const { result } = renderHook(() => useCatalogueData())
     await waitFor(() => expect(result.current.state.status).toBe('ready'))
     act(() => result.current.applyStock([{ itemId: 'knot-tying', stock: 1 }]))

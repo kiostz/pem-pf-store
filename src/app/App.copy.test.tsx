@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react' // rende
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { CART_STORAGE_KEY } from '@/features/cart/cart-storage.ts' // the stored cart's key
 import { writeSentOrder } from '@/features/order/sent-order-storage.ts' // fills the stored order
-import { honor, shopFetch } from '@/test/shop-fetch.ts' // the honor builder and the /shop fake
+import { item, shopFetch } from '@/test/shop-fetch.ts' // the item builder and the /shop fake
 import { App } from './App.tsx' // code under test
 
 // The real captcha loads Turnstile's script, which a test must not do.
@@ -32,7 +32,7 @@ function serveData(fails: boolean) {
     'fetch',
     fails
       ? vi.fn(async () => new Response('', { status: 500 })) // the request fails
-      : shopFetch([honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')]), // the shop answers
+      : shopFetch([item('knot-tying', 'Knot Tying'), item('ants', 'Ants')]), // the shop answers
   ) // the one request
 }
 
@@ -99,7 +99,7 @@ describe('buyer copy', () => {
     // catches: "Sold out", "Only 2 left", "Loading the shop" or the busy words drifting into "honor" wording
     vi.spyOn(console, 'error').mockImplementation(() => {}) // a refused load is logged
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":5,"ants":1}}') // above the stock, and Sold out
-    vi.stubGlobal('fetch', shopFetch([honor('knot-tying', 'Knot Tying', { stock: 2 }), honor('ants', 'Ants', { stock: 0 })])) // the shop answers
+    vi.stubGlobal('fetch', shopFetch([item('knot-tying', 'Knot Tying', { stock: 2 }), item('ants', 'Ants', { stock: 0 })])) // the shop answers
     window.location.hash = '#/cart'
     const ready = render(<App />)
     await screen.findByText('Only 2 left') // the red mark
@@ -127,7 +127,7 @@ describe('buyer copy', () => {
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":3}}') // above the stock once refused
     vi.stubGlobal(
       'fetch',
-      shopFetch([honor('knot-tying', 'Knot Tying')], [], (url) =>
+      shopFetch([item('knot-tying', 'Knot Tying')], [], (url) => // the shop answers with these items
         url.endsWith('/orders')
           ? new Response(JSON.stringify({ error: 'stock', lines: [{ itemId: 'knot-tying', stock: 1 }] }), { status: 409 })
           : undefined,

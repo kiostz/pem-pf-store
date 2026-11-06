@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react' // scroll, focus and title around a screen change, and the click's type
 import { CartProvider } from '@/features/cart/CartProvider.tsx' // the cart state
 import { CartScreen } from '@/features/cart/CartScreen.tsx' // the cart screen
-import { Catalogue } from '@/features/catalogue/Catalogue.tsx' // the buyer's list of honors
+import { Catalogue } from '@/features/catalogue/Catalogue.tsx' // the buyer's list of items
 import { useCatalogueData } from '@/features/catalogue/use-catalogue-data.ts' // the one load
 import { ConfirmationScreen } from '@/features/order/ConfirmationScreen.tsx' // the screen after a sent order
 import { HomeScreen } from '@/features/home/HomeScreen.tsx' // the landing page
@@ -150,7 +150,7 @@ export function App() {
 
   return (
     // the cart provider gets the loaded items, null until they arrive
-    <CartProvider honors={data.state.status === 'ready' ? data.state.items : null}>
+    <CartProvider items={data.state.status === 'ready' ? data.state.items : null}>
       <OrderFormProvider>
         <div className="bg-bg-app text-text-default min-h-screen">
           <AppHeader
@@ -186,7 +186,7 @@ export function App() {
           {(route === 'home' || route === 'catalogue') && (
             <TabPill
               current={route} // the tab for this screen
-              honors={data.state.status === 'ready' ? data.state.items : null} // the Cart tab counts once they have loaded
+              items={data.state.status === 'ready' ? data.state.items : null} // the Cart tab counts once they have loaded
               currency={data.state.status === 'ready' ? data.state.settings.currency : null} // and prices once they have
               shopHref={shopHash(shop.category)} // the Shop tab reopens the last Shop address
               cartLinkRef={cartTabRef} // focused on return from the cart

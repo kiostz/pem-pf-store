@@ -8,7 +8,7 @@ import { CartProvider } from '@/features/cart/CartProvider.tsx' // the cart stat
 import { CartScreen } from '@/features/cart/CartScreen.tsx' // Checkout lives here
 import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' // the load the screen receives
 import type { Item } from '@/shared/data/types.ts' // the shape of an item
-import { honor } from '@/test/shop-fetch.ts' // the honor builder
+import { item } from '@/test/shop-fetch.ts' // the item builder
 import { PILL_DOCK } from '@/shared/ui/floating-pill-box.ts' // the dock Send order floats in
 import { DetailsScreen } from './DetailsScreen.tsx' // code under test
 import { OrderFormProvider } from './OrderFormProvider.tsx' // the form state
@@ -22,10 +22,10 @@ vi.mock('@/features/order/Captcha.tsx', () => ({
   ),
 }))
 
-const honors: Item[] = [honor('knot-tying', 'Knot Tying')] // Knot Tying listed; africa-lore is not, like a Hidden item
+const items: Item[] = [item('knot-tying', 'Knot Tying')] // Knot Tying listed; africa-lore is not, like a Hidden item
 
 const ready: CatalogueLoad = {
-  state: { status: 'ready', items: honors, settings: { currency: 'MYR' }, clubs: [] }, // the ready state holds the items
+  state: { status: 'ready', items, settings: { currency: 'MYR' }, clubs: [] }, // the ready state holds the items
   showSkeleton: false,
   retry: () => {}, applyStock: () => {},
 } // the load as the app hands it over
@@ -44,7 +44,9 @@ function renderDetails(quantities: Record<string, number>) {
   window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, quantities })) // the saved cart
   window.location.hash = '#/details' // as a buyer arrives
   render(
-    <CartProvider honors={honors}>
+    <CartProvider
+      items={items} // the items the cart is checked against
+    >
       <OrderFormProvider>
         <DetailsScreen data={ready} />
       </OrderFormProvider>
@@ -91,12 +93,14 @@ describe('DetailsScreen', () => {
 
   it('goes to the cart when a line is above today\'s stock or Sold out, and leaves the stored cart alone', () => {
     // catches: a typed address or reload carrying an over-stock line into an order
-    const low: Item[] = [honor('knot-tying', 'Knot Tying', { stock: 2 }), honor('ants', 'Ants', { stock: 0 })] // two short of the cart
+    const low: Item[] = [item('knot-tying', 'Knot Tying', { stock: 2 }), item('ants', 'Ants', { stock: 0 })] // two short of the cart
     for (const quantities of [{ 'knot-tying': 3 }, { 'knot-tying': 1, ants: 1 }]) {
       window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, quantities })) // the saved cart
       window.location.hash = '#/details' // as a buyer arrives
       const { unmount } = render(
-        <CartProvider honors={low}>
+        <CartProvider
+          items={low} // the items the cart is checked against
+        >
           <OrderFormProvider>
             {/* the ready state with the short items */}
             <DetailsScreen data={{ ...ready, state: { ...ready.state, items: low } as typeof ready.state }} />
@@ -115,7 +119,9 @@ describe('DetailsScreen', () => {
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}')
     window.location.hash = '#/details'
     render(
-      <CartProvider honors={null}>
+      <CartProvider
+        items={null} // the items, null while loading
+      >
         <OrderFormProvider>
           <DetailsScreen data={{ state: { status: 'loading' }, showSkeleton: false, retry: () => {}, applyStock: () => {} }} />
         </OrderFormProvider>
@@ -129,7 +135,9 @@ describe('DetailsScreen', () => {
     // catches: a heading over a blank page, a skeleton flash on a fast load, or fields that jump when the form arrives
     const loading: CatalogueLoad = { state: { status: 'loading' }, showSkeleton: false, retry: () => {}, applyStock: () => {} }
     const tree = (data: CatalogueLoad) => (
-      <CartProvider honors={null}>
+      <CartProvider
+        items={null} // the items, null while loading
+      >
         <OrderFormProvider>
           <DetailsScreen data={data} />
         </OrderFormProvider>
@@ -155,7 +163,9 @@ describe('DetailsScreen', () => {
     // catches: the details page telling a rate-limited buyer to check their connection
     const retry = vi.fn() // counts the retry
     render(
-      <CartProvider honors={null}>
+      <CartProvider
+        items={null} // the items, null while loading
+      >
         <OrderFormProvider>
           <DetailsScreen data={{ state: { status: 'error', reason: 'busy' }, showSkeleton: false, retry, applyStock: () => {} }} />
         </OrderFormProvider>
@@ -176,14 +186,16 @@ describe('DetailsScreen', () => {
      * @return the page
      */
     const page = (list: Item[]) => ( // a page over this list of items
-      <CartProvider honors={list}>
+      <CartProvider
+        items={list} // the items the cart is checked against
+      >
         <OrderFormProvider>
           {/* the ready state with the listed items */}
           <DetailsScreen data={{ ...ready, state: { ...ready.state, items: list } as typeof ready.state }} />
         </OrderFormProvider>
       </CartProvider>
     ) // the page for one data load
-    const { rerender } = render(page(honors))
+    const { rerender } = render(page(items)) // the page over the loaded items
     expect(screen.getByLabelText('Name')).toBeInTheDocument() // the form is open
     rerender(page([])) // the data no longer lists Knot Tying
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
@@ -195,7 +207,9 @@ describe('DetailsScreen', () => {
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}')
     window.location.hash = '#/details'
     render(
-      <CartProvider honors={null}>
+      <CartProvider
+        items={null} // the items, null while loading
+      >
         <OrderFormProvider>
           <DetailsScreen data={{ state: { status: 'error', reason: 'failed' }, showSkeleton: false, retry: () => {}, applyStock: () => {} }} />
         </OrderFormProvider>
@@ -228,7 +242,9 @@ describe('DetailsScreen', () => {
       return route === 'details' ? <DetailsScreen data={ready} /> : <CartScreen data={ready} onBack={() => {}} />
     }
     render(
-      <CartProvider honors={honors}>
+      <CartProvider
+        items={items} // the items the cart is checked against
+      >
         <OrderFormProvider>
           <Flow />
         </OrderFormProvider>

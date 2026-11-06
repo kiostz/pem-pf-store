@@ -54,7 +54,7 @@ describe('CategoryFilter', () => {
   })
 
   it('reports a category named "All" as that category, not as All categories', () => {
-    // catches: a category called All colliding with the All categories value and showing every honor
+    // catches: a category called All colliding with the All categories value and showing every item
     const onSelect = vi.fn()
     render(<CategoryFilter categories={['All', 'Nature']} selected={null} onSelect={onSelect} />)
     const control = screen.getByRole('combobox', { name: 'Category' }) // the closed control

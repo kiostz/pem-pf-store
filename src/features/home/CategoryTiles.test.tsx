@@ -3,7 +3,7 @@
 import { fireEvent, render, screen } from '@testing-library/react' // render and query
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
 import type { Item } from '@/shared/data/types.ts' // the shape of an item
-import { honor as makeHonor } from '@/test/shop-fetch.ts' // the honor builder
+import { item as makeItem } from '@/test/shop-fetch.ts' // the item builder
 import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' // the load the tiles receive
 import { CategoryTiles } from './CategoryTiles.tsx' // code under test
 
@@ -13,18 +13,18 @@ import { CategoryTiles } from './CategoryTiles.tsx' // code under test
  * @param category its category
  * @return the item
  */
-function honor(name: string, category: string): Item { // builds an item in a category
-  return makeHonor(name.toLowerCase(), name, { category }) // the id from the name
+function item(name: string, category: string): Item { // builds an item in a category
+  return makeItem(name.toLowerCase(), name, { category }) // the id from the name
 }
 
 /**
  * Builds a ready load.
- * @param honors the items
+ * @param items the items
  * @return the load
  */
-function ready(honors: Item[]): CatalogueLoad { // a ready load over these items
+function ready(items: Item[]): CatalogueLoad { // a ready load over these items
   return {
-    state: { status: 'ready', items: honors, settings: { currency: 'MYR' }, clubs: [] }, // the ready state holds the items
+    state: { status: 'ready', items, settings: { currency: 'MYR' }, clubs: [] }, // the ready state holds the items
     showSkeleton: false,
     retry: () => {}, applyStock: () => {},
   } as CatalogueLoad
@@ -43,9 +43,9 @@ describe('CategoryTiles', () => {
     render(
       <CategoryTiles
         data={ready([
-          honor('Leaves', 'Nature'),
-          honor('Ants', 'Arts and Crafts'),
-          honor('Tie', 'Recreation'),
+          item('Leaves', 'Nature'), // one test item the shop lists
+          item('Ants', 'Arts and Crafts'), // one test item the shop lists
+          item('Tie', 'Recreation'), // one test item the shop lists
         ])}
       />,
     )
@@ -59,7 +59,7 @@ describe('CategoryTiles', () => {
 
   it('fills each tile with its patch colour and the grey award colour for an unknown category, with the name as text and no icon', () => {
     // catches: a tile with the wrong fill, or an icon or overlay added over the colour
-    render(<CategoryTiles data={ready([honor('A', 'Recreation'), honor('B', 'Club Special')])} />)
+    render(<CategoryTiles data={ready([item('A', 'Recreation'), item('B', 'Club Special')])} />) // the tiles read their categories from these items
     const recreation = screen.getByRole('link', { name: 'Recreation' })
     expect(recreation).toHaveStyle({ backgroundColor: '#117155' })
     expect(screen.getByRole('link', { name: 'Club Special' })).toHaveStyle({ backgroundColor: '#525252' })
@@ -69,7 +69,7 @@ describe('CategoryTiles', () => {
 
   it('gives the Shirt tile a near-black name without a halo and the Accessories tile a white name in the plain halo', () => {
     // catches: a white name on the light khaki tile, or a missing halo on the slate one
-    render(<CategoryTiles data={ready([honor('A', 'Shirt'), honor('B', 'Accessories')])} />)
+    render(<CategoryTiles data={ready([item('A', 'Shirt'), item('B', 'Accessories')])} />) // the tiles read their categories from these items
     const shirt = screen.getByRole('link', { name: 'Shirt' })
     const accessories = screen.getByRole('link', { name: 'Accessories' })
     expect(shirt).toHaveStyle({ backgroundColor: '#c3b091', color: '#171717' })
@@ -121,7 +121,7 @@ describe('CategoryTiles', () => {
   it('writes the name in near-black on the two light tiles, as the category marks do, and in white on the rest', () => {
     // catches: white names on Nature and Household Arts, where white has 1.13:1 and 1.96:1
     render(
-      <CategoryTiles data={ready([honor('A', 'Nature'), honor('B', 'Household Arts'), honor('C', 'Recreation')])} />,
+      <CategoryTiles data={ready([item('A', 'Nature'), item('B', 'Household Arts'), item('C', 'Recreation')])} />, // three items in three categories
     )
     for (const name of ['Nature', 'Household Arts']) {
       const tile = screen.getByRole('link', { name })
@@ -133,7 +133,7 @@ describe('CategoryTiles', () => {
 
   it('gives Arts and Crafts, the one mid-tone tile, the stronger tighter halo', () => {
     // catches: the plain halo on a tile where white measures only 3.6:1
-    render(<CategoryTiles data={ready([honor('A', 'Arts and Crafts')])} />)
+    render(<CategoryTiles data={ready([item('A', 'Arts and Crafts')])} />) // the tiles read their categories from these items
     const tile = screen.getByRole('link', { name: 'Arts and Crafts' })
     expect(tile).toHaveClass('text-on-patch', 'text-shadow-halo-strong')
     expect(tile).not.toHaveClass('text-shadow-halo')

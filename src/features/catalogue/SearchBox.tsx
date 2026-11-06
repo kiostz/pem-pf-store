@@ -22,12 +22,12 @@ export function SearchBox({
     // Holds the label and the input.
     <div>
       {/* The visible hint disappears while typing, so the label stays for screen readers. */}
-      <label htmlFor="honor-search" className="sr-only">
+      <label htmlFor="item-search" className="sr-only">
         Search items
       </label>
       {/* 16 px text stops iOS zooming in on focus; 44 px tall for a thumb. */}
       <input
-        id="honor-search" // the label points here
+        id="item-search" // the label points here
         ref={ref} // so Clear filters can focus it
         type="search" // search keyboard and clear button
         value={value} // controlled by the screen

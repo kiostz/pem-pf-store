@@ -8,11 +8,11 @@ import { CartContext } from './use-cart.ts' // the context this provider fills
 
 /**
  * Holds the cart for everything below it, starts from storage and saves every change.
- * @param honors the loaded honors, or null while loading or after a failed load (nothing can be taken out then)
+ * @param items the loaded items, or null while loading or after a failed load (nothing can be taken out then)
  * @param children the screens that read or edit the cart
  * @return the provider element
  */
-export function CartProvider({ honors, children }: { honors: Item[] | null; children: ReactNode }) { // the items decide what is unavailable
+export function CartProvider({ items, children }: { items: Item[] | null; children: ReactNode }) { // the items decide what is unavailable
   const [initial] = useState(readCart) // read once, at start
   const [quantities, setQuantities] = useState<CartQuantities>(initial) // the cart
   // Save each change; the first run is the start, which changes nothing, so a stored value stays untouched until the buyer edits; runs on every cart change.
@@ -22,18 +22,18 @@ export function CartProvider({ honors, children }: { honors: Item[] | null; chil
   }, [quantities, initial]) // rerun when the cart changes
 
   /**
-   * Removes every id the shop no longer lists from the cart in one write; does nothing before honors load or when all ids are orderable.
+   * Removes every id the shop no longer lists from the cart in one write; does nothing before items load or when all ids are orderable.
    */
   const takeOutUnavailable = useCallback(() => {
-    if (honors === null) return // the data is unknown: nothing can be judged unavailable
+    if (items === null) return // the data is unknown: nothing can be judged unavailable
     setQuantities((current) => {
-      const { unavailable } = resolveCart(current, honors) // what cannot be ordered
+      const { unavailable } = resolveCart(current, items) // what cannot be ordered
       if (unavailable.length === 0) return current // same object: no re-render, no write
       const next = { ...current } // a copy
       for (const { honorId } of unavailable) delete next[honorId] // out of the cart
       return next // saved by the effect above
     })
-  }, [honors]) // the honors decide what is unavailable
+  }, [items]) // the items decide what is unavailable
 
   /**
    * Takes a sent order's lines out of the cart, so only what the buyer added or raised while it was sending stays.

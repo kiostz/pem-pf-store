@@ -1,7 +1,7 @@
 // Tests for the cart maths: quantity rules, A to Z lines, exact money in cents and the item count.
 
 import { describe, expect, it } from 'vitest' // test API
-import { honor as makeHonor } from '@/test/shop-fetch.ts' // the honor builder
+import { item as makeItem } from '@/test/shop-fetch.ts' // the item builder
 import {
   cartCount,
   clampQuantity,
@@ -14,13 +14,13 @@ import {
 } from './cart.ts' // code under test
 
 /**
- * Builds one honor for the tests.
- * @param id honor id
+ * Builds one item for the tests.
+ * @param id item id
  * @param name display name
  * @param price price in the currency's main unit
- * @return an honor as the shop lists it
+ * @return an item as the shop lists it
  */
-const honor = (id: string, name: string, price = 4) => makeHonor(id, name, { price }) // only the price varies here
+const item = (id: string, name: string, price = 4) => makeItem(id, name, { price }) // only the price varies here
 
 describe('clampQuantity', () => {
   it.each([
@@ -58,9 +58,9 @@ describe('resolveCart', () => {
   it('sorts lines A to Z by name and skips ids with no honor', () => {
     // catches: lines in insertion order, or a crash on an id the data does not know
     const honors = [
-      honor('leaves', 'Leaves'),
-      honor('ants', 'Ants'),
-      honor('knot-tying', 'Knot Tying'),
+      item('leaves', 'Leaves'), // a test item in the shop list
+      item('ants', 'Ants'), // a test item in the shop list
+      item('knot-tying', 'Knot Tying'), // a test item in the shop list
     ]
     const { lines } = resolveCart(
       { leaves: 1, 'no-such-honor': 5, ants: 2 },
@@ -77,7 +77,7 @@ describe('money and count', () => {
   it('adds 3 lines of RM 1.15 x 3 to exactly 345 each and 1035 in all', () => {
     // catches: floating-point drift such as 3.4499999999999997 in a shown total
     const lines = ['a', 'b', 'c'].map((id) => ({
-      honor: honor(id, id, 1.15),
+      honor: item(id, id, 1.15), // the order line's test item
       quantity: 3,
     }))
     expect(lines.map(lineTotalCents)).toEqual([345, 345, 345])
@@ -87,8 +87,8 @@ describe('money and count', () => {
   it('counts the sum of all quantities', () => {
     // catches: counting order lines instead of the quantities
     const lines = [
-      { honor: honor('a', 'A'), quantity: 2 },
-      { honor: honor('b', 'B'), quantity: 3 },
+      { honor: item('a', 'A'), quantity: 2 }, // the order line's test item
+      { honor: item('b', 'B'), quantity: 3 }, // the order line's test item
     ]
     expect(cartCount(lines)).toBe(5)
     expect(cartCount([])).toBe(0)
@@ -100,7 +100,7 @@ describe('resolveCart unavailable honors', () => {
     // catches: a missing id (a Hidden honor, which /shop never lists) still priced into the total or dropped without a trace
     const { lines, unavailable } = resolveCart(
       { ants: 2, 'africa-lore': 1 },
-      [honor('ants', 'Ants')],
+      [item('ants', 'Ants')], // a test item in the shop list
     )
     expect(lines.map((line) => line.honor.name)).toEqual(['Ants'])
     expect(unavailable).toEqual([{ honorId: 'africa-lore' }])
@@ -110,7 +110,7 @@ describe('resolveCart unavailable honors', () => {
 
   it('prices a repriced honor at the new price', () => {
     // catches: a stored price surviving a price change
-    const { lines } = resolveCart({ ants: 2 }, [honor('ants', 'Ants', 5)])
+    const { lines } = resolveCart({ ants: 2 }, [item('ants', 'Ants', 5)]) // resolve one id against one listed item
     expect(estimatedTotalCents(lines)).toBe(1000)
   })
 })
@@ -123,7 +123,7 @@ describe('quantityCap', () => {
     [99, 99],
   ])('caps stock %s at %s, the lower of 99 and the stock', (stock, expected) => {
     // catches: a stepper that lets a buyer pick more than is left, or more than 99
-    expect(quantityCap(makeHonor('a', 'A', { stock }))).toBe(expected)
+    expect(quantityCap(makeItem('a', 'A', { stock }))).toBe(expected) // cap of an item with this stock
   })
 })
 
@@ -146,6 +146,6 @@ describe('exceedsStock', () => {
     [1, 0, true],
   ])('says a line of %s with stock %s is over: %s', (quantity, stock, expected) => {
     // catches: an exact-stock line blocked, or a Sold out line let through
-    expect(exceedsStock({ honor: makeHonor('a', 'A', { stock }), quantity })).toBe(expected)
+    expect(exceedsStock({ honor: makeItem('a', 'A', { stock }), quantity })).toBe(expected) // is the order line over its item's stock
   })
 })

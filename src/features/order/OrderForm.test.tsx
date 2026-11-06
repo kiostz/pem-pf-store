@@ -91,7 +91,9 @@ function renderForm(
 ) {
   window.localStorage.setItem(CART_STORAGE_KEY, `{"version":1,"quantities":{"knot-tying":${cartQuantity}}}`) // the cart whose sent lines the form removes
   render(
-    <CartProvider honors={null}>
+    <CartProvider
+      items={null} // the items, null while loading
+    >
       <OrderFormProvider>
         <CartProbe />
         <OrderForm lines={orderLines} currency="MYR" clubs={clubList} onStockRefused={onStockRefused} />
@@ -638,7 +640,9 @@ describe('OrderForm sending', () => {
       )
     }
     render(
-      <CartProvider honors={null}>
+      <CartProvider
+        items={null} // the items, null while loading
+      >
         <OrderFormProvider>
           <Screen />
         </OrderFormProvider>

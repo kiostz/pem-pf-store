@@ -4,12 +4,12 @@ import { StrictMode } from 'react' // React's double render and double effect ru
 import { act, fireEvent, render, screen } from '@testing-library/react' // render and query
 import { beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import type { Item } from '@/shared/data/types.ts' // the shape of an item
-import { honor } from '@/test/shop-fetch.ts' // the honor builder
+import { item } from '@/test/shop-fetch.ts' // the item builder
 import { CART_STORAGE_KEY } from './cart-storage.ts' // the key under test
 import { CartProvider } from './CartProvider.tsx' // code under test
 import { useCart } from './use-cart.ts' // reads the cart
 
-const honors: Item[] = [honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')] // Africa Lore is not listed, like a Hidden item
+const items: Item[] = [item('knot-tying', 'Knot Tying'), item('ants', 'Ants')] // Africa Lore is not listed, like a Hidden item
 
 /**
  * Shows the cart as text and offers one button to change it.
@@ -38,18 +38,22 @@ function Probe() {
 
 /**
  * Renders the probe inside a provider.
- * @param honorsNow the honors prop
+ * @param itemsNow the items prop
  * @return RTL's rerender, which keeps the probe
  */
-function renderProvider(honorsNow: Item[] | null) { // the items prop, null while loading
+function renderProvider(itemsNow: Item[] | null) { // the items prop, null while loading
   const view = render(
-    <CartProvider honors={honorsNow}>
+    <CartProvider
+      items={itemsNow} // the items the cart is checked against
+    >
       <Probe />
     </CartProvider>,
   )
   return (next: Item[] | null) => // rerenders with the next items
     view.rerender(
-      <CartProvider honors={next}>
+      <CartProvider
+        items={next} // the items the cart is checked against
+      >
         <Probe />
       </CartProvider>,
     )
@@ -105,7 +109,7 @@ describe('CartProvider', () => {
     expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('not json')
   })
 
-  it('takes nothing out while honors is null', () => {
+  it('takes nothing out while items is null', () => { // items null takes nothing out of the cart
     // catches: an emptied cart while the data is still loading or after a failed load
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"africa-lore":1,"gone":2}}')
     renderProvider(null)
@@ -113,13 +117,13 @@ describe('CartProvider', () => {
     expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{"africa-lore":1,"gone":2}}')
   })
 
-  it('keeps unavailable ids when honors arrive, with no write', () => {
+  it('keeps unavailable ids when items arrive, with no write', () => { // ids missing from the arrived items stay, with no write
     // catches: the old take-out on load, which hides an unavailable line before the buyer sees it
     const stored = '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-honor":3}}'
     window.localStorage.setItem(CART_STORAGE_KEY, stored)
     const setItem = vi.spyOn(Storage.prototype, 'setItem') // counts the writes
     const rerender = renderProvider(null)
-    act(() => rerender(honors))
+    act(() => rerender(items)) // the items arrive
     expect(screen.getByTestId('quantities')).toHaveTextContent('{"knot-tying":2,"africa-lore":1,"no-such-honor":3}')
     expect(setItem).not.toHaveBeenCalled()
     expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe(stored)
@@ -129,13 +133,15 @@ describe('CartProvider', () => {
     // catches: a stored cart that loses the unavailable line, so a reload hides it
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"africa-lore":1,"ants":2}}')
     const first = render(
-      <CartProvider honors={honors}>
+      <CartProvider
+        items={items} // the items the cart is checked against
+      >
         <Probe />
       </CartProvider>,
     )
     fireEvent.click(screen.getByText('five knots')) // a write, so storage holds the whole cart
     first.unmount() // the page closes
-    renderProvider(honors) // and opens again
+    renderProvider(items) // and opens again
     expect(screen.getByTestId('quantities')).toHaveTextContent('{"africa-lore":1,"ants":2,"knot-tying":5}')
   })
 
@@ -146,7 +152,7 @@ describe('CartProvider', () => {
       '{"version":1,"quantities":{"knot-tying":2,"africa-lore":1,"no-such-honor":3}}',
     )
     const setItem = vi.spyOn(Storage.prototype, 'setItem') // counts the writes
-    renderProvider(honors)
+    renderProvider(items) // the loaded items
     fireEvent.click(screen.getByText('take out unavailable'))
     expect(screen.getByTestId('quantities')).toHaveTextContent('{"knot-tying":2}')
     expect(setItem.mock.calls.map(([, value]) => value)).toEqual(['{"version":1,"quantities":{"knot-tying":2}}']) // one write
@@ -161,7 +167,9 @@ describe('CartProvider', () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem') // counts the writes
     render(
       <StrictMode>
-        <CartProvider honors={honors}>
+        <CartProvider
+          items={items} // the items the cart is checked against
+        >
           <Probe />
         </CartProvider>
       </StrictMode>,
@@ -175,12 +183,12 @@ describe('CartProvider', () => {
     // catches: a write (and a re-render) on every Checkout press
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":2}}')
     const setItem = vi.spyOn(Storage.prototype, 'setItem') // counts the writes
-    renderProvider(honors)
+    renderProvider(items) // the loaded items
     fireEvent.click(screen.getByText('take out unavailable'))
     expect(setItem).not.toHaveBeenCalled()
   })
 
-  it('takeOutUnavailable writes nothing while honors is null', () => {
+  it('takeOutUnavailable writes nothing while items is null', () => { // takeOutUnavailable does nothing before items load
     // catches: an emptied cart before the data is known, which would drop orderable lines too
     const stored = '{"version":1,"quantities":{"africa-lore":1,"gone":2}}'
     window.localStorage.setItem(CART_STORAGE_KEY, stored)
@@ -200,7 +208,7 @@ describe('CartProvider', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('full')
     })
-    renderProvider(honors)
+    renderProvider(items) // the loaded items
     fireEvent.click(screen.getByText('five knots'))
     expect(screen.getByTestId('quantities')).toHaveTextContent('{"knot-tying":5}')
   })

@@ -4,14 +4,14 @@ The tokens live in `src/styles/index.css`; this file says why they are what they
 
 ## Product
 
-- **What it is:** an online order form for AY honor patches, for Pathfinder clubs in Malaysia. Orders go by email. There is no payment on the site.
-- **Who buys:** anyone. Club leaders, parents and Pathfinders all use it like an ordinary online store. Most arrive knowing which honor they need, on a phone.
-- **The job:** find honors, set quantities and send an order in under two minutes, then keep the order number.
+- **What it is:** an online order form for Pathfinder club items, for clubs in Malaysia. Orders go by email. There is no payment on the site.
+- **Who buys:** anyone. Club leaders, parents and Pathfinders all use it like an ordinary online store. Most arrive knowing which item they need, on a phone.
+- **The job:** find items, set quantities and send an order in under two minutes, then keep the order number.
 - **Feel:** an official store. Clean, trustworthy and plain, like a supplier's catalogue. The patch pictures are the colour; the interface stays quiet.
 - **Voice:** plain and polite. Short sentences, verbs first on buttons. The site says "we" for the people who handle orders. Prices read like `RM 4.00`.
 - **Brand limits:**
   - The name is always "PEM Pathfinder Store".
-  - Words come from the project glossary (honor, not badge or product).
+  - Words come from the project glossary (item, not badge or product).
   - The emblem is used on the public site: Home traces its outline (see The welcome band and the emblem trace). The trademark risk is accepted and a takedown would mean removing the trace.
   - English only.
 
@@ -162,8 +162,8 @@ A 44 px outlined circle in the header of Home and Shop: a sun while the page is 
 ### Cards
 
 - White (dark `#1C1C1E`), 16 px radius, and a 1 px `border-subtle` hairline in both themes. No shadow in either theme: the hairline alone gives the edge, so a card looks the same whichever way the theme is set.
-- This holds for the Honor card, the cart card, and the cards on Order sent. Home's "How ordering works" list has it too, with hairline dividers between steps in the soft fill.
-- The patch picture is the hero of an Honor card; the name wraps rather than truncates; the Category label is a quiet text box (not a control); the price is muted in tabular figures; Add sits at the same height on every card in a row.
+- This holds for the Item card, the cart card, and the cards on Order sent. Home's "How ordering works" list has it too, with hairline dividers between steps in the soft fill.
+- The patch picture is the hero of an Item card; the name wraps rather than truncates; the Category label is a quiet text box (not a control); the price is muted in tabular figures; Add sits at the same height on every card in a row.
 
 ### Buttons and steppers
 
@@ -174,7 +174,7 @@ A 44 px outlined circle in the header of Home and Shop: a sun while the page is 
 ### The Removed note and the failure note
 
 - Both are the same dark note (`bg-inverse`), as wide as the pill, stacked 12 px above it.
-- The Removed note names the honor and has Undo. It slides up and fades in; it holds 5 s, fades in its last 150 ms, pauses while the pointer or focus is on it, and restarts at 5 s when they leave. With Reduce Motion it fades only.
+- The Removed note names the item and has Undo. It slides up and fades in; it holds 5 s, fades in its last 150 ms, pauses while the pointer or focus is on it, and restarts at 5 s when they leave. With Reduce Motion it fades only.
 - The send-failure note shows when sending fails: a white x on a red 32 px circle (44 px tap area) in place of Undo. It stays until the next send or the x, because a buyer has to act on it.
 
 ### Category tiles
@@ -367,5 +367,5 @@ The Clubs tab reuses every token above; it adds no colour, radius or duration. E
 
 ## Fixed choices
 
-- Honors show as a card grid, with Add turning into a stepper after the first tap, not as rows with always-shown steppers.
+- Items show as a card grid, with Add turning into a stepper after the first tap, not as rows with always-shown steppers.
 - Unchanged: the A–Z order, the Category label on each card, the Category filter dropdown, the Category mark colours and the confirmation wording.

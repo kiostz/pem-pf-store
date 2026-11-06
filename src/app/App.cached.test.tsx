@@ -1,4 +1,4 @@
-// Tests for App when the honors are already loaded at the first draw (a cached load), so the Unavailable line and banner cannot depend on a slow load.
+// Tests for App when the items are already loaded at the first draw (a cached load), so the Unavailable line and banner cannot depend on a slow load.
 
 import { fireEvent, render, screen } from '@testing-library/react' // render and query the page
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API and mocks
@@ -21,11 +21,11 @@ vi.mock('@/features/order/Captcha.tsx', () => ({
 
 // The one load answers at once, as a cache would: ready on the very first render.
 vi.mock('@/features/catalogue/use-catalogue-data.ts', async () => {
-  const { honor } = await import('@/test/shop-fetch.ts') // the mock factory runs before imports, so it loads the builder itself
+  const { item } = await import('@/test/shop-fetch.ts') // the mock factory runs before imports, so it loads the builder itself
   const loaded = {
     state: {
       status: 'ready',
-      items: [honor('knot-tying', 'Knot Tying')], // Africa Lore is not listed, like a Hidden item
+      items: [item('knot-tying', 'Knot Tying')], // Africa Lore is not listed, like a Hidden item
       settings: { currency: 'MYR' },
       clubs: [],
     },
@@ -43,10 +43,10 @@ afterEach(() => {
   window.location.hash = '' // back to the catalogue address
 })
 
-describe('App with honors loaded at the first draw', () => {
+describe('App with items loaded at the first draw', () => { // the App when items are cached at the first draw
   it('shows the Unavailable line and banner when the cart is opened from the catalogue', async () => {
     // catches: the unavailable line taken out on first mount of the catalogue, so a buyer is never shown what went
-    window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1,"africa-lore":1}}') // a saved cart holding an honor the shop no longer lists
+    window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1,"africa-lore":1}}') // a saved cart holding an item the shop no longer lists
     render(<App />)
     fireEvent.click(screen.getByRole('link', { name: /^Cart, / })) // open the cart
     expect(await screen.findByText('1 item is no longer available')).toBeInTheDocument() // told once
