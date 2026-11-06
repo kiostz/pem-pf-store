@@ -1,10 +1,11 @@
-// The category tiles: a sideways row of links in each category's patch colour that open Shop on that category, with the row's own loading, error and empty states so Home never waits on the load.
+// The category tiles: a sideways row of links in each category's colour, with its icon, that open Shop on that category, with the row's own loading, error and empty states so Home never waits on the load.
 
 import { categoryNames } from '@/features/catalogue/filter.ts' // Active categories, A to Z
 import type { CatalogueLoad } from '@/features/catalogue/use-catalogue-data.ts' // the load, made by the app
 import { shopHash } from '@/shared/routes.ts' // the filtered shop's address
 import { PILL_BOX } from '@/shared/ui/button-box.ts' // the pill shape of the actions
-import { categoryMark } from '@/shared/ui/category-mark.ts' // the category's patch colour
+import { categoryMark } from '@/shared/ui/category-mark.ts' // the category's colour and icon
+import { CategoryIcon } from '@/shared/ui/CategoryIcon.tsx' // the category's icon
 import { loadErrorText } from '@/shared/ui/load-error-text.ts' // the failed-load message by reason
 import { LoadingStatus } from '@/shared/ui/LoadingStatus.tsx' // what a screen reader hears while loading
 import { SKELETON_PULSE } from '@/shared/ui/skeleton-box.ts' // the skeleton's pulse
@@ -22,8 +23,8 @@ export function CategoryTiles({ data }: { data: CatalogueLoad }) {
   const { state, showSkeleton, retry } = data // load state, skeleton gate and retry
   const categories = state.status === 'ready' ? categoryNames(state.items) : [] // Active categories A to Z
   return (
-    // Out to the screen edges so the row scrolls under the page's gutter; vertical room so a focus ring is not clipped.
-    <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 py-1">
+    // Out to the screen edges so the row scrolls under the page's gutter; the scroll padding keeps a snapped tile 16 px from the edge; vertical room so a focus ring is not clipped.
+    <div className="-mx-4 flex scroll-px-4 snap-x gap-3 overflow-x-auto px-4 py-1">
       {/* Nothing for the loader delay, then skeleton tiles of the same box. */}
       <LoadingStatus loading={showSkeleton} /> {/* always mounted, so its text is announced when the tiles appear */}
       {showSkeleton &&
@@ -49,15 +50,17 @@ export function CategoryTiles({ data }: { data: CatalogueLoad }) {
       )}
       {/* One link per category. */}
       {categories.map((category) => {
-        const { background, foreground, strongHalo } = categoryMark(category) // the patch colour and the lettering that reads on it, from the one map
+        const { icon, background, foreground } = categoryMark(category) // the colour, icon and lettering that reads on it, from the one map
         const dark = foreground !== PATCH_WHITE // the light tiles take near-black names, as their icons do
         return (
           <a
             key={category} // names are unique
             href={shopHash(category)} // opens Shop on this category
             style={dark ? { backgroundColor: background, color: foreground } : { backgroundColor: background }} // the colours are data, the same in both themes
-            className={`${TILE_BOX} ${dark ? '' : `text-on-patch ${strongHalo ? 'text-shadow-halo-strong' : 'text-shadow-halo'}`} focus-visible:outline-focus-ring flex snap-start items-end p-2.5 text-sm font-extrabold transition-transform duration-(--duration-press) focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.97]`} // name bottom-left; white names sit in a dark halo, near-black ones have none; press feedback, focus ring
+            className={`${TILE_BOX} ${dark ? '' : 'text-on-patch text-shadow-halo'} focus-visible:outline-focus-ring flex snap-start flex-col justify-between p-2.5 text-sm font-extrabold transition-transform duration-(--duration-press) focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.97]`} // icon top-left, name bottom-left; white names sit in a dark halo, near-black ones have none; press feedback, focus ring
           >
+            {/* The icon: 24 px, in the name's colour, hidden from screen readers by the icon itself. */}
+            <CategoryIcon name={icon} className="size-6" />
             {category}
           </a>
         )

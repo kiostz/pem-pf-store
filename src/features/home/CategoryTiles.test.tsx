@@ -57,27 +57,38 @@ describe('CategoryTiles', () => {
     )
   })
 
-  it('fills each tile with its patch colour and the grey award colour for an unknown category, with the name as text and no icon', () => {
-    // catches: a tile with the wrong fill, or an icon or overlay added over the colour
-    render(<CategoryTiles data={ready([item('A', 'Recreation'), item('B', 'Club Special')])} />) // the tiles read their categories from these items
-    const recreation = screen.getByRole('link', { name: 'Recreation' })
-    expect(recreation).toHaveStyle({ backgroundColor: '#117155' })
+  it('fills each tile with its category colour and an aria-hidden icon, the name alone as its accessible name, and grey for an unknown category', () => { // one test, four checks
+    // catches: a tile with the wrong fill, no icon, or an icon read out beside the name
+    render(<CategoryTiles data={ready([item('A', 'Honors'), item('B', 'Club Special')])} />) // the tiles read their categories from these items
+    const honors = screen.getByRole('link', { name: 'Honors' }) // the name is the whole accessible name
+    expect(honors).toHaveStyle({ backgroundColor: '#1f5f3a' }) // forest green
+    expect(honors.querySelector('svg')).toHaveAttribute('aria-hidden', 'true') // the icon is decoration
     expect(screen.getByRole('link', { name: 'Club Special' })).toHaveStyle({ backgroundColor: '#525252' })
-    expect(recreation.querySelector('svg')).toBeNull()
-    expect(recreation).toHaveClass('text-shadow-halo') // the halo token class, no literal
+    expect(honors).toHaveClass('text-shadow-halo') // the halo token class, no literal
   })
 
-  it('gives the Shirt tile a near-black name without a halo and the Accessories tile a white name in the plain halo', () => {
-    // catches: a white name on the light khaki tile, or a missing halo on the slate one
-    render(<CategoryTiles data={ready([item('A', 'Shirt'), item('B', 'Accessories')])} />) // the tiles read their categories from these items
-    const shirt = screen.getByRole('link', { name: 'Shirt' })
-    const accessories = screen.getByRole('link', { name: 'Accessories' })
-    expect(shirt).toHaveStyle({ backgroundColor: '#c3b091', color: '#171717' })
-    expect(shirt).not.toHaveClass('text-shadow-halo')
-    expect(shirt).not.toHaveClass('text-shadow-halo-strong')
-    expect(accessories).toHaveStyle({ backgroundColor: '#2f4858' })
-    expect(accessories).toHaveClass('text-on-patch', 'text-shadow-halo')
-    expect(accessories).not.toHaveClass('text-shadow-halo-strong')
+  it('gives the Shirts tile a near-black name without a halo and the Honors and Accessories tiles a white name in the plain halo', () => { // light tile, dark name
+    // catches: a white name on the light khaki tile, or a missing halo on the dark ones
+    render(<CategoryTiles data={ready([item('A', 'Shirts'), item('B', 'Accessories'), item('C', 'Honors')])} />) // the tiles read their categories from these items
+    const shirts = screen.getByRole('link', { name: 'Shirts' }) // the khaki tile
+    expect(shirts).toHaveStyle({ backgroundColor: '#c3b091', color: '#171717' }) // khaki with near-black lettering
+    expect(shirts).not.toHaveClass('text-shadow-halo') // dark letters take no halo
+    for (const name of ['Accessories', 'Honors']) { // the two dark tiles
+      expect(screen.getByRole('link', { name })).toHaveClass('text-on-patch', 'text-shadow-halo') // a dark tile has a white name in the halo
+    }
+    expect(screen.getByRole('link', { name: 'Accessories' })).toHaveStyle({ backgroundColor: '#2f4858' }) // slate
+  })
+
+  it('carries no strong halo class on any tile', () => { // the halo is deleted
+    // catches: the deleted strong halo coming back on a tile
+    const { container } = render(<CategoryTiles data={ready([item('A', 'Accessories'), item('B', 'Honors'), item('C', 'Shirts')])} />) // all three tiles
+    expect(container.innerHTML).not.toContain('halo-strong') // no tile carries it
+  })
+
+  it('lets the tile row scroll with 16 px of scroll padding so a swipe never leaves a tile flush to the screen edge', () => { // scroll padding on the row
+    // catches: the first tile pulled to the screen edge after a swipe
+    render(<CategoryTiles data={ready([item('A', 'Honors')])} />) // one tile
+    expect(screen.getByRole('link', { name: 'Honors' }).parentElement).toHaveClass('scroll-px-4', 'snap-x') // the row is the link's parent
   })
 
   it('shows nothing for a load that has not passed the delay, then 3 skeleton tiles, with no links', () => {
@@ -116,26 +127,5 @@ describe('CategoryTiles', () => {
     render(<CategoryTiles data={ready([])} />)
     expect(screen.getByText('Nothing is in the shop yet. Check back soon.')).toBeInTheDocument()
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
-  })
-
-  it('writes the name in near-black on the two light tiles, as the category marks do, and in white on the rest', () => {
-    // catches: white names on Nature and Household Arts, where white has 1.13:1 and 1.96:1
-    render(
-      <CategoryTiles data={ready([item('A', 'Nature'), item('B', 'Household Arts'), item('C', 'Recreation')])} />, // three items in three categories
-    )
-    for (const name of ['Nature', 'Household Arts']) {
-      const tile = screen.getByRole('link', { name })
-      expect(tile).toHaveStyle({ color: '#171717' })
-      expect(tile).not.toHaveClass('text-shadow-halo', 'text-shadow-halo-strong') // a dark halo round dark letters would blur them
-    }
-    expect(screen.getByRole('link', { name: 'Recreation' })).toHaveClass('text-on-patch', 'text-shadow-halo')
-  })
-
-  it('gives Arts and Crafts, the one mid-tone tile, the stronger tighter halo', () => {
-    // catches: the plain halo on a tile where white measures only 3.6:1
-    render(<CategoryTiles data={ready([item('A', 'Arts and Crafts')])} />) // the tiles read their categories from these items
-    const tile = screen.getByRole('link', { name: 'Arts and Crafts' })
-    expect(tile).toHaveClass('text-on-patch', 'text-shadow-halo-strong')
-    expect(tile).not.toHaveClass('text-shadow-halo')
   })
 })

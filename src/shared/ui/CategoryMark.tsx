@@ -1,4 +1,4 @@
-// The category mark: a square in the category's patch colour with its icon, shown where an item has no picture, so every row has the same 56 px lead.
+// The category mark: a square in the category's colour with its icon, shown where an item has no picture, so every row has the same 56 px lead.
 
 import { categoryMark } from './category-mark.ts' // colours and icon of a category
 import { CategoryIcon } from './CategoryIcon.tsx' // draws the icon

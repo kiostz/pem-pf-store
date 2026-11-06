@@ -53,9 +53,20 @@ describe('PatchPicture', () => {
     const { container } = render(<PatchPicture item={item(null)} />) // an item with no picture
     expect(container.querySelector('img')).toBeNull()
     const mark = screen.getByTestId('category-mark')
-    expect(mark).toHaveStyle({ backgroundColor: '#f0f2ed', color: '#171717' }) // Nature's colours
+    expect(mark).toHaveStyle({ backgroundColor: '#525252', color: '#ffffff' }) // the grey default's colours
     expect(mark).toHaveClass('border')
     expect(mark.querySelector('svg')).not.toBeNull()
+  })
+
+  it('shows the Honors mark for a Honors item with no picture, and for one whose picture fails to load', () => { // both fallback paths
+    // catches: an Honors item showing the grey default or an old area colour
+    const honors = { ...item(null), category: 'Honors' } // a Honors item with no picture
+    const { unmount } = render(<PatchPicture item={honors} />) // the no-picture case
+    expect(screen.getByTestId('category-mark')).toHaveStyle({ backgroundColor: '#1f5f3a', color: '#ffffff' }) // forest green, white icon
+    unmount() // render the failing-picture case fresh
+    const failing = render(<PatchPicture item={{ ...honors, image: 'items/knot-tying.webp' }} />) // the picture fails
+    fireEvent.error(failing.container.querySelector('img')!) // the browser could not load it
+    expect(screen.getByTestId('category-mark')).toHaveStyle({ backgroundColor: '#1f5f3a' }) // forest green again
   })
 
   it('swaps a picture that fails to load for the category mark', () => {

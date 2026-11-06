@@ -4,18 +4,10 @@ import { describe, expect, it } from 'vitest' // test API
 import { categoryMark } from './category-mark.ts' // code under test
 
 const known = {
-  ADRA: ['#483977', '#ffffff'],
-  'Arts and Crafts': ['#4f8db1', '#ffffff'],
-  'Health and Science': ['#533868', '#ffffff'],
-  'Household Arts': ['#f6a949', '#171717'],
-  Nature: ['#f0f2ed', '#171717'],
-  'Outdoor Industries': ['#4b3211', '#ffffff'],
-  Outreach: ['#2a3578', '#ffffff'],
-  Recreation: ['#117155', '#ffffff'],
-  Vocational: ['#d0272a', '#ffffff'],
-  Shirt: ['#c3b091', '#171717'],
-  Accessories: ['#2f4858', '#ffffff'],
-} // measured patch backgrounds and the icon colour on each
+  Accessories: ['neckerchief', '#2f4858', '#ffffff'], // slate with a white neckerchief
+  Honors: ['award', '#1f5f3a', '#ffffff'], // forest green with a white award
+  Shirts: ['shirt', '#c3b091', '#171717'], // khaki with a near-black shirt
+} // each category's icon, background and icon colour
 
 /**
  * WCAG relative luminance of a hex colour.
@@ -42,35 +34,27 @@ function contrast(a: string, b: string): number {
 }
 
 describe('categoryMark', () => {
-  it('gives each known category its measured colours', () => {
-    for (const [name, [background, foreground]] of Object.entries(known)) {
-      const mark = categoryMark(name)
-      expect([mark.background, mark.foreground]).toEqual([
-        background,
-        foreground,
-      ]) // catches a typo in a hex or a wrong icon colour
+  it('gives each category its icon, colour and icon colour', () => { // exact pairs
+    for (const [name, [icon, background, foreground]] of Object.entries(known)) { // each known category
+      expect(categoryMark(name)).toEqual({ icon, background, foreground }) // catches a typo in a hex, a wrong icon, or a leftover strongHalo key
     }
   })
 
-  it('gives the eleven categories eleven different icons and backgrounds', () => {
+  it('gives the three categories three different icons and backgrounds, none the grey default', () => { // distinct marks
     const marks = Object.keys(known).map(categoryMark)
-    expect(new Set(marks.map((m) => m.icon)).size).toBe(11) // catches two categories sharing an icon
-    expect(new Set(marks.map((m) => m.background)).size).toBe(11) // catches two categories sharing a colour
+    expect(new Set(marks.map((m) => m.background)).size).toBe(3) // catches two categories sharing a colour
+    expect(new Set(marks.map((m) => m.icon)).size).toBe(3) // catches two categories sharing an icon
+    expect(marks.map((m) => m.background)).not.toContain('#525252') // catches a category falling back to the grey default
   })
 
-  it('gives Shirt the Tabler shirt and Accessories the neckerchief', () => {
-    expect(categoryMark('Shirt').icon).toBe('shirt') // catches Shirt falling back to the grey award mark
-    expect(categoryMark('Accessories').icon).toBe('neckerchief') // catches Accessories falling back to the grey award mark
-  })
-
-  it.each(['Pioneering', '', 'constructor'])(
-    'gives the default mark for "%s"',
+  it.each(['Shirt', 'Nature', '', 'constructor'])( // unknown names
+    'gives the grey award for "%s"', // the case title
     (name) => {
       expect(categoryMark(name)).toEqual({
         icon: 'award',
         background: '#525252',
         foreground: '#ffffff',
-      }) // catches a crash or undefined colours for a club-added category
+      }) // catches the old singular Shirt or an area name still matching, or a crash on a prototype key
     },
   )
 
@@ -78,6 +62,12 @@ describe('categoryMark', () => {
     for (const name of [...Object.keys(known), 'Pioneering']) {
       const { background, foreground } = categoryMark(name)
       expect(contrast(background, foreground)).toBeGreaterThanOrEqual(3) // catches an unreadable icon
+    }
+  })
+
+  it('keeps the white names on Accessories and Honors at 4.5:1', () => { // tile name contrast
+    for (const name of ['Accessories', 'Honors']) { // the two dark tiles
+      expect(contrast(categoryMark(name).background, '#ffffff')).toBeGreaterThanOrEqual(4.5) // catches a tile name too faint to read
     }
   })
 })

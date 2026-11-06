@@ -49,21 +49,22 @@ Every ratio below is measured from the values in `src/styles/index.css` (WCAG 2 
 | cart stepper focus ring        | oxblood (12.0:1 on soft, 14.8:1 on card)                    | `#8AB4FF` (6.7:1 on soft, 8.2:1 on card)                |
 | emblem trace                   | rose `#E8B4BC` (8.2:1 on the band)                          | the same (10.1:1 on the dark band)                      |
 
-- The Category mark colours stay as ruled (real patch backgrounds).
+- The Category mark is one per category, in the club's category colours (below).
 - Red is kept for errors, the trash icon and the failure note's close circle.
 - Tan `#B89A7A` is not used: it is 2.6:1 on white, so never text.
 - The focus ring is blue (`#3B82F6`) so it never matches the oxblood it sits on. It measures 2.97:1 on the soft fill, so the cart stepper has its own ring (above).
 - The hairline is a quiet edge, not a boundary a reader depends on: it is about 1.5:1, below the 3:1 a control edge would need. Every control that must be found (fields, steppers, buttons) has text or a fill that carries it, and the card edge only tidies the grouping.
 - The trash icon beside "removed" in the light Removed note is 3.06:1 on the note fill `#1B1B1D`, held at 3:1 by the test. The red `#C62828` is ruled, so the note fill was darkened from `#1D1D1F` to reach it.
-- The two newest category marks (the square is the same in light and dark; only the hairline round it changes):
+- The three category marks (the square is the same in light and dark; only the hairline round it changes). Any other category name shows the grey award (`#525252`, white icon):
 
-| Category    | Patch colour       | Icon                                              | Icon colour         | Icon on patch (light and dark) | Patch on card, light / dark |
-| ----------- | ------------------ | ------------------------------------------------- | ------------------- | ------------------------------ | --------------------------- |
-| Shirt       | khaki `#C3B091`    | Tabler `shirt`                                    | near-black `#171717` | 8.5:1                          | 2.1:1 / 8.1:1                |
-| Accessories | slate `#2F4858`    | our own neckerchief (Tabler outline style, 24 px grid, 2 px stroke, round caps and joins; a neck loop whose two ends rise from the sides of a slide ring, with a triangle as wide as the loop hanging from the ring, four paths) | white `#FFFFFF`     | 9.6:1                          | 9.6:1 / 1.8:1                |
+| Category    | Colour             | Icon                                              | Icon colour         | Icon on colour (light and dark) | Colour on card, light / dark |
+| ----------- | ------------------ | ------------------------------------------------- | ------------------- | ------------------------------- | ---------------------------- |
+| Accessories | slate `#2F4858`    | our own neckerchief (Tabler outline style, 24 px grid, 2 px stroke, round caps and joins; a neck loop whose two ends rise from the sides of a slide ring, with a triangle as wide as the loop hanging from the ring, four paths) | white `#FFFFFF`     | 9.6:1                           | 9.6:1 / 1.8:1                |
+| Honors      | forest green `#1F5F3A` | Tabler `award`                                | white `#FFFFFF`     | 7.6:1                           | 7.6:1 / 2.2:1                |
+| Shirts      | khaki `#C3B091`    | Tabler `shirt`                                    | near-black `#171717` | 8.5:1                           | 2.1:1 / 8.1:1                |
 
-- The patch edge against the card is under 3:1 in one theme for each (khaki in light, slate in dark), as the real patch colours are; the hairline and the icon carry the square, and the name beside it names the category. Shirt's tile name is near-black with no halo (8.5:1), Accessories' is white in the plain halo (9.6:1).
-- Tile names: near-black `#171717` on the three light tiles (9.1:1 on Household Arts `#F6A949`, 15.9:1 on Nature `#F0F2ED`, 8.5:1 on Shirt `#C3B091`; the tile colours are patch colours), white elsewhere, always over a dark halo (see Components).
+- The colour against the card is under 3:1 in one theme for each (khaki in light, slate and green in dark); the hairline and the icon carry the square, and the name beside it names the category. Shirts' tile name is near-black with no halo (8.5:1); Accessories' and Honors' are white in the halo (9.6:1 and 7.6:1).
+- Tile names: near-black `#171717` on the one light tile (8.5:1 on Shirts `#C3B091`), white on the other two, over a dark halo (see Components).
 - Print keeps the light values on a white page.
 - A test (`src/styles/tokens.test.ts`) holds the listed text pairs at 4.5:1 and the listed icon and ring pairs at 3:1, in light, dark and print, plus the close mark, the Browse the shop pill and the trace.
 - The three trace colours (`trace`, `trace-bright`, `trace-core`) are read by the trace's canvas code as hex. Keep them opaque hex that the build cannot shorten to a colour name (`#ff0000` would become `red`). The build does shorten `#ffffff` to `#fff`, so the reader accepts the three-digit form too; a value it cannot read leaves the trace as the still outline.
@@ -186,8 +187,8 @@ A 44 px outlined circle in the header of Home and Shop: a sun while the page is 
 
 ### Category tiles
 
-- A tile is the category's full patch colour, 104 x 88 px, its name bottom-left, in a row that scrolls sideways so the next tile shows in part.
-- The name follows the category mark's rule: near-black `#171717` on the three light tiles (Nature, Household Arts, Shirt), white on the rest. White names sit in a dark halo (`text-shadow-halo`), and on Arts and Crafts, where white is only 3.6:1, in a stronger, tighter one (`text-shadow-halo-strong`). Near-black names have no halo.
+- One tile per category with an Active item, A to Z. A tile is the category's full colour, 104 x 88 px, with its icon (24 px, in the name's colour) top-left and its name bottom-left. The row scrolls sideways with 16 px of scroll padding, so the next tile shows in part and a snapped tile never sits flush to the screen edge; three tiles fit at 375 px.
+- The name follows the category mark's rule: near-black `#171717` on Shirts, white on Accessories and Honors. White names sit in a dark halo (`text-shadow-halo`); the near-black name has no halo.
 - `on-patch` (`#FFFFFF`, the same in light and dark) is the white of those names; it is used only over the halo.
 
 ### The welcome band and the emblem trace
@@ -248,7 +249,8 @@ A 44 px outlined circle in the header of Home and Shop: a sun while the page is 
 
 - Cards no longer have "no edge in light": they keep the 1 px hairline in both themes.
 - The trace is the canvas heat tracer; the earlier SVG tails and CSS rider are gone, and so are the `duration-trace-build` and `duration-trace-flicker` tokens.
-- Tile names are dark on the three light tiles and white with a halo on the others (not an all-white halo).
+- Tile names are dark on the one light tile (Shirts) and white with a halo on the others (not an all-white halo).
+- The nine area marks in measured patch colours are gone: each category now has one mark (Accessories, Honors, Shirts), as in the mark table above.
 - The name is "PEM Pathfinder Store" everywhere; no earlier name appears.
 - One floating pill on every screen with one, with the failure note's white x on red.
 - The theme control is one button (sun or moon), not a dropdown.
@@ -376,4 +378,4 @@ The Clubs tab reuses every token above; it adds no colour, radius or duration. E
 ## Fixed choices
 
 - Items show as a card grid, with Add turning into a stepper after the first tap, not as rows with always-shown steppers.
-- Shop order: in-stock items first, then Sold out, each group A–Z (the cart stays A–Z). Unchanged: the Category label's place on each card, the Category filter dropdown, the Category mark colours and the confirmation wording.
+- Shop order: in-stock items first, then Sold out, each group A–Z (the cart stays A–Z). Unchanged: the Category label's place on each card, the Category filter dropdown and the confirmation wording.

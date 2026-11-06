@@ -101,10 +101,10 @@ describe('index.css emblem trace', () => {
     expect(reduced).toContain('.pill-content')
   })
 
-  it('defines the plain and the stronger tile-name halo', () => {
+  it('defines the plain tile-name halo and no stronger one', () => { // the halo token
     // catches: a halo class with no token behind it
     expect(css).toMatch(/--text-shadow-halo:/)
-    expect(css).toMatch(/--text-shadow-halo-strong:/)
+    expect(css).not.toContain('--text-shadow-halo-strong') // catches the orphaned strong halo returning
   })
 
   it('keeps the whole play under 5 seconds, with no repeat, and drops the two CSS-ride tokens', () => {
