@@ -188,7 +188,7 @@ export async function loadItemPage(
   const answer = await call(`/api/items?${query}`, { signal: request.signal }) // the request
   if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
   if (answer === null || answer.status !== 200) return { kind: 'error' } // the Worker or the network failed
-  const honors = field(answer.body, 'honors') // the rows
+  const honors = field(answer.body, 'items') // the rows
   const nextCursor = field(answer.body, 'nextCursor') // where the next page starts
   if (
     !isHonorList(honors) ||
@@ -227,7 +227,7 @@ export async function sendHonorChanges(
   const answer = await post('/api/items/changes', { changes }) // the request
   if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
   if (answer === null) return { kind: 'error' } // the network failed
-  const honors = field(answer.body, 'honors') // the rows it carries
+  const honors = field(answer.body, 'items') // the rows it carries
   if (answer.status === 200 && isHonorList(honors))
     return { kind: 'saved', honors } // written
   if (
@@ -258,7 +258,7 @@ export async function addItem(item: NewItem): Promise<AddResult> {
   const answer = await post('/api/items', item) // the request
   if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
   if (answer === null) return { kind: 'error' } // the network failed
-  const honor = field(answer.body, 'honor') // the new row
+  const honor = field(answer.body, 'item') // the new row
   if (answer.status === 201 && isAdminHonor(honor))
     return { kind: 'added', honor } // created
   const code = field(answer.body, 'error') // the Worker's code
@@ -279,7 +279,7 @@ export async function deleteItem(
   if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
   if (answer === null) return { kind: 'error' } // the network failed
   const deletedId = field(answer.body, 'deletedId') // the id on success
-  const honors = field(answer.body, 'honors') // the current rows on a conflict
+  const honors = field(answer.body, 'items') // the current rows on a conflict
   if (answer.status === 200 && typeof deletedId === 'string')
     return { kind: 'deleted', deletedId } // gone
   if (answer.status === 409 && isHonorList(honors))
@@ -309,9 +309,9 @@ export async function uploadPicture(
   }) // the bytes, typed as the Worker expects
   if (answer === 'signed-out') return { kind: 'signed-out' } // the session ended
   if (answer === null) return { kind: 'error' } // the network failed
-  const honor = field(answer.body, 'honor') // the saved row
+  const honor = field(answer.body, 'item') // the saved row
   if (answer.status === 200 && isAdminHonor(honor)) return { kind: 'saved', honor } // stored
-  const honors = field(answer.body, 'honors') // the current rows on a conflict
+  const honors = field(answer.body, 'items') // the current rows on a conflict
   const deletedIds = field(answer.body, 'deletedIds') // the ids another admin deleted
   if (answer.status === 409 && isHonorList(honors) && isTextList(deletedIds))
     return { kind: 'conflict', honors, deletedIds } // nothing stored
@@ -362,7 +362,7 @@ export type SettingsCallResult =
 function isAdminOrder(value: unknown): value is AdminOrder {
   if (typeof value !== 'object' || value === null) return false // not an object
   const row = value as Record<string, unknown> // read by field
-  const buyer = row.buyer as Record<string, unknown> | null // the details or null
+  const buyer = row.buyer as Record<string, unknown> | null // the details; null is refused below
   return (
     typeof row.number === 'string' && // the order number
     typeof row.createdAt === 'string' && // an ISO time
@@ -372,12 +372,11 @@ function isAdminOrder(value: unknown): value is AdminOrder {
     Number.isInteger(row.totalCents) && // whole cents
     Number.isInteger(row.itemCount) && // a whole count
     typeof row.club === 'string' && // the club
-    (buyer === null ||
-      (typeof buyer === 'object' &&
-        typeof buyer.name === 'string' &&
-        typeof buyer.email === 'string' &&
-        typeof buyer.phone === 'string')) && // details or removed
-    (row.personalDataRemovedAt === null || typeof row.personalDataRemovedAt === 'string') && // the removal time or none
+    typeof buyer === 'object' && // the buyer is an object
+    buyer !== null && // never null
+    typeof buyer.name === 'string' && // the name
+    typeof buyer.email === 'string' && // the email
+    typeof buyer.phone === 'string' && // the phone
     Array.isArray(row.lines) &&
     row.lines.every(
       (line: Record<string, unknown>) =>

@@ -62,16 +62,16 @@ describe('OrderRow', () => {
     expect(screen.getByRole('link', { name: '+60 12 000 0000' })).toHaveAttribute('href', 'tel:+60120000000')
   })
 
-  it('says "No buyer details" in the closed and the open row, with no contact links', () => {
-    // Catches blank contact fields, links to nothing, and the old removal reason.
-    renderRow(makeOrder({ number: 'PF-20261103-CCCC', buyer: null, personalDataRemovedAt: null }))
-    const toggle = screen.getByRole('button', { name: /PF-20261103-CCCC/ })
-    expect(toggle).toHaveTextContent('No buyer details')
+  it('always shows the buyer name in the closed row and the contact links in the open row, never "No buyer details"', () => {
+    // Catches the removed null-buyer branch coming back, or a closed row without the buyer's name.
+    renderRow()
+    const toggle = screen.getByRole('button', { name: /PF-20261105-AAAA/ })
+    expect(toggle).toHaveTextContent('Test Buyer')
     fireEvent.click(toggle)
-    expect(screen.getAllByText('No buyer details')).toHaveLength(2) // closed and open row
-    expect(screen.queryByRole('link', { name: /@/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /\d/ })).not.toBeInTheDocument()
-    expect(document.body).not.toHaveTextContent(/removed/i)
+    expect(screen.getByText('Test Buyer')).toBeInTheDocument() // still shown once the row is open
+    expect(screen.getByRole('link', { name: 'buyer@example.test' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '+60 12 000 0000' })).toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent('No buyer details')
   })
 
   it('saves a step change, sending from, and says "Step saved."', async () => {

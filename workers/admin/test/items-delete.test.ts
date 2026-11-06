@@ -75,7 +75,7 @@ describe('POST /api/items/delete', () => {
     await env.DB.prepare('UPDATE items SET stock = 3 WHERE id = ?').bind('camp-shirt').run()
     const res = await del('camp-shirt')
     expect(res.status).toBe(409)
-    expect(await res.json()).toEqual({ error: 'conflict', honors: [wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', status: 'hidden', stock: 3, priceCents: 1500, clubAdded: true, createdAt: seen.modifiedAt, modifiedAt: seen.modifiedAt })] })
+    expect(await res.json()).toEqual({ error: 'conflict', items: [wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', status: 'hidden', stock: 3, priceCents: 1500, clubAdded: true, createdAt: seen.modifiedAt, modifiedAt: seen.modifiedAt })] })
     expect(await fullRowOf('camp-shirt')).not.toBeNull()
   })
 
@@ -124,7 +124,7 @@ describe('the delete statement\'s own guard', () => {
   it('answers conflict with the current row and keeps the item when a sale lands just before the DELETE', async () => {
     // Catches a guard column dropped from the DELETE's WHERE: an item sold a second earlier would be deleted unseen.
     const result = await deleteHonor(racing(() => env.DB.prepare('UPDATE items SET stock = 3 WHERE id = ?').bind('camp-shirt').run()), env.PICTURES, { id: 'camp-shirt', seen: seen as never })
-    expect(result).toEqual({ kind: 'conflict', honors: [wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', status: 'hidden', stock: 3, priceCents: 1500, clubAdded: true, createdAt: seen.modifiedAt, modifiedAt: seen.modifiedAt })] })
+    expect(result).toEqual({ kind: 'conflict', items: [wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', status: 'hidden', stock: 3, priceCents: 1500, clubAdded: true, createdAt: seen.modifiedAt, modifiedAt: seen.modifiedAt })] })
     expect(await fullRowOf('camp-shirt')).not.toBeNull()
   })
 

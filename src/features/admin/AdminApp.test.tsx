@@ -18,7 +18,7 @@ beforeEach(() => {
         if (path === '/api/clubs') return Response.json({ clubs })
         if (path === '/api/settings') return Response.json({ orderEmailOn: true })
         if (path === '/api/settings/prices') return Response.json({ currency: 'SGD', defaultPriceCents: 450 }) // the save's answer
-        return Response.json({ honors: rows, nextCursor: null })
+        return Response.json({ items: rows, nextCursor: null })
       }),
     ),
   ) // every route the shell touches

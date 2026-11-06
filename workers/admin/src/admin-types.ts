@@ -19,7 +19,7 @@ export interface AdminHonor {
 
 // One page of the admin list.
 export interface AdminPage {
-  honors: AdminHonor[] // Up to 50 rows in the requested order.
+  items: AdminHonor[] // Up to 50 rows in the requested order.
   nextCursor: string | null // Opaque text for the next page, or null at the end.
 }
 
@@ -42,8 +42,8 @@ export interface HonorChange {
 
 // The outcome of a save.
 export type SaveResult =
-  | { kind: 'saved'; honors: AdminHonor[] } // Written; the saved rows.
-  | { kind: 'conflict'; honors: AdminHonor[]; deletedIds: string[] } // Nothing written: the current rows that no longer match, and ids another admin deleted.
+  | { kind: 'saved'; items: AdminHonor[] } // Written; the saved rows.
+  | { kind: 'conflict'; items: AdminHonor[]; deletedIds: string[] } // Nothing written: the current rows that no longer match, and ids another admin deleted.
   | { kind: 'name-taken'; ids: string[] } // Nothing written: the ids whose new name another item has.
 
 // A new Club-added honor.
@@ -71,8 +71,7 @@ export interface AdminOrder {
   totalCents: number // Whole cents.
   itemCount: number // Sum of the line quantities.
   club: string // The club as typed or picked.
-  buyer: { name: string; email: string; phone: string } | null // Null once the personal data was removed.
-  personalDataRemovedAt: string | null // ISO UTC time of the removal, or null.
+  buyer: { name: string; email: string; phone: string } // Always present.
   lines: Array<{ itemId: string; name: string; quantity: number; priceCents: number; inShop: boolean }> // Snapshot name and price; `inShop` says the item still exists.
 }
 

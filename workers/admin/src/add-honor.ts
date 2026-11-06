@@ -6,7 +6,7 @@ import { readAdminHonors } from './honors' // Reads the new row back.
 
 // The outcome of an Add.
 export type AddResult =
-  | { kind: 'added'; honor: AdminHonor } // The new row.
+  | { kind: 'added'; item: AdminHonor } // The new row.
   | { kind: 'name-taken' } // Another item has this name, in any case.
   | { kind: 'id-taken' } // The id and its eight suffixes are all taken.
 
@@ -41,7 +41,7 @@ export async function addHonor(db: D1Database, input: NewItem, now: string): Pro
       if (reason.includes('items.id')) continue // The id is taken: try the next suffix.
       return { kind: 'name-taken' } // The unique name index.
     }
-    return { kind: 'added', honor: (await readAdminHonors(db, [id]))[0] } // Read back with its times.
+    return { kind: 'added', item: (await readAdminHonors(db, [id]))[0] } // Read back with its times.
   }
   return { kind: 'id-taken' } // Nine ids used.
 }

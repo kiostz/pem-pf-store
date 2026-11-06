@@ -6,7 +6,7 @@ import { call, insertHonors, seedHonors, type SeedHonor } from './helpers'
 
 // One page as the Worker answers it.
 interface Page {
-  honors: { id: string; name: string; modifiedAt: string; createdAt: string }[]
+  items: { id: string; name: string; modifiedAt: string; createdAt: string }[]
   nextCursor: string | null
 }
 
@@ -58,7 +58,7 @@ async function walk(sort: string, extra = '', afterFirst: () => Promise<void> = 
   do {
     const { status, body } = await page(`sort=${sort}${extra}${cursor === null ? '' : `&cursor=${cursor}`}`)
     expect(status).toBe(200)
-    pages.push(body.honors.map((honor) => honor.id))
+    pages.push(body.items.map((item) => item.id))
     cursor = body.nextCursor
     if (pages.length === 1) await afterFirst() // Rows change while the admin scrolls.
   } while (cursor !== null)
@@ -101,14 +101,14 @@ describe('pages of 50', () => {
       { id: 'newer', name: 'Zed', modifiedAt: at(5), createdAt: at(5) },
     ])
     for (const sort of ['changed', 'newest']) {
-      expect((await page(`sort=${sort}`)).body.honors.map((h) => h.id), sort).toEqual(['newer', 'apple', 'banana', 'cherry'])
+      expect((await page(`sort=${sort}`)).body.items.map((h) => h.id), sort).toEqual(['newer', 'apple', 'banana', 'cherry'])
     }
   })
 
   it('lists name order case-insensitively', async () => {
     // Catches binary collation, which puts "apple" after every capital.
     await seedHonors([{ id: 'b', name: 'Banana' }, { id: 'a', name: 'apple' }, { id: 'c', name: 'Cherry' }])
-    expect((await page('sort=name')).body.honors.map((h) => h.id)).toEqual(['a', 'b', 'c'])
+    expect((await page('sort=name')).body.items.map((h) => h.id)).toEqual(['a', 'b', 'c'])
   })
 
   it('pages the same way when two rows tie on time across the page edge', async () => {
@@ -138,8 +138,8 @@ describe('filters', () => {
         { id: 'work-rope', name: 'Work With Rope', category: 'Nature' },
         { id: 'knots', name: 'Knots', category: 'Nature' },
       ])
-      expect((await page(`sort=${sort}&q=WORK%20rope`)).body.honors.map((h) => h.id).sort()).toEqual(['rope-work', 'work-rope'])
-      expect((await page(`sort=${sort}&q=work%20rope&category=Nature`)).body.honors.map((h) => h.id)).toEqual(['work-rope'])
+      expect((await page(`sort=${sort}&q=WORK%20rope`)).body.items.map((h) => h.id).sort()).toEqual(['rope-work', 'work-rope'])
+      expect((await page(`sort=${sort}&q=work%20rope&category=Nature`)).body.items.map((h) => h.id)).toEqual(['work-rope'])
     })
   }
 
@@ -150,19 +150,19 @@ describe('filters', () => {
       { id: 'under', name: 'Snake_Charmer' },
       { id: 'plain', name: 'Snake Charmer' },
     ])
-    expect((await page('q=%25')).body.honors.map((h) => h.id)).toEqual(['pct'])
-    expect((await page('q=e_c')).body.honors.map((h) => h.id)).toEqual(['under'])
+    expect((await page('q=%25')).body.items.map((h) => h.id)).toEqual(['pct'])
+    expect((await page('q=e_c')).body.items.map((h) => h.id)).toEqual(['under'])
   })
 
   it('returns an empty page for a search with no match', async () => {
     // Catches a null cursor or an error where nothing matches.
-    expect(await page('q=zzzzqqq')).toEqual({ status: 200, body: { honors: [], nextCursor: null } })
+    expect(await page('q=zzzzqqq')).toEqual({ status: 200, body: { items: [], nextCursor: null } })
   })
 
   it('returns an empty page for an empty table', async () => {
     // Catches a crash on no rows.
     await seedHonors([])
-    expect((await page('')).body).toEqual({ honors: [], nextCursor: null })
+    expect((await page('')).body).toEqual({ items: [], nextCursor: null })
   })
 
   it('gives no cursor when exactly 50 rows match', async () => {
@@ -186,14 +186,14 @@ describe('filters', () => {
   it('sends no total and the new fields on each row', async () => {
     // Catches a count(*) creeping back, and a row missing its price or times.
     const res = await call('/api/items?sort=name')
-    const body = (await res.json()) as Record<string, unknown> & { honors: Record<string, unknown>[] }
-    expect(Object.keys(body).sort()).toEqual(['honors', 'nextCursor'])
-    expect(body.honors[0]).toEqual({ id: 'item-001', name: 'Item 001', category: 'Outreach', status: 'active', stock: 0, priceCents: 400, image: null, clubAdded: false, createdAt: at(1), modifiedAt: at(1) })
+    const body = (await res.json()) as Record<string, unknown> & { items: Record<string, unknown>[] }
+    expect(Object.keys(body).sort()).toEqual(['items', 'nextCursor'])
+    expect(body.items[0]).toEqual({ id: 'item-001', name: 'Item 001', category: 'Outreach', status: 'active', stock: 0, priceCents: 400, image: null, clubAdded: false, createdAt: at(1), modifiedAt: at(1) })
   })
 
   it('marks a Club-added honor with clubAdded', async () => {
     // Catches clubAdded read from the wrong column.
     await seedHonors([{ id: 'camp-shirt', name: 'Camp Shirt', issuedBy: 'Club' }])
-    expect(((await page('')).body.honors[0] as Record<string, unknown>).clubAdded).toBe(true)
+    expect(((await page('')).body.items[0] as Record<string, unknown>).clubAdded).toBe(true)
   })
 })

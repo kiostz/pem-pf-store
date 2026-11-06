@@ -13,9 +13,9 @@ interface RawOrder { // An order as D1 returns it.
   currency: string // Currency code.
   totalCents: number // Total in cents.
   club: string // The club it belongs to.
-  name: string | null // Buyer name, null once removed.
-  email: string | null // Buyer email, null once removed.
-  phone: string | null // Buyer phone, null once removed.
+  name: string // Buyer name; NOT NULL in D1.
+  email: string // Buyer email; NOT NULL in D1.
+  phone: string // Buyer phone; NOT NULL in D1.
 }
 
 interface RawLine { // A line as D1 returns it; `inShop` is 0 or 1.
@@ -58,7 +58,6 @@ export function orderPageSql(query: OrderQuery): { sql: string; params: (string 
 function toOrders(rows: RawOrder[], lines: RawLine[]): AdminOrder[] {
   return rows.map((row) => {
     const own = lines.filter((line) => line.orderId === row.id) // This order's lines, in the order they were saved.
-    const hasBuyer = row.name !== null && row.email !== null && row.phone !== null // Cleared fields mean no buyer.
     return { // The API shape of one order.
       number: row.number, // As stored.
       createdAt: row.createdAt, // As stored.
@@ -67,8 +66,7 @@ function toOrders(rows: RawOrder[], lines: RawLine[]): AdminOrder[] {
       totalCents: row.totalCents, // As stored.
       itemCount: own.reduce((sum, line) => sum + line.quantity, 0), // Quantity, not lines.
       club: row.club, // As stored.
-      buyer: hasBuyer ? { name: row.name as string, email: row.email as string, phone: row.phone as string } : null, // Checked above.
-      personalDataRemovedAt: null, // The column is gone; the field stays until the Admin API drops it.
+      buyer: { name: row.name, email: row.email, phone: row.phone }, // Always present: the columns are NOT NULL.
       lines: own.map((line) => ({ itemId: line.itemId, name: line.name, quantity: line.quantity, priceCents: line.priceCents, inShop: line.inShop === 1 })), // The lines with the live flag.
     }
   })

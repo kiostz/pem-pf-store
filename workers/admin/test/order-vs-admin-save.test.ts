@@ -20,7 +20,7 @@ describe('an order between the admin load and save', () => {
     expect(sold.kind).toBe('saved') // Saved.
     const stale = await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 5, to: 8 } }] }) // The admin still sees 5.
     expect(stale.status).toBe(409) // Conflict.
-    expect(await stale.json()).toEqual({ error: 'conflict', honors: [wire({ id: 'knot-tying', name: 'Knot Tying', stock: 3 })], deletedIds: [] }) // The current row.
+    expect(await stale.json()).toEqual({ error: 'conflict', items: [wire({ id: 'knot-tying', name: 'Knot Tying', stock: 3 })], deletedIds: [] }) // The current row.
     expect(await rowOf('knot-tying')).toEqual({ stock: 3, status: 'active' }) // Not overwritten.
     const orders = await env.DB.prepare('SELECT COUNT(*) AS n FROM orders').first<{ n: number }>() // The sale.
     expect(orders?.n).toBe(1) // Still there.
@@ -39,8 +39,8 @@ describe('an order for an item the admin just edited', () => {
     const request = parseOrderRequest({ requestId: '00000000-0000-4000-8000-000000000002', turnstileToken: 't', name: 'Ana Tester', email: 'ana@example.com', phone: '+60 12-345 6789', club: { name: 'Gilead', typed: false }, lines: [{ itemId: 'africa-lore', quantity: 2 }] })!
     expect((await saveOrder(env.DB, request, new Date('2030-01-01T00:00:00Z'))).kind).toBe('saved') // The sale, far later.
     expect(await fullRowOf('africa-lore')).toMatchObject({ stock: 3, modified_at: edited }) // Stock down, time kept.
-    const page = (await (await call('/api/items?sort=changed')).json()) as { honors: { id: string; modifiedAt: string }[] }
-    expect(page.honors.map((honor) => honor.id)).toEqual(['africa-lore', 'knot-tying']) // Edited first, as before the sale.
-    expect(page.honors[0].modifiedAt).toBe(edited)
+    const page = (await (await call('/api/items?sort=changed')).json()) as { items: { id: string; modifiedAt: string }[] }
+    expect(page.items.map((item) => item.id)).toEqual(['africa-lore', 'knot-tying']) // Edited first, as before the sale.
+    expect(page.items[0].modifiedAt).toBe(edited)
   })
 })

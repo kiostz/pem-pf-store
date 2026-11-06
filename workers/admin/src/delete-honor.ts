@@ -7,7 +7,7 @@ import { readAdminHonors } from './honors' // Reads the current row.
 export type DeleteResult =
   | { kind: 'deleted' } // Gone now, or already gone.
   | { kind: 'built-in' } // Not Club-added.
-  | { kind: 'conflict'; honors: AdminHonor[] } // The row changed since the admin saw it; nothing deleted.
+  | { kind: 'conflict'; items: AdminHonor[] } // The row changed since the admin saw it; nothing deleted.
 
 /**
  * Tells whether a stored row is exactly what the admin saw, including the stock a sale lowers without touching modified_at.
@@ -37,7 +37,7 @@ export async function deleteHonor(db: D1Database, bucket: R2Bucket, request: Del
   const [current] = await readAdminHonors(db, [request.id]) // The stored row, if any.
   if (current === undefined) return { kind: 'deleted' } // Already gone: the goal is met.
   if (!current.clubAdded) return { kind: 'built-in' } // Never deleted.
-  if (!matches(current, request.seen)) return { kind: 'conflict', honors: [current] } // Changed since viewing.
+  if (!matches(current, request.seen)) return { kind: 'conflict', items: [current] } // Changed since viewing.
   const { seen } = request // The guard values.
   const result = await db
     .prepare("DELETE FROM items WHERE id = ? AND issued_by = 'Club' AND name = ? AND category = ? AND price_cents = ? AND status = ? AND stock = ? AND modified_at = ?")
@@ -48,5 +48,5 @@ export async function deleteHonor(db: D1Database, bucket: R2Bucket, request: Del
     return { kind: 'deleted' } // Done.
   }
   const [after] = await readAdminHonors(db, [request.id]) // Why not: gone, or changed just now.
-  return after === undefined ? { kind: 'deleted' } : { kind: 'conflict', honors: [after] } // Gone is fine.
+  return after === undefined ? { kind: 'deleted' } : { kind: 'conflict', items: [after] } // Gone is fine.
 }

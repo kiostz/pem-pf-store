@@ -1,10 +1,10 @@
-// Tests GET /api/orders: pages of 50 without repeats or gaps, step filter, number lookup, lines and removed buyers.
+// Tests GET /api/orders: pages of 50 without repeats or gaps, step filter, number lookup, lines and buyer details.
 
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { BUYER, call, insertHonors, orderNumber, seedHonors, seedOrders, type SeedOrder } from './helpers'
 
-interface Page { orders: { number: string; step: string; itemCount: number; totalCents: number; buyer: unknown; personalDataRemovedAt: string | null; lines: { itemId: string; name: string; quantity: number; priceCents: number; inShop: boolean }[] }[]; nextCursor: string | null }
+interface Page { orders: { number: string; step: string; itemCount: number; totalCents: number; buyer: unknown; lines: { itemId: string; name: string; quantity: number; priceCents: number; inShop: boolean }[] }[]; nextCursor: string | null }
 
 /**
  * Reads one page.
@@ -103,11 +103,12 @@ describe('GET /api/orders pages', () => {
     expect(order.buyer).toEqual(BUYER)
   })
 
-  it('serves personalDataRemovedAt as null now that the column is gone', async () => {
-    // Catches the old field vanishing from the JSON before the Admin API drops it on purpose.
+  it('serves every order with a buyer object and no personalDataRemovedAt key', async () => {
+    // Catches the dropped removal field still being served, or a buyer that is not a full object.
     await seedOrders([{ number: 'PF-20261105-ABCD' }])
     const order = (await page()).body.orders[0]
-    expect(order.personalDataRemovedAt).toBeNull()
+    expect(Object.keys(order)).not.toContain('personalDataRemovedAt')
+    expect(order.buyer).toEqual(BUYER)
   })
 
   it('answers 400 invalid for a bad query and sets no-store', async () => {

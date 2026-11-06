@@ -16,8 +16,6 @@ const LABELS: Record<OrderStep, string> = {
   cancelled: 'Cancelled',
 } // the step words on screen
 
-const NO_BUYER = 'No buyer details' // shown when an order has no buyer
-
 const TAGS: Record<OrderStep, string> = {
   new: 'bg-bg-soft text-accent', // soft fill, oxblood text
   paid: 'bg-bg-soft text-text-default', // soft fill, ink
@@ -173,7 +171,7 @@ export function OrderRow({
           <StepTag step={order.step} />
         </span>
         <span className="text-text-muted text-sm">{`${formatAdminTime(order.createdAt)} · ${order.club}`}</span>
-        <span className="text-sm">{order.buyer?.name ?? NO_BUYER}</span>
+        <span className="text-sm">{order.buyer.name}</span>
         <span className="text-text-muted text-sm">{items}</span>
       </button>
       {/* The outcome of the last change; mounted always so screen readers hear it appear. */}
@@ -200,24 +198,20 @@ export function OrderRow({
               </li>
             ))}
           </ul>
-          {order.buyer !== null ? (
-            <p className="flex flex-col text-sm">
-              <a
-                href={`mailto:${order.buyer.email}`} // opens the mail app
-                className="text-accent focus-visible:outline-focus-ring flex min-h-11 items-center underline focus-visible:outline-2"
-              >
-                {order.buyer.email}
-              </a>
-              <a
-                href={`tel:${order.buyer.phone.replace(/[^\d+]/g, '')}`} // digits and a plus only
-                className="text-accent focus-visible:outline-focus-ring flex min-h-11 items-center underline focus-visible:outline-2"
-              >
-                {order.buyer.phone}
-              </a>
-            </p>
-          ) : (
-            <p className="text-text-muted text-sm">{NO_BUYER}</p>
-          )}
+          <p className="flex flex-col text-sm">
+            <a
+              href={`mailto:${order.buyer.email}`} // opens the mail app
+              className="text-accent focus-visible:outline-focus-ring flex min-h-11 items-center underline focus-visible:outline-2"
+            >
+              {order.buyer.email}
+            </a>
+            <a
+              href={`tel:${order.buyer.phone.replace(/[^\d+]/g, '')}`} // digits and a plus only
+              className="text-accent focus-visible:outline-focus-ring flex min-h-11 items-center underline focus-visible:outline-2"
+            >
+              {order.buyer.phone}
+            </a>
+          </p>
           {order.step !== 'cancelled' && (
             // A cancelled order is final: no step control and no cancel.
             <div className="flex flex-wrap items-center justify-between gap-3">

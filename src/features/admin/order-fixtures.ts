@@ -15,7 +15,6 @@ export const makeOrder = (fields: Partial<AdminOrder> & { number: string }): Adm
   itemCount: 3, // three items
   club: 'Test Club', // a made-up club
   buyer: { name: 'Test Buyer', email: 'buyer@example.test', phone: '+60 12 000 0000' }, // a made-up buyer
-  personalDataRemovedAt: null, // details kept
   lines: [
     { itemId: 'knot-tying', name: 'Knot Tying', quantity: 2, priceCents: 400, inShop: true }, // still sold
     { itemId: 'camp-shirt', name: 'Camp Shirt', quantity: 1, priceCents: 400, inShop: true }, // still sold

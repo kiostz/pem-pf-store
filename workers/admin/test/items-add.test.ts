@@ -26,7 +26,7 @@ describe('POST /api/items', () => {
     // Catches an Add that starts Active (sellable before the admin looked), or with a time of the backfill date.
     const res = await add()
     expect(res.status).toBe(201)
-    expect(await res.json()).toEqual({ honor: wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', status: 'hidden', stock: 0, priceCents: 400, clubAdded: true, createdAt: NOW, modifiedAt: NOW }) })
+    expect(await res.json()).toEqual({ item: wire({ id: 'camp-shirt', name: 'Camp Shirt', category: 'Shirt', status: 'hidden', stock: 0, priceCents: 400, clubAdded: true, createdAt: NOW, modifiedAt: NOW }) })
     expect(await fullRowOf('camp-shirt')).toMatchObject({ issued_by: 'Club', status: 'hidden', stock: 0, created_at: NOW, modified_at: NOW })
   })
 
@@ -41,7 +41,7 @@ describe('POST /api/items', () => {
     await insertHonors([{ id: 'camp-shirt', name: 'Camp  Shirt!' }]) // The same slug, another name.
     const res = await add()
     expect(res.status).toBe(201)
-    expect(((await res.json()) as { honor: { id: string } }).honor.id).toBe('camp-shirt-2')
+    expect(((await res.json()) as { item: { id: string } }).item.id).toBe('camp-shirt-2')
     expect((await fullRowOf('camp-shirt'))!.name).toBe('Camp  Shirt!') // Untouched.
   })
 
@@ -50,7 +50,7 @@ describe('POST /api/items', () => {
     const res = await add({ name: 'knot tying' })
     expect(res.status).toBe(409)
     expect(await res.json()).toEqual({ error: 'name-taken' })
-    expect(((await (await call('/api/items?sort=name')).json()) as { honors: unknown[] }).honors).toHaveLength(1)
+    expect(((await (await call('/api/items?sort=name')).json()) as { items: unknown[] }).items).toHaveLength(1)
   })
 
   it('makes one row from two parallel adds of the same name', async () => {

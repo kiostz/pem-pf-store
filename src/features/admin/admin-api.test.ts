@@ -9,6 +9,7 @@ import {
   loadClubs,
   loadItemPage,
   loadMeta,
+  loadOrderPage,
   moveClubs,
   removeClub,
   savePrices,
@@ -17,6 +18,7 @@ import {
 } from './admin-api.ts' // the code under test
 import { makeClub } from './club-fixtures.ts' // shared clubs
 import { makeItem, meta } from './item-fixtures.ts' // shared rows
+import { makeOrder } from './order-fixtures.ts' // shared orders
 
 const knot = makeItem({ id: 'knot-tying', name: 'Knot Tying' }) // a valid row
 
@@ -48,7 +50,7 @@ afterEach(() => vi.unstubAllGlobals()) // no stub leaks on
 describe('loadItemPage', () => {
   it('asks for the sort, search, category and cursor in the query, without following redirects', async () => {
     // Catches a filter that never reaches D1, or a load that follows an Access redirect into a login page.
-    const spy = stubFetch(Response.json({ honors: [knot], nextCursor: 'abc' }))
+    const spy = stubFetch(Response.json({ items: [knot], nextCursor: 'abc' }))
     const result = await loadItemPage({
       sort: 'newest',
       q: 'knot tying',
@@ -65,7 +67,7 @@ describe('loadItemPage', () => {
 
   it('leaves out an empty search, category and cursor', async () => {
     // Catches "q=&category=" reaching the Worker, which would answer 400.
-    const spy = stubFetch(Response.json({ honors: [], nextCursor: null }))
+    const spy = stubFetch(Response.json({ items: [], nextCursor: null }))
     await loadItemPage({ sort: 'changed', q: '', category: null, cursor: null })
     expect((spy.mock.calls as unknown as [string][])[0][0]).toBe(
       '/api/items?sort=changed',
@@ -74,7 +76,7 @@ describe('loadItemPage', () => {
 
   it('maps an opaque redirect and a 403 to signed-out, and a 400, a 500, a network error and a wrong shape to error', async () => {
     // Catches an expired session shown as a failure, or a malformed page trusted.
-    const body = { honors: [knot], nextCursor: null }
+    const body = { items: [knot], nextCursor: null }
     stubFetch(opaqueRedirect())
     expect(
       await loadItemPage({
@@ -97,7 +99,7 @@ describe('loadItemPage', () => {
       Response.json({ error: 'invalid' }, { status: 400 }),
       Response.json({ error: 'server' }, { status: 500 }),
       Response.json({
-        honors: [{ ...knot, priceCents: '4' }],
+        items: [{ ...knot, priceCents: '4' }],
         nextCursor: null,
       }),
       Response.json({ ...body, nextCursor: 5 }),
@@ -140,7 +142,7 @@ describe('sendHonorChanges', () => {
 
   it('posts the changes as JSON on the same origin without following redirects', async () => {
     // Catches a save without the JSON type the Worker demands, or one that follows a login redirect.
-    const spy = stubFetch(Response.json({ honors: [knot] }))
+    const spy = stubFetch(Response.json({ items: [knot] }))
     expect(await sendHonorChanges(changes)).toEqual({
       kind: 'saved',
       honors: [knot],
@@ -160,7 +162,7 @@ describe('sendHonorChanges', () => {
     // Catches a refused save shown as saved, or the deleted ids lost.
     stubFetch(
       Response.json(
-        { error: 'conflict', honors: [knot], deletedIds: ['gone'] },
+        { error: 'conflict', items: [knot], deletedIds: ['gone'] },
         { status: 409 },
       ),
     )
@@ -199,7 +201,7 @@ describe('addItem', () => {
 
   it('posts the item and maps 201, name-taken, id-taken, signed-out and failures', async () => {
     // Catches an Add that cannot tell the two 409s apart, which need different words.
-    const spy = stubFetch(Response.json({ honor: knot }, { status: 201 }))
+    const spy = stubFetch(Response.json({ item: knot }, { status: 201 }))
     expect(await addItem(input)).toEqual({ kind: 'added', honor: knot })
     expect(spy).toHaveBeenCalledWith(
       '/api/items',
@@ -246,7 +248,7 @@ describe('deleteItem', () => {
       }),
     )
     stubFetch(
-      Response.json({ error: 'conflict', honors: [knot] }, { status: 409 }),
+      Response.json({ error: 'conflict', items: [knot] }, { status: 409 }),
     )
     expect(await deleteItem(request)).toEqual({
       kind: 'conflict',
@@ -259,6 +261,12 @@ describe('deleteItem', () => {
     stubFetch(Response.json({ error: 'server' }, { status: 500 }))
     expect(await deleteItem(request)).toEqual({ kind: 'error' })
   })
+
+  it('reads a 409 with only the old honors key as an error kind', async () => {
+    // Catches a tab left open across the deploy crashing on the old key name.
+    stubFetch(Response.json({ error: 'conflict', honors: [knot] }, { status: 409 }))
+    expect(await deleteItem(request)).toEqual({ kind: 'error' })
+  })
 })
 
 describe('uploadPicture', () => {
@@ -267,7 +275,7 @@ describe('uploadPicture', () => {
 
   it('posts the bytes with the picture type to the picture route, and leaves seen empty for null', async () => {
     // Catches a JSON body or the wrong type (the Worker refuses both), a wrongly encoded seen key, or a followed Access redirect.
-    const spy = stubFetch(Response.json({ honor: withPicture }))
+    const spy = stubFetch(Response.json({ item: withPicture }))
     await uploadPicture('knot-tying', 'items/knot-tying.webp', picture)
     expect(spy).toHaveBeenCalledWith(
       '/api/items/picture?id=knot-tying&seen=items%2Fknot-tying.webp',
@@ -285,21 +293,21 @@ describe('uploadPicture', () => {
 
   it('maps 200 to saved with the checked row, and a row with a wrong image type to error', async () => {
     // Catches a row of the wrong shape entering the list.
-    stubFetch(Response.json({ honor: withPicture }))
+    stubFetch(Response.json({ item: withPicture }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'saved', honor: withPicture })
-    stubFetch(Response.json({ honor: { ...knot, image: 7 } }))
+    stubFetch(Response.json({ item: { ...knot, image: 7 } }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
   })
 
   it('maps 409 to conflict with the rows and deleted ids', async () => {
     // Catches a refused upload shown as saved, or a deleted item left in the list.
-    stubFetch(Response.json({ error: 'conflict', honors: [withPicture], deletedIds: [] }, { status: 409 }))
+    stubFetch(Response.json({ error: 'conflict', items: [withPicture], deletedIds: [] }, { status: 409 }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({
       kind: 'conflict',
       honors: [withPicture],
       deletedIds: [],
     })
-    stubFetch(Response.json({ error: 'conflict', honors: [], deletedIds: ['knot-tying'] }, { status: 409 }))
+    stubFetch(Response.json({ error: 'conflict', items: [], deletedIds: ['knot-tying'] }, { status: 409 }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({
       kind: 'conflict',
       honors: [],
@@ -325,11 +333,11 @@ describe('uploadPicture', () => {
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
     stubFetch(Response.json({}, { status: 200 }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
-    stubFetch(Response.json({ error: 'conflict', honors: [withPicture] }, { status: 409 }))
+    stubFetch(Response.json({ error: 'conflict', items: [withPicture] }, { status: 409 }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
-    stubFetch(Response.json({ error: 'conflict', honors: [{ ...knot, image: 7 }], deletedIds: [] }, { status: 409 }))
+    stubFetch(Response.json({ error: 'conflict', items: [{ ...knot, image: 7 }], deletedIds: [] }, { status: 409 }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
-    stubFetch(Response.json({ honor: withPicture }, { status: 400 }))
+    stubFetch(Response.json({ item: withPicture }, { status: 400 }))
     expect(await uploadPicture('knot-tying', null, picture)).toEqual({ kind: 'error' })
   })
 })
@@ -415,5 +423,32 @@ describe('savePrices', () => {
     expect(await savePrices(change)).toEqual({ kind: 'error' })
     stubFetch(Response.json({ currency: 'SGD', defaultPriceCents: '400' }))
     expect(await savePrices(change)).toEqual({ kind: 'error' })
+  })
+})
+
+describe('answers from an old Worker and orders without a buyer', () => {
+  it('reads an answer that has only the old honors or honor key as an error kind, never a crash', async () => {
+    // Catches an admin tab left open across the deploy trusting the old key names.
+    stubFetch(Response.json({ honors: [knot], nextCursor: null }))
+    expect(await loadItemPage({ sort: 'changed', q: '', category: null, cursor: null })).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ honors: [knot] }))
+    expect(await sendHonorChanges([{ id: 'knot-tying', stock: { from: 1, to: 2 } }])).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ honor: knot }, { status: 201 }))
+    expect(await addItem({ name: 'Knot Tying', category: 'Outdoor', priceCents: 400 })).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ honor: knot }))
+    expect(await uploadPicture('knot-tying', null, new Blob(['x'], { type: 'image/webp' }))).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ error: 'conflict', honors: [knot], deletedIds: [] }, { status: 409 }))
+    expect(await sendHonorChanges([{ id: 'knot-tying', stock: { from: 1, to: 2 } }])).toEqual({ kind: 'error' })
+    stubFetch(Response.json({ error: 'conflict', honors: [knot], deletedIds: [] }, { status: 409 }))
+    expect(await uploadPicture('knot-tying', null, new Blob(['x'], { type: 'image/webp' }))).toEqual({ kind: 'error' })
+  })
+
+  it('reads an order whose buyer is null as an error kind', async () => {
+    // Catches a null buyer reaching the order row, which no longer handles it.
+    const order = makeOrder({ number: 'PF-20261105-AAAA' })
+    stubFetch(Response.json({ orders: [order], nextCursor: null }))
+    expect(await loadOrderPage({ step: null, number: null, cursor: null })).toEqual({ kind: 'ok', orders: [order], nextCursor: null })
+    stubFetch(Response.json({ orders: [{ ...order, buyer: null }], nextCursor: null }))
+    expect(await loadOrderPage({ step: null, number: null, cursor: null })).toEqual({ kind: 'error' })
   })
 })

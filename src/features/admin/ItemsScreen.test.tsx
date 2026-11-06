@@ -11,7 +11,7 @@ import type { ResizeDeps } from './resize-picture.ts' // the passed-in browser p
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response> // answers one request
 type Routes = { pages?: Handler; meta?: Handler; changes?: Handler; add?: Handler; del?: Handler; picture?: Handler } // one handler per route
 
-const pageOf = (honors: AdminHonor[], nextCursor: string | null = null) => Response.json({ honors, nextCursor }) // a page answer
+const pageOf = (items: AdminHonor[], nextCursor: string | null = null) => Response.json({ items, nextCursor }) // a page answer
 
 /**
  * Stubs fetch for every route of the Admin Worker the screen uses.
@@ -25,7 +25,7 @@ function stubApi(routes: Routes = {}) {
       const post = init?.method === 'POST' // writes are POSTs
       if (path === '/api/meta') return (routes.meta ?? (() => Response.json(meta)))(String(url), init)
       if (path === '/api/items/changes')
-        return (routes.changes ?? (() => Response.json({ honors: [] })))(String(url), init)
+        return (routes.changes ?? (() => Response.json({ items: [] })))(String(url), init)
       if (path === '/api/items/picture')
         return (routes.picture ?? (() => Response.json({}, { status: 500 })))(String(url), init)
       if (path === '/api/items/delete')
@@ -345,7 +345,7 @@ describe('editing in the sheet and saving', () => {
   it('counts a row edit and a sheet edit, shows the pending values, and sends each `from`', async () => {
     // Catches a sheet edit that never reaches the pending list, or a request without the row's `from`.
     const spy = stubApi({
-      changes: () => Response.json({ honors: [{ ...rows[2], name: 'Knots', priceCents: 550, stock: 5 }] }),
+      changes: () => Response.json({ items: [{ ...rows[2], name: 'Knots', priceCents: 550, stock: 5 }] }),
     })
     await openScreen()
     typeKnotStock('5')
@@ -380,10 +380,10 @@ describe('editing in the sheet and saving', () => {
         const change = JSON.parse(init!.body as string).changes[0]
         return change.name === undefined
           ? Response.json({
-              honors: [{ ...rows[2], name: 'Knot Alpha', priceCents: 550, modifiedAt: '2026-11-03T05:00:00.000Z' }],
+              items: [{ ...rows[2], name: 'Knot Alpha', priceCents: 550, modifiedAt: '2026-11-03T05:00:00.000Z' }],
             }) // the price saved; another admin renamed it meanwhile
           : Response.json(
-              { error: 'conflict', honors: [{ ...rows[2], name: 'Knot Alpha', priceCents: 550 }], deletedIds: [] },
+              { error: 'conflict', items: [{ ...rows[2], name: 'Knot Alpha', priceCents: 550 }], deletedIds: [] },
               { status: 409 },
             )
       },
@@ -427,9 +427,9 @@ describe('editing in the sheet and saving', () => {
           const change = JSON.parse(init!.body as string).changes[0]
           return change.id === 'knot-tying'
             ? Response.json({
-                honors: [{ ...rows[2], name: 'Knot Alpha', priceCents: 550, modifiedAt: '2026-11-03T05:00:00.000Z' }],
+                items: [{ ...rows[2], name: 'Knot Alpha', priceCents: 550, modifiedAt: '2026-11-03T05:00:00.000Z' }],
               })
-            : Response.json({ honors: [{ ...rows[3], stock: 9, modifiedAt: '2026-11-03T05:10:00.000Z' }] })
+            : Response.json({ items: [{ ...rows[3], stock: 9, modifiedAt: '2026-11-03T05:10:00.000Z' }] })
         },
       })
       await openScreen()
@@ -465,10 +465,10 @@ describe('editing in the sheet and saving', () => {
           const change = JSON.parse(init!.body as string).changes[0]
           return change.name === undefined
             ? Response.json({
-                honors: [{ ...rows[2], name: 'Knot Alpha', priceCents: 550, modifiedAt: '2026-11-03T05:00:00.000Z' }],
+                items: [{ ...rows[2], name: 'Knot Alpha', priceCents: 550, modifiedAt: '2026-11-03T05:00:00.000Z' }],
               })
             : Response.json(
-                { error: 'conflict', honors: [{ ...rows[2], name: 'Knot Gamma', priceCents: 550 }], deletedIds: [] },
+                { error: 'conflict', items: [{ ...rows[2], name: 'Knot Gamma', priceCents: 550 }], deletedIds: [] },
                 { status: 409 },
               )
         },
@@ -534,7 +534,7 @@ describe('editing in the sheet and saving', () => {
     expect(postBodies(spy)).toHaveLength(1)
     expect(screen.getByRole('button', { name: 'Saving…' })).toBeInTheDocument()
     await act(async () => undefined) // lets the stub take the request
-    await act(async () => release(Response.json({ honors: [{ ...rows[2], stock: 5 }] })))
+    await act(async () => release(Response.json({ items: [{ ...rows[2], stock: 5 }] })))
     expect(await screen.findByText('Saved 1 change.')).toBeInTheDocument()
   })
 
@@ -544,7 +544,7 @@ describe('editing in the sheet and saving', () => {
     const spy = stubApi({
       changes: () => {
         if (++attempts === 1) throw new TypeError('Failed to fetch') // the connection drops
-        return Response.json({ honors: [{ ...rows[2], stock: 5 }] })
+        return Response.json({ items: [{ ...rows[2], stock: 5 }] })
       },
     })
     await openScreen()
@@ -604,8 +604,8 @@ describe('conflicts', () => {
     const spy = stubApi({
       changes: (_url, init) =>
         JSON.parse(init!.body as string).changes[0].stock.from === 12
-          ? Response.json({ error: 'conflict', honors: [{ ...rows[2], stock: 5 }], deletedIds: [] }, { status: 409 })
-          : Response.json({ honors: [{ ...rows[2], stock: 7 }] }),
+          ? Response.json({ error: 'conflict', items: [{ ...rows[2], stock: 5 }], deletedIds: [] }, { status: 409 })
+          : Response.json({ items: [{ ...rows[2], stock: 7 }] }),
     })
     await openScreen()
     typeKnotStock('7')
@@ -629,7 +629,7 @@ describe('conflicts', () => {
   it('takes a deleted item off the list and says so', async () => {
     // Catches an edit left on a row another admin deleted, with no word about why.
     stubApi({
-      changes: () => Response.json({ error: 'conflict', honors: [], deletedIds: ['knot-tying'] }, { status: 409 }),
+      changes: () => Response.json({ error: 'conflict', items: [], deletedIds: ['knot-tying'] }, { status: 409 }),
     })
     await openScreen()
     typeKnotStock('5')
@@ -644,7 +644,7 @@ describe('conflicts', () => {
     let moved = false
     const spy = stubApi({
       pages: () => pageOf(moved ? [{ ...rows[2], stock: 20 }] : rows),
-      changes: () => Response.json({ honors: [] }),
+      changes: () => Response.json({ items: [] }),
     })
     await openScreen()
     typeKnotStock('5')
@@ -662,7 +662,7 @@ describe('Add item', () => {
     // Catches an added item the admin cannot find in the list, or one that waits for Save.
     const camp = { ...rows[1], id: 'camp-hat', name: 'Camp Hat', status: 'hidden' as const, stock: 0 }
     const spy = stubApi({
-      add: () => Response.json({ honor: camp }, { status: 201 }),
+      add: () => Response.json({ item: camp }, { status: 201 }),
       pages: (url) => (url.includes('q=Camp+Hat') ? pageOf([camp]) : pageOf(rows)),
     })
     await openScreen()
@@ -715,7 +715,7 @@ describe('Delete item', () => {
     const spy = stubApi({
       del: () =>
         ++calls === 1
-          ? Response.json({ error: 'conflict', honors: [latest] }, { status: 409 })
+          ? Response.json({ error: 'conflict', items: [latest] }, { status: 409 })
           : Response.json({ deletedId: 'camp-shirt' }),
     })
     await openScreen()
@@ -806,7 +806,7 @@ describe('Discard and Undo', () => {
     // Catches an Undo that restores the count but not the flags.
     stubApi({
       changes: () =>
-        Response.json({ error: 'conflict', honors: [{ ...rows[2], stock: 5 }], deletedIds: [] }, { status: 409 }),
+        Response.json({ error: 'conflict', items: [{ ...rows[2], stock: 5 }], deletedIds: [] }, { status: 409 }),
     })
     await openScreen()
     typeKnotStock('7')
@@ -841,7 +841,7 @@ describe('Discard and Undo', () => {
     const walk = screen.getByRole('textbox', { name: 'Stock of Nature Walk' }) // jsdom ignores inert, so this edit gets in
     fireEvent.change(walk, { target: { value: '9' } })
     fireEvent.blur(walk)
-    await act(async () => answer(Response.json({ honors: [{ ...rows[2], stock: 5 }] })))
+    await act(async () => answer(Response.json({ items: [{ ...rows[2], stock: 5 }] })))
     expect(await screen.findByText('Saved 1 change.')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Stock of Nature Walk' })).toHaveValue('9')
     expect(screen.getByRole('button', { name: 'Save (1 change)' })).toBeInTheDocument()
@@ -926,7 +926,7 @@ describe('interruptions', () => {
         if (failing) throw new TypeError('Failed to fetch') // the connection drops
         return pageOf(rows)
       },
-      changes: () => Response.json({ honors: [{ ...rows[2], stock: 5 }] }),
+      changes: () => Response.json({ items: [{ ...rows[2], stock: 5 }] }),
     })
     await openScreen()
     typeKnotStock('5')
@@ -959,7 +959,7 @@ describe('interruptions', () => {
     await act(async () => undefined)
     await act(async () => page2(pageOf([rows[2], rows[3]]))) // the page lists Knot Tying as it was
     await act(async () =>
-      answer(Response.json({ honors: [{ ...rows[2], stock: 5, modifiedAt: '2026-11-03T05:00:00.000Z' }] })),
+      answer(Response.json({ items: [{ ...rows[2], stock: 5, modifiedAt: '2026-11-03T05:00:00.000Z' }] })),
     )
     expect(await screen.findByText('Saved 1 change.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Save \(/ })).not.toBeInTheDocument() // nothing left pending
@@ -1044,7 +1044,7 @@ describe('picture upload', () => {
 
   it('replaces the row in place after a saved picture and keeps a pending name edit pending', async () => {
     // Catches a picture save that drops the admin's unsaved edits or reshuffles the list.
-    const spy = stubApi({ picture: () => Response.json({ honor: knotWithPicture }) })
+    const spy = stubApi({ picture: () => Response.json({ item: knotWithPicture }) })
     await openScreen(deps)
     openSheet('Knot Tying')
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Knots' } })
@@ -1065,7 +1065,7 @@ describe('picture upload', () => {
 
   it('flags a field another admin changed when a picture is saved, with the latest values', async () => {
     // Catches a picture save that hides another admin's rename behind a fresh change time.
-    stubApi({ picture: () => Response.json({ honor: { ...knotWithPicture, name: 'Knot Alpha' } }) }) // renamed meanwhile
+    stubApi({ picture: () => Response.json({ item: { ...knotWithPicture, name: 'Knot Alpha' } }) }) // renamed meanwhile
     await openScreen(deps)
     await uploadForKnot()
     expect(await screen.findByText('Picture saved.')).toBeInTheDocument()
@@ -1081,7 +1081,7 @@ describe('picture upload', () => {
     stubApi({
       picture,
       changes: () =>
-        Response.json({ honors: [{ ...rows[2], name: 'Knot Alpha', priceCents: 550, modifiedAt: '2026-11-03T05:00:00.000Z' }] }),
+        Response.json({ items: [{ ...rows[2], name: 'Knot Alpha', priceCents: 550, modifiedAt: '2026-11-03T05:00:00.000Z' }] }),
     })
     await openScreen(deps)
     openSheet('Knot Tying')
@@ -1096,7 +1096,7 @@ describe('picture upload', () => {
   it('clears an older save-raised note when a picture save shows nothing else out of date', async () => {
     // Catches a "This item has been updated" note that stays after a picture save whose answer matches what the row shows.
     await openFlaggedKnotForPicture(() =>
-      Response.json({ honor: { ...knotWithPicture, name: 'Knot Tying', priceCents: 550 } }),
+      Response.json({ item: { ...knotWithPicture, name: 'Knot Tying', priceCents: 550 } }),
     ) // the answer agrees with the shown values
     expect(await screen.findByText('Picture saved.')).toBeInTheDocument()
     expect(screen.queryByText(/^Latest: /)).not.toBeInTheDocument() // the old note is gone
@@ -1105,7 +1105,7 @@ describe('picture upload', () => {
   it('drops an older save-raised note when a picture conflict brings the latest rows', async () => {
     // Catches an old "Latest: Knot Alpha" line left on a row that a picture conflict just refreshed.
     await openFlaggedKnotForPicture(() =>
-      Response.json({ error: 'conflict', honors: [{ ...knotWithPicture, name: 'Knot Gamma' }], deletedIds: [] }, { status: 409 }),
+      Response.json({ error: 'conflict', items: [{ ...knotWithPicture, name: 'Knot Gamma' }], deletedIds: [] }, { status: 409 }),
     )
     await waitFor(() => expect(screen.getAllByText('Knot Gamma').length).toBeGreaterThan(0)) // the list shows the newest values
     expect(screen.queryByText(/^Latest: /)).not.toBeInTheDocument() // the older note is gone
@@ -1114,7 +1114,7 @@ describe('picture upload', () => {
   it('deletes with the picture save as the guard after an unsaved edit on the same item', async () => {
     // Catches a Delete that sends the old change time and gets a false conflict for the admin's own picture save.
     const campWithPicture = { ...rows[1], image: 'items/camp-shirt-1a2b3c4d.webp', modifiedAt: '2026-11-03T03:00:00.000Z' } // after the upload
-    const spy = stubApi({ picture: () => Response.json({ honor: campWithPicture }) })
+    const spy = stubApi({ picture: () => Response.json({ item: campWithPicture }) })
     await openScreen(deps)
     const stock = screen.getByRole('textbox', { name: 'Stock of Camp Shirt' })
     fireEvent.change(stock, { target: { value: '9' } })
@@ -1138,7 +1138,7 @@ describe('picture upload', () => {
   it('takes the item off the list and closes the sheet when another admin deleted it', async () => {
     // Catches a deleted item left on the list, or a sheet that stays open on a row that is gone.
     stubApi({
-      picture: () => Response.json({ error: 'conflict', honors: [], deletedIds: ['knot-tying'] }, { status: 409 }),
+      picture: () => Response.json({ error: 'conflict', items: [], deletedIds: ['knot-tying'] }, { status: 409 }),
     })
     await openScreen(deps)
     await uploadForKnot()
@@ -1149,7 +1149,7 @@ describe('picture upload', () => {
   it('applies the current row on a conflict and says the item was updated', async () => {
     // Catches a refused upload that leaves the sheet showing the old picture.
     stubApi({
-      picture: () => Response.json({ error: 'conflict', honors: [knotWithPicture], deletedIds: [] }, { status: 409 }),
+      picture: () => Response.json({ error: 'conflict', items: [knotWithPicture], deletedIds: [] }, { status: 409 }),
     })
     await openScreen(deps)
     await uploadForKnot()
@@ -1196,7 +1196,7 @@ describe('picture upload interruptions', () => {
     const spy = stubApi({
       picture: () => {
         if (!online) throw new TypeError('Failed to fetch') // the connection drops
-        return Response.json({ honor: stored })
+        return Response.json({ item: stored })
       },
     })
     await openScreen(deps)
@@ -1222,7 +1222,7 @@ describe('picture upload interruptions', () => {
       picture: () => {
         sent += 1
         if (sent === 1) throw new TypeError('Failed to fetch') // the Worker stored it, but the reply never came
-        return Response.json({ error: 'conflict', honors: [stored], deletedIds: [] }, { status: 409 }) // the second sees a new key
+        return Response.json({ error: 'conflict', items: [stored], deletedIds: [] }, { status: 409 }) // the second sees a new key
       },
     })
     await openScreen(deps)
@@ -1237,7 +1237,7 @@ describe('picture upload interruptions', () => {
 
   it('sends one upload for a double click on Save picture through the real hook', async () => {
     // Catches a double click that sends two uploads and leaves an orphan object.
-    const spy = stubApi({ picture: () => Response.json({ honor: stored }) })
+    const spy = stubApi({ picture: () => Response.json({ item: stored }) })
     await openScreen(deps)
     await chooseForKnot()
     const save = screen.getByRole('button', { name: 'Save picture' })
@@ -1250,7 +1250,7 @@ describe('picture upload interruptions', () => {
   it.fails('clears the sign-in note once Try again saves after an ended session (known gap: the note stays)', async () => {
     // Catches a stale "Your sign-in has ended ... save here. Your changes are kept." banner beside a saved picture, with no changes pending.
     let signedIn = false // the first request is refused
-    stubApi({ picture: () => (signedIn ? Response.json({ honor: stored }) : Response.json({}, { status: 403 })) })
+    stubApi({ picture: () => (signedIn ? Response.json({ item: stored }) : Response.json({}, { status: 403 })) })
     await openScreen(deps)
     await chooseForKnot()
     fireEvent.click(screen.getByRole('button', { name: 'Save picture' }))

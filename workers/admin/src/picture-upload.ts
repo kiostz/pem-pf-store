@@ -13,8 +13,8 @@ export type PictureType = 'image/webp' | 'image/png'
 
 // The outcome of an upload.
 export type UploadResult =
-  | { kind: 'saved'; honor: AdminHonor } // Stored; the row with its new key.
-  | { kind: 'conflict'; honors: AdminHonor[]; deletedIds: string[] } // Nothing stored: the current row, or the id of a deleted one.
+  | { kind: 'saved'; item: AdminHonor } // Stored; the row with its new key.
+  | { kind: 'conflict'; items: AdminHonor[]; deletedIds: string[] } // Nothing stored: the current row, or the id of a deleted one.
 
 /**
  * Tells whether the first bytes are those of the claimed picture type.
@@ -68,8 +68,8 @@ export async function uploadPicture(
 ): Promise<UploadResult> {
   const { id, seen } = input // The guard.
   const [current] = await readAdminHonors(env.DB, [id]) // The stored row, if any.
-  if (current === undefined) return { kind: 'conflict', honors: [], deletedIds: [id] } // Gone.
-  if (current.image !== seen) return { kind: 'conflict', honors: [current], deletedIds: [] } // Another picture is there now.
+  if (current === undefined) return { kind: 'conflict', items: [], deletedIds: [id] } // Gone.
+  if (current.image !== seen) return { kind: 'conflict', items: [current], deletedIds: [] } // Another picture is there now.
   const key = newKey(id, input.type) // A fresh key, so no cache holds it.
   await env.PICTURES.put(key, input.bytes, { httpMetadata: { contentType: input.type, cacheControl: CACHE_CONTROL } }) // Store first.
   let changes: number // Rows the guarded update changed.
@@ -83,13 +83,13 @@ export async function uploadPicture(
   if (changes === 0) { // Someone changed or deleted the row in between.
     await removeQuietly(env.PICTURES, key) // Drop the new object.
     const [after] = await readAdminHonors(env.DB, [id]) // Why: gone, or another picture.
-    return after === undefined ? { kind: 'conflict', honors: [], deletedIds: [id] } : { kind: 'conflict', honors: [after], deletedIds: [] } // Deleted, or the current row.
+    return after === undefined ? { kind: 'conflict', items: [], deletedIds: [id] } : { kind: 'conflict', items: [after], deletedIds: [] } // Deleted, or the current row.
   }
   if (seen !== null) await removeQuietly(env.PICTURES, seen) // The old object is no longer pointed at.
   const [honor] = await readAdminHonors(env.DB, [id]) // The saved row.
   if (honor === undefined) { // Deleted right after the update: nothing points at the new object.
     await removeQuietly(env.PICTURES, key) // Drop the new object.
-    return { kind: 'conflict', honors: [], deletedIds: [id] } // Gone.
+    return { kind: 'conflict', items: [], deletedIds: [id] } // Gone.
   }
-  return { kind: 'saved', honor } // Done.
+  return { kind: 'saved', item: honor } // Done.
 }

@@ -15,7 +15,7 @@ describe('a cancel between the Items load and save', () => {
     expect((await postTo('/api/orders/step', { number: 'PF-20261105-ABCD', from: 'new', to: 'cancelled', restock: true })).status).toBe(200)
     const stale = await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 3, to: 9 } }] }) // The admin saw 3.
     expect(stale.status).toBe(409)
-    expect(await stale.json()).toEqual({ error: 'conflict', honors: [wire({ id: 'knot-tying', name: 'Knot Tying', stock: 5 })], deletedIds: [] })
+    expect(await stale.json()).toEqual({ error: 'conflict', items: [wire({ id: 'knot-tying', name: 'Knot Tying', stock: 5 })], deletedIds: [] })
     expect((await rowOf('knot-tying')).stock).toBe(5)
   })
 })

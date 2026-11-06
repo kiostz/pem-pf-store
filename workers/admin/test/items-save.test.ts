@@ -36,7 +36,7 @@ function freezeClock(): void {
  */
 function honorsOf(result: Awaited<ReturnType<typeof saveHonorChanges>>) {
   if (result.kind === 'name-taken') throw new Error('unexpected name-taken') // A test bug.
-  return result.honors
+  return result.items
 }
 
 describe('POST /api/items/changes', () => {
@@ -52,7 +52,7 @@ describe('POST /api/items/changes', () => {
     expect(res.status).toBe(200)
     expect(res.headers.get('Cache-Control')).toBe('no-store')
     expect(await res.json()).toEqual({
-      honors: [
+      items: [
         wire({ id: 'africa-lore', name: 'Africa Lore', category: 'Mission', status: 'active', stock: 0, modifiedAt: NOW }),
         wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 20, modifiedAt: NOW }),
       ],
@@ -72,7 +72,7 @@ describe('POST /api/items/changes', () => {
     expect(res.status).toBe(409)
     expect(await res.json()).toEqual({
       error: 'conflict',
-      honors: [wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 12 })],
+      items: [wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', status: 'active', stock: 12 })],
       deletedIds: [],
     })
     expect(await rowOf('knot-tying')).toEqual({ stock: 12, status: 'active' }) // Untouched.
@@ -88,7 +88,7 @@ describe('POST /api/items/changes', () => {
       ],
     })
     expect(res.status).toBe(409)
-    expect(((await res.json()) as { honors: { id: string }[] }).honors.map((h) => h.id)).toEqual(['africa-lore'])
+    expect(((await res.json()) as { items: { id: string }[] }).items.map((h) => h.id)).toEqual(['africa-lore'])
     expect((await rowOf('knot-tying')).stock).toBe(12)
   })
 
@@ -173,7 +173,7 @@ describe('POST /api/items/changes', () => {
       ],
     })
     expect(res.status).toBe(409)
-    expect(await res.json()).toEqual({ error: 'conflict', honors: [], deletedIds: ['no-such-honor'] })
+    expect(await res.json()).toEqual({ error: 'conflict', items: [], deletedIds: ['no-such-honor'] })
     expect((await rowOf('knot-tying')).stock).toBe(12)
   })
 
@@ -190,7 +190,7 @@ describe('POST /api/items/changes', () => {
       { id: 'knot-tying', stock: { from: 12, to: 20 } },
       { id: 'africa-lore', stock: { from: 0, to: 5 } },
     ])
-    expect(result).toEqual({ kind: 'conflict', honors: [], deletedIds: ['africa-lore'] })
+    expect(result).toEqual({ kind: 'conflict', items: [], deletedIds: ['africa-lore'] })
     expect((await rowOf('knot-tying')).stock).toBe(12) // Nothing written.
   })
 
@@ -298,7 +298,7 @@ describe('name, category and price', () => {
     })
     expect(res.status).toBe(200)
     expect(await fullRowOf('knot-tying')).toMatchObject({ name: 'Knots', category: 'Shirt', price_cents: 650, created_at: BACKFILL_TIME, modified_at: NOW })
-    expect(((await res.json()) as { honors: { modifiedAt: string }[] }).honors[0].modifiedAt).toBe(NOW)
+    expect(((await res.json()) as { items: { modifiedAt: string }[] }).items[0].modifiedAt).toBe(NOW)
   })
 
   it('stamps one time on every row of one save', async () => {
@@ -315,7 +315,7 @@ describe('name, category and price', () => {
       freezeClock()
       const res = await postChanges({ changes: [{ id: 'knot-tying', [field]: stale, stock: { from: 12, to: 13 } }] })
       expect(res.status).toBe(409)
-      expect(await res.json()).toEqual({ error: 'conflict', honors: [wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', stock: 12 })], deletedIds: [] })
+      expect(await res.json()).toEqual({ error: 'conflict', items: [wire({ id: 'knot-tying', name: 'Knot Tying', category: 'Outdoor', stock: 12 })], deletedIds: [] })
       expect(await fullRowOf('knot-tying')).toMatchObject({ stock: 12, modified_at: BACKFILL_TIME }) // A 409 leaves the time alone.
     })
   }
@@ -425,7 +425,7 @@ describe('interruptions', () => {
     const stamped = (await fullRowOf('knot-tying'))!.modified_at
     const rename = await postChanges({ changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots B' } }] }) // Tab B, still the old name.
     expect(rename.status).toBe(409)
-    expect(((await rename.json()) as { honors: { name: string }[] }).honors[0].name).toBe('Knots A') // The latest values for the flag.
+    expect(((await rename.json()) as { items: { name: string }[] }).items[0].name).toBe('Knots A') // The latest values for the flag.
     expect(await fullRowOf('knot-tying')).toMatchObject({ name: 'Knots A', modified_at: stamped }) // Nothing written, time unmoved.
   })
 

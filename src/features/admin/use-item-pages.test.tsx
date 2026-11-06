@@ -6,7 +6,7 @@ import { makeItem } from './item-fixtures.ts' // row builder
 import { useItemPages } from './use-item-pages.ts' // the code under test
 
 const page = (ids: string[], nextCursor: string | null = null) =>
-  Response.json({ honors: ids.map((id) => makeItem({ id })), nextCursor }) // a page answer
+  Response.json({ items: ids.map((id) => makeItem({ id })), nextCursor }) // a page answer
 
 /**
  * Stubs fetch with a handler and returns the requested URLs.

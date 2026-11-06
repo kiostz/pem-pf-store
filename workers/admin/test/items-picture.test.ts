@@ -41,14 +41,14 @@ describe('POST /api/items/picture', () => {
     const before = Date.now()
     const res = await upload(`id=knot-tying&seen=${encodeURIComponent(OLD)}`)
     expect(res.status).toBe(200)
-    const { honor } = (await res.json()) as { honor: { image: string; modifiedAt: string } }
-    expect(honor.image).toMatch(/^items\/knot-tying-[0-9a-f]{8}\.webp$/)
-    expect(await imageOf('knot-tying')).toBe(honor.image)
-    const stored = await env.PICTURES.head(honor.image)
+    const { item } = (await res.json()) as { item: { image: string; modifiedAt: string } }
+    expect(item.image).toMatch(/^items\/knot-tying-[0-9a-f]{8}\.webp$/)
+    expect(await imageOf('knot-tying')).toBe(item.image)
+    const stored = await env.PICTURES.head(item.image)
     expect(stored?.httpMetadata?.contentType).toBe('image/webp')
     expect(stored?.httpMetadata?.cacheControl).toBe('public, max-age=31536000, immutable')
     expect(await env.PICTURES.head(OLD)).toBeNull()
-    expect(Date.parse(honor.modifiedAt)).toBeGreaterThanOrEqual(before)
+    expect(Date.parse(item.modifiedAt)).toBeGreaterThanOrEqual(before)
     const row = await fullRowOf('knot-tying')
     expect([row?.name, row?.price_cents, row?.status, row?.stock]).toEqual(['Knot Tying', 450, 'active', 5])
   })
@@ -57,9 +57,9 @@ describe('POST /api/items/picture', () => {
     // catches: Safari pictures saved with a webp key or type
     const res = await upload(`id=knot-tying&seen=${encodeURIComponent(OLD)}`, PNG, { 'Content-Type': 'image/png' })
     expect(res.status).toBe(200)
-    const { honor } = (await res.json()) as { honor: { image: string } }
-    expect(honor.image).toMatch(/^items\/knot-tying-[0-9a-f]{8}\.png$/)
-    expect((await env.PICTURES.head(honor.image))?.httpMetadata?.contentType).toBe('image/png')
+    const { item } = (await res.json()) as { item: { image: string } }
+    expect(item.image).toMatch(/^items\/knot-tying-[0-9a-f]{8}\.png$/)
+    expect((await env.PICTURES.head(item.image))?.httpMetadata?.contentType).toBe('image/png')
   })
 
   it('saves a first picture (empty seen) and deletes nothing', async () => {
@@ -67,8 +67,8 @@ describe('POST /api/items/picture', () => {
     const del = vi.spyOn(env.PICTURES, 'delete')
     const res = await upload('id=africa-lore&seen=')
     expect(res.status).toBe(200)
-    const { honor } = (await res.json()) as { honor: { image: string } }
-    expect(honor.image).toMatch(/^items\/africa-lore-[0-9a-f]{8}\.webp$/)
+    const { item } = (await res.json()) as { item: { image: string } }
+    expect(item.image).toMatch(/^items\/africa-lore-[0-9a-f]{8}\.webp$/)
     expect(del).not.toHaveBeenCalled()
     expect(await env.PICTURES.head(OLD)).not.toBeNull()
     del.mockRestore()
@@ -78,7 +78,7 @@ describe('POST /api/items/picture', () => {
     // catches: overwriting a picture another admin saved
     const res = await upload('id=knot-tying&seen=items%2Fother.webp')
     expect(res.status).toBe(409)
-    expect(await res.json()).toEqual({ error: 'conflict', honors: [wire({ id: 'knot-tying', name: 'Knot Tying', stock: 5, priceCents: 450, image: OLD })], deletedIds: [] })
+    expect(await res.json()).toEqual({ error: 'conflict', items: [wire({ id: 'knot-tying', name: 'Knot Tying', stock: 5, priceCents: 450, image: OLD })], deletedIds: [] })
     expect(await imageOf('knot-tying')).toBe(OLD)
     expect(await keysOf('knot-tying')).toEqual([OLD])
   })
@@ -105,7 +105,7 @@ describe('POST /api/items/picture', () => {
     await env.DB.prepare("DELETE FROM items WHERE id = 'africa-lore'").run()
     const res = await upload('id=africa-lore&seen=')
     expect(res.status).toBe(409)
-    expect(await res.json()).toEqual({ error: 'conflict', honors: [], deletedIds: ['africa-lore'] })
+    expect(await res.json()).toEqual({ error: 'conflict', items: [], deletedIds: ['africa-lore'] })
     expect(await keysOf('africa-lore')).toEqual([])
   })
 
@@ -200,9 +200,9 @@ describe('POST /api/items/picture', () => {
     const calls = log.mock.calls
     log.mockRestore()
     expect(res.status).toBe(200)
-    const { honor } = (await res.json()) as { honor: { image: string } }
-    expect(honor.image).toMatch(/^items\/knot-tying-[0-9a-f]{8}\.webp$/)
-    expect(await imageOf('knot-tying')).toBe(honor.image)
+    const { item } = (await res.json()) as { item: { image: string } }
+    expect(item.image).toMatch(/^items\/knot-tying-[0-9a-f]{8}\.webp$/)
+    expect(await imageOf('knot-tying')).toBe(item.image)
     expect(calls).toEqual([['picture cleanup failed', 'TypeError']])
   })
 
@@ -226,7 +226,7 @@ describe('POST /api/items/picture', () => {
     const res = await upload(`id=knot-tying&seen=${encodeURIComponent(OLD)}`)
     spy.mockRestore()
     expect(res.status).toBe(409)
-    expect(await res.json()).toEqual({ error: 'conflict', honors: [], deletedIds: ['knot-tying'] })
+    expect(await res.json()).toEqual({ error: 'conflict', items: [], deletedIds: ['knot-tying'] })
     expect(await keysOf('knot-tying')).toEqual([OLD])
   })
 
@@ -241,7 +241,7 @@ describe('POST /api/items/picture', () => {
     const res = await upload(`id=knot-tying&seen=${encodeURIComponent(OLD)}`)
     spy.mockRestore()
     expect(res.status).toBe(409)
-    expect(await res.json()).toEqual({ error: 'conflict', honors: [], deletedIds: ['knot-tying'] })
+    expect(await res.json()).toEqual({ error: 'conflict', items: [], deletedIds: ['knot-tying'] })
     expect(await keysOf('knot-tying')).toEqual([])
   })
 })

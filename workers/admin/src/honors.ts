@@ -64,11 +64,11 @@ export function pageSql(query: ItemQuery): { sql: string; params: (string | numb
 export async function readAdminPage(db: D1Database, query: ItemQuery): Promise<AdminPage> {
   const { sql, params } = pageSql(query) // The statement.
   const { results } = await db.prepare(sql).bind(...params).all<RawHonor>() // Up to 51 rows.
-  const honors = results.slice(0, PAGE_SIZE).map(toHonor) // The page itself.
-  const last = honors[honors.length - 1] // The row the next page follows.
-  if (results.length <= PAGE_SIZE || last === undefined) return { honors, nextCursor: null } // That was the end.
+  const items = results.slice(0, PAGE_SIZE).map(toHonor) // The page itself.
+  const last = items[items.length - 1] // The row the next page follows.
+  if (results.length <= PAGE_SIZE || last === undefined) return { items, nextCursor: null } // That was the end.
   const time = query.sort === 'newest' ? last.createdAt : last.modifiedAt // The sort's time.
-  return { honors, nextCursor: encodeCursor(query.sort, query.sort === 'name' ? { name: last.name, id: last.id } : { time, name: last.name, id: last.id }) } // More follow.
+  return { items, nextCursor: encodeCursor(query.sort, query.sort === 'name' ? { name: last.name, id: last.id } : { time, name: last.name, id: last.id }) } // More follow.
 }
 
 /**
@@ -221,7 +221,7 @@ export async function saveHonorChanges(db: D1Database, now: string, changes: Hon
   const present = new Set(current.map((honor) => honor.id)) // Ids that exist.
   const gone = ids.filter((id) => !present.has(id)) // Deleted by another admin.
   const stale = mismatched(current, changes) // Rows that moved since the admin's view.
-  if (stale.length > 0 || gone.length > 0) return { kind: 'conflict', honors: stale, deletedIds: gone } // Nothing written.
+  if (stale.length > 0 || gone.length > 0) return { kind: 'conflict', items: stale, deletedIds: gone } // Nothing written.
   const duplicated = duplicateNameIds(changes) // Two renames to one name in this save.
   if (duplicated.length > 0) return { kind: 'name-taken', ids: duplicated } // Refused before any write.
   try { // The write.
@@ -230,13 +230,13 @@ export async function saveHonorChanges(db: D1Database, now: string, changes: Hon
     const after = await readAdminHonors(db, ids) // The rows as they are now.
     const afterIds = new Set(after.map((honor) => honor.id)) // Ids that still exist.
     const goneNow = ids.filter((id) => !afterIds.has(id)) // Deleted after the read.
-    if (goneNow.length > 0) return { kind: 'conflict', honors: mismatched(after, changes), deletedIds: goneNow } // A conflict, nothing written.
-    if (allApplied(after, changes)) return { kind: 'saved', honors: after } // The write landed and only the answer was lost.
+    if (goneNow.length > 0) return { kind: 'conflict', items: mismatched(after, changes), deletedIds: goneNow } // A conflict, nothing written.
+    if (allApplied(after, changes)) return { kind: 'saved', items: after } // The write landed and only the answer was lost.
     const movedNow = mismatched(after, changes) // Was it a row that moved after the read?
-    if (movedNow.length > 0) return { kind: 'conflict', honors: movedNow, deletedIds: [] } // Yes: a conflict, nothing written.
+    if (movedNow.length > 0) return { kind: 'conflict', items: movedNow, deletedIds: [] } // Yes: a conflict, nothing written.
     const taken = await nameTakenIds(db, changes) // Was it a name another item holds? A swap lands here too: the batch checks the unique index per statement, so a rename onto a name another row is leaving in the same save is refused, and the admin renames through a temporary name in two saves.
     if (taken.length > 0) return { kind: 'name-taken', ids: taken } // Yes.
     throw error // No: a real failure, for the handler to answer 500.
   }
-  return { kind: 'saved', honors: await readAdminHonors(db, ids) } // The rows as saved.
+  return { kind: 'saved', items: await readAdminHonors(db, ids) } // The rows as saved.
 }

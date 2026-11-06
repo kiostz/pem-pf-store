@@ -339,9 +339,9 @@ async function postChanges(request: Request, env: Env): Promise<Response> {
   const changes = parseHonorChanges(read.body) // Null when invalid.
   if (changes === null) return json({ error: 'invalid' }, 400) // Fails validation.
   const result = await saveHonorChanges(env.DB, new Date().toISOString(), changes) // The guarded save, with one time for the request.
-  if (result.kind === 'saved') return json({ honors: result.honors }, 200) // As saved.
+  if (result.kind === 'saved') return json({ items: result.items }, 200) // As saved.
   if (result.kind === 'name-taken') return json({ error: 'name-taken', ids: result.ids }, 409) // Nothing written.
-  return json({ error: 'conflict', honors: result.honors, deletedIds: result.deletedIds }, 409) // Current rows and gone ids; nothing written.
+  return json({ error: 'conflict', items: result.items, deletedIds: result.deletedIds }, 409) // Current rows and gone ids; nothing written.
 }
 
 /**
@@ -356,7 +356,7 @@ async function postItem(request: Request, env: Env): Promise<Response> {
   const input = parseNewItem(read.body) // Null when invalid.
   if (input === null) return json({ error: 'invalid' }, 400) // Fails validation.
   const result = await addHonor(env.DB, input, new Date().toISOString()) // Both times are this one.
-  if (result.kind === 'added') return json({ honor: result.honor }, 201) // Created.
+  if (result.kind === 'added') return json({ item: result.item }, 201) // Created.
   return json({ error: result.kind }, 409) // `name-taken` or `id-taken`.
 }
 
@@ -374,7 +374,7 @@ async function postDelete(request: Request, env: Env): Promise<Response> {
   const result = await deleteHonor(env.DB, env.PICTURES, input) // The guarded delete.
   if (result.kind === 'deleted') return json({ deletedId: input.id }, 200) // Gone.
   if (result.kind === 'built-in') return json({ error: 'built-in' }, 400) // Never deleted.
-  return json({ error: 'conflict', honors: result.honors }, 409) // Changed since viewing.
+  return json({ error: 'conflict', items: result.items }, 409) // Changed since viewing.
 }
 
 /**
@@ -395,8 +395,8 @@ async function postPicture(request: Request, env: Env): Promise<Response> {
   if (bytes === null) return json({ error: 'too-large' }, 413) // Over 256 KB.
   if (bytes.byteLength === 0 || !hasSignature(bytes, type as PictureType)) return json({ error: 'invalid' }, 400) // Empty, or not the claimed picture type.
   const result = await uploadPicture(env, { id, seen: seen === '' ? null : seen, type: type as PictureType, bytes }, new Date().toISOString()) // The guarded store.
-  if (result.kind === 'saved') return json({ honor: result.honor }, 200) // Stored.
-  return json({ error: 'conflict', honors: result.honors, deletedIds: result.deletedIds }, 409) // Current row or deleted id; nothing stored.
+  if (result.kind === 'saved') return json({ item: result.item }, 200) // Stored.
+  return json({ error: 'conflict', items: result.items, deletedIds: result.deletedIds }, 409) // Current row or deleted id; nothing stored.
 }
 
 /**
