@@ -120,7 +120,7 @@ describe('GET /orders/status/<requestId>', () => {
     await postOrder(validOrder({ requestId: UUID })) // Two Knot Tying at 300 in MYR.
     const first = await (await lookup(`/orders/status/${UUID}`)).json() // Before the admin's changes.
     await env.DB.batch([
-      env.DB.prepare("UPDATE honors SET name = 'Renamed', price_cents = 999, stock = 0 WHERE id = 'knots'"), // Renamed, repriced, sold out.
+      env.DB.prepare("UPDATE items SET name = 'Renamed', price_cents = 999, stock = 0 WHERE id = 'knots'"), // Renamed, repriced, sold out.
       env.DB.prepare("UPDATE settings SET currency = 'SGD'"), // Another currency.
     ])
     expect(await (await lookup(`/orders/status/${UUID}`)).json()).toEqual(first) // The same answer.
@@ -142,7 +142,7 @@ describe('GET /orders/status/<requestId>', () => {
     // Catches a lookup with a side effect.
     mockSiteverify() // Captcha passes.
     await postOrder(validOrder({ requestId: UUID })) // One order.
-    const snapshot = async () => JSON.stringify([(await env.DB.prepare('SELECT * FROM orders').all()).results, (await env.DB.prepare('SELECT id, stock FROM honors ORDER BY id').all()).results]) // Rows and stock.
+    const snapshot = async () => JSON.stringify([(await env.DB.prepare('SELECT * FROM orders').all()).results, (await env.DB.prepare('SELECT id, stock FROM items ORDER BY id').all()).results]) // Rows and stock.
     const before = await snapshot() // Before.
     await lookup(`/orders/status/${UUID}`) // Found.
     await lookup(`/orders/status/${UUID.replace('aa', 'bb')}`) // Not found.

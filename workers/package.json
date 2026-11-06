@@ -15,7 +15,7 @@
     "types:admin": "wrangler types --config admin/wrangler.jsonc admin/worker-configuration.d.ts",
     "db:migrate:local": "wrangler d1 migrations apply pem-pathfinder-store --local --config api/wrangler.jsonc",
     "db:migrate:remote": "wrangler d1 migrations apply pem-pathfinder-store --remote --config api/wrangler.jsonc",
-    "db:export:remote": "mkdir -p api/.wrangler && wrangler d1 export pem-pathfinder-store --remote --config api/wrangler.jsonc --table honors --table clubs --table settings --no-schema --output api/.wrangler/fill.sql",
+    "db:export:remote": "mkdir -p api/.wrangler && wrangler d1 export pem-pathfinder-store --remote --config api/wrangler.jsonc --table items --table clubs --table settings --no-schema --output api/.wrangler/fill.sql",
     "db:fill:local": "wrangler d1 execute pem-pathfinder-store --local --config api/wrangler.jsonc --file=api/.wrangler/fill.sql",
     "deploy": "wrangler deploy --config api/wrangler.jsonc",
     "deploy:admin": "npm --prefix .. run build:admin && wrangler deploy --config admin/wrangler.jsonc"

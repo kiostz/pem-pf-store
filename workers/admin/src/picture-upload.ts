@@ -74,7 +74,7 @@ export async function uploadPicture(
   await env.PICTURES.put(key, input.bytes, { httpMetadata: { contentType: input.type, cacheControl: CACHE_CONTROL } }) // Store first.
   let changes: number // Rows the guarded update changed.
   try { // A failed update must not leave the new object behind.
-    const result = await env.DB.prepare('UPDATE honors SET image = ?, modified_at = ? WHERE id = ? AND image IS ?').bind(key, now, id, seen).run() // Same guard again, in the statement.
+    const result = await env.DB.prepare('UPDATE items SET image = ?, modified_at = ? WHERE id = ? AND image IS ?').bind(key, now, id, seen).run() // Same guard again, in the statement.
     changes = result.meta.changes // 0 or 1.
   } catch (error) { // The write failed.
     await removeQuietly(env.PICTURES, key) // Drop the new object.

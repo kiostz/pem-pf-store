@@ -100,7 +100,7 @@ export interface SeedHonor {
  * @return Nothing.
  */
 export async function seedHonors(honors: SeedHonor[]): Promise<void> {
-  await env.DB.prepare('DELETE FROM honors').run() // Start clean.
+  await env.DB.prepare('DELETE FROM items').run() // Start clean.
   await insertHonors(honors) // Then the rows.
 }
 
@@ -114,7 +114,7 @@ export async function insertHonors(honors: SeedHonor[]): Promise<void> {
   await env.DB.batch(
     honors.map((honor) =>
       env.DB.prepare(
-        'INSERT INTO honors (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO items (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       ).bind(
         honor.id,
         honor.name ?? honor.id,
@@ -137,7 +137,7 @@ export async function insertHonors(honors: SeedHonor[]): Promise<void> {
  * @return Its stock and status.
  */
 export async function rowOf(id: string): Promise<{ stock: number; status: string }> {
-  const row = await env.DB.prepare('SELECT stock, status FROM honors WHERE id = ?').bind(id).first<{ stock: number; status: string }>() // One row.
+  const row = await env.DB.prepare('SELECT stock, status FROM items WHERE id = ?').bind(id).first<{ stock: number; status: string }>() // One row.
   if (row === null) throw new Error(`no honor ${id}`) // A test bug.
   return row
 }
@@ -148,7 +148,7 @@ export async function rowOf(id: string): Promise<{ stock: number; status: string
  * @return The row, or null when it does not exist.
  */
 export async function fullRowOf(id: string): Promise<{ name: string; category: string; price_cents: number; status: string; stock: number; issued_by: string; created_at: string; modified_at: string } | null> {
-  return env.DB.prepare('SELECT name, category, price_cents, status, stock, issued_by, created_at, modified_at FROM honors WHERE id = ?').bind(id).first() // Null when absent.
+  return env.DB.prepare('SELECT name, category, price_cents, status, stock, issued_by, created_at, modified_at FROM items WHERE id = ?').bind(id).first() // Null when absent.
 }
 
 /**
@@ -166,7 +166,7 @@ export function wire(over: Record<string, unknown> & { id: string }): Record<str
  * @return The key, or null when it has none or the row is gone.
  */
 export async function imageOf(id: string): Promise<string | null> {
-  const row = await env.DB.prepare('SELECT image FROM honors WHERE id = ?').bind(id).first<{ image: string | null }>() // One row.
+  const row = await env.DB.prepare('SELECT image FROM items WHERE id = ?').bind(id).first<{ image: string | null }>() // One row.
   return row?.image ?? null // No row or no picture.
 }
 
@@ -177,7 +177,6 @@ export interface SeedOrder {
   createdAt?: string // ISO UTC time with milliseconds.
   step?: 'new' | 'paid' | 'handed_out' | 'cancelled' // Defaults to new.
   club?: string // Defaults to Gilead.
-  removedAt?: string // Marks the buyer fields as removed.
   lines?: { itemId: string; name?: string; quantity?: number; priceCents?: number }[] // Defaults to one line of item-1.
 }
 
@@ -204,14 +203,13 @@ export async function seedOrders(orders: SeedOrder[]): Promise<void> {
   for (const order of orders) { // One insert per order, then its lines.
     const lines = order.lines ?? [{ itemId: 'item-1' }] // One default line.
     const total = lines.reduce((sum, line) => sum + (line.priceCents ?? 400) * (line.quantity ?? 1), 0) // The stored total.
-    const removed = order.removedAt !== undefined // Removal clears the buyer fields.
     statements.push( // The order row.
-      env.DB.prepare('INSERT INTO orders (id, number, created_at, step, currency, total_cents, buyer_name, buyer_email, buyer_phone, club, personal_data_removed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind( // Every column.
+      env.DB.prepare('INSERT INTO orders (id, number, created_at, step, currency, total_cents, buyer_name, buyer_email, buyer_phone, club) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind( // Every column.
         order.id ?? null, order.number, order.createdAt ?? '2026-11-05T01:00:00.000Z', order.step ?? 'new', 'MYR', total, // Id, number, time, step, currency, total.
-        removed ? null : BUYER.name, removed ? null : BUYER.email, removed ? null : BUYER.phone, order.club ?? 'Gilead', order.removedAt ?? null, // Buyer, club, removal.
+        BUYER.name, BUYER.email, BUYER.phone, order.club ?? 'Gilead', // Buyer and club.
       ),
     )
-    for (const line of lines) statements.push(env.DB.prepare('INSERT INTO order_lines (order_id, honor_id, name, quantity, price_cents) VALUES ((SELECT id FROM orders WHERE number = ?), ?, ?, ?, ?)').bind(order.number, line.itemId, line.name ?? line.itemId, line.quantity ?? 1, line.priceCents ?? 400)) // One insert per line.
+    for (const line of lines) statements.push(env.DB.prepare('INSERT INTO order_lines (order_id, item_id, name, quantity, price_cents) VALUES ((SELECT id FROM orders WHERE number = ?), ?, ?, ?, ?)').bind(order.number, line.itemId, line.name ?? line.itemId, line.quantity ?? 1, line.priceCents ?? 400)) // One insert per line.
   }
   await env.DB.batch(statements) // One transaction.
 }

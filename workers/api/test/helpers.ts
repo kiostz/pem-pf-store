@@ -135,7 +135,7 @@ export async function seedShop(): Promise<void> {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM order_lines'), // Lines first.
     env.DB.prepare('DELETE FROM orders'), // Then orders.
-    env.DB.prepare('DELETE FROM honors'), // Then honors.
+    env.DB.prepare('DELETE FROM items'), // Then honors.
     env.DB.prepare('DELETE FROM settings'), // Then settings.
   ])
   await addSettings() // MYR, email on.
@@ -152,7 +152,7 @@ export async function seedShop(): Promise<void> {
 export async function addHonor(row: Record<string, unknown>): Promise<void> {
   const h = { id: 'x', name: 'X', category: 'Nature', issued_by: 'General Conference', status: 'active', stock: 0, price_cents: 400, image: null, ...row } // Defaults plus overrides.
   await env.DB.prepare(
-    'INSERT INTO honors (id, name, category, issued_by, skill_level, status, stock, price_cents, image) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)',
+    'INSERT INTO items (id, name, category, issued_by, skill_level, status, stock, price_cents, image) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)',
   ).bind(h.id, h.name, h.category, h.issued_by, h.status, h.stock, h.price_cents, h.image).run() // Positional binds.
 }
 
@@ -184,7 +184,7 @@ export async function addOrder(order: { number: string; createdAt: string; step?
     "INSERT INTO orders (number, created_at, step, currency, total_cents, buyer_name, buyer_email, buyer_phone, club) VALUES (?, ?, ?, 'MYR', 900, 'Ana Tester', 'ana@example.test', '+60 12 000 0000', 'Gilead') RETURNING id",
   ).bind(order.number, order.createdAt, order.step ?? 'new').first<{ id: number }>() // The order row.
   for (let i = 0; i < (order.lineCount ?? 1); i += 1) {
-    await env.DB.prepare("INSERT INTO order_lines (order_id, honor_id, name, quantity, price_cents) VALUES (?, ?, 'Knot Tying', 1, 300)").bind(row!.id, `line-${i}`).run() // One line each, ids differ.
+    await env.DB.prepare("INSERT INTO order_lines (order_id, item_id, name, quantity, price_cents) VALUES (?, ?, 'Knot Tying', 1, 300)").bind(row!.id, `line-${i}`).run() // One line each, ids differ.
   }
   return row!.id // For the caller's checks.
 }

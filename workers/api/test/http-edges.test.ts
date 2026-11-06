@@ -8,7 +8,7 @@ const SHOP = 'https://kiostz.github.io' // The one allowed origin.
 
 describe('http edges', () => {
   beforeEach(async () => {
-    await env.DB.exec('DELETE FROM honors; DELETE FROM clubs; DELETE FROM settings;') // Each test starts empty.
+    await env.DB.exec('DELETE FROM items; DELETE FROM clubs; DELETE FROM settings;') // Each test starts empty.
   })
 
   it.each(['HEAD', 'OPTIONS', 'PUT', 'DELETE', 'PATCH'])('answers %s on /items with 405 and Allow: GET', async (method) => {

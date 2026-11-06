@@ -46,7 +46,7 @@ describe('POST /api/settings/prices', () => {
     // Catches a currency change that rewrites stored prices or past orders.
     await seedHonors([{ id: 'knot-tying', name: 'Knot Tying', stock: 5 }])
     await seedOrders([{ number: 'PF-20261105-2222', lines: [{ itemId: 'knot-tying', priceCents: 450 }] }])
-    const items = async () => (await env.DB.prepare('SELECT id, price_cents FROM honors ORDER BY id').all()).results
+    const items = async () => (await env.DB.prepare('SELECT id, price_cents FROM items ORDER BY id').all()).results
     const orders = async () => (await env.DB.prepare('SELECT number, currency, total_cents FROM orders ORDER BY number').all()).results
     const before = [await items(), await orders(), await fullRowOf('knot-tying')]
     await save({ currency: { from: 'MYR', to: 'SGD' }, defaultPriceCents: { from: 400, to: 900 } })

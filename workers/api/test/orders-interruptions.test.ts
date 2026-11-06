@@ -11,7 +11,7 @@ import { call, fakeEmail, count, mockSiteverify, postOrder, SHOP, seedShop, vali
  * @return The stock.
  */
 async function stockOf(id: string): Promise<number> {
-  return (await env.DB.prepare('SELECT stock FROM honors WHERE id = ?').bind(id).first<{ stock: number }>())!.stock // One row.
+  return (await env.DB.prepare('SELECT stock FROM items WHERE id = ?').bind(id).first<{ stock: number }>())!.stock // One row.
 }
 
 /**
@@ -174,7 +174,7 @@ describe('races for the last items', () => {
   it('sells exactly the stock when five different sends race for three left', async () => {
     // Catches an oversell or a stock below 0 when several sends pass the pre-check together.
     mockSiteverify() // Captcha passes.
-    await env.DB.exec("UPDATE honors SET stock = 3 WHERE id = 'knots'") // Three left.
+    await env.DB.exec("UPDATE items SET stock = 3 WHERE id = 'knots'") // Three left.
     const results = await Promise.all(Array.from({ length: 5 }, () => postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 1 }] })))) // Five buyers.
     const statuses = results.map(({ res }) => res.status).sort() // Outcomes.
     expect(statuses).toEqual([201, 201, 201, 409, 409]) // Three sold, two refused.
@@ -196,7 +196,7 @@ describe('races for the last items', () => {
     expect(results.map(({ res }) => res.status).sort()).toEqual([201, 409]) // One wins.
     expect(await stockOf('rope')).toBe(0) // Gone.
     expect(await count('orders')).toBe(1) // One order.
-    const knotLines = await env.DB.prepare("SELECT COALESCE(SUM(quantity), 0) AS n FROM order_lines WHERE honor_id = 'knots'").first<{ n: number }>() // Knots sold by saved lines.
+    const knotLines = await env.DB.prepare("SELECT COALESCE(SUM(quantity), 0) AS n FROM order_lines WHERE item_id = 'knots'").first<{ n: number }>() // Knots sold by saved lines.
     expect(await stockOf('knots')).toBe(5 - knotLines!.n) // Stock fell exactly by the lines that were saved, never for the refused order.
   })
 })
@@ -205,7 +205,7 @@ describe('stock changed by the admin during a send', () => {
   it('refuses with the new stock when the admin lowers it before the send, then accepts the lowered quantity', async () => {
     // Catches an order filled from a stale view: the buyer's cart said 3, the admin has since set 1.
     mockSiteverify() // Captcha passes.
-    await env.DB.exec("UPDATE honors SET stock = 1 WHERE id = 'knots'") // The admin saved a lower stock.
+    await env.DB.exec("UPDATE items SET stock = 1 WHERE id = 'knots'") // The admin saved a lower stock.
     const refused = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 3 }] })) // The old cart.
     expect(refused.res.status).toBe(409) // Refused.
     expect(await refused.res.json()).toEqual({ error: 'stock', lines: [{ honorId: 'knots', stock: 1 }] }) // The new stock.
@@ -219,7 +219,7 @@ describe('stock changed by the admin during a send', () => {
     // Catches the abort path turning into a 500 or a lost order instead of re-reading stock and refusing.
     mockSiteverify() // Captcha passes.
     const db = watchedDb(async (n) => {
-      if (n === 2) await env.DB.exec("UPDATE honors SET stock = 1 WHERE id = 'knots'") // After the pre-check, before the write.
+      if (n === 2) await env.DB.exec("UPDATE items SET stock = 1 WHERE id = 'knots'") // After the pre-check, before the write.
     }) // The admin saves in the gap.
     const { res } = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 2 }] }), { overrides: { DB: db } }) // Send.
     expect(res.status).toBe(409) // Refused.
@@ -232,7 +232,7 @@ describe('stock changed by the admin during a send', () => {
     // Catches a hidden item being sold because only the pre-check looked at status.
     mockSiteverify() // Captcha passes.
     const db = watchedDb(async (n) => {
-      if (n === 2) await env.DB.exec("UPDATE honors SET status = 'hidden' WHERE id = 'knots'") // Hidden in the gap.
+      if (n === 2) await env.DB.exec("UPDATE items SET status = 'hidden' WHERE id = 'knots'") // Hidden in the gap.
     })
     const { res } = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 1 }] }), { overrides: { DB: db } }) // Send.
     expect(res.status).toBe(409) // Refused.

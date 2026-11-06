@@ -57,7 +57,7 @@ describe('POST /api/items', () => {
     // Catches two admins' double Add creating two items: the unique index decides.
     const [a, b] = await Promise.all([add(), add({ name: 'CAMP SHIRT' })])
     expect([a.status, b.status].sort()).toEqual([201, 409])
-    const { n } = (await env.DB.prepare("SELECT count(*) AS n FROM honors WHERE name = 'Camp Shirt' COLLATE NOCASE").first<{ n: number }>())!
+    const { n } = (await env.DB.prepare("SELECT count(*) AS n FROM items WHERE name = 'Camp Shirt' COLLATE NOCASE").first<{ n: number }>())!
     expect(n).toBe(1)
   })
 

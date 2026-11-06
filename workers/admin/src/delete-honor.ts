@@ -40,7 +40,7 @@ export async function deleteHonor(db: D1Database, bucket: R2Bucket, request: Del
   if (!matches(current, request.seen)) return { kind: 'conflict', honors: [current] } // Changed since viewing.
   const { seen } = request // The guard values.
   const result = await db
-    .prepare("DELETE FROM honors WHERE id = ? AND issued_by = 'Club' AND name = ? AND category = ? AND price_cents = ? AND status = ? AND stock = ? AND modified_at = ?")
+    .prepare("DELETE FROM items WHERE id = ? AND issued_by = 'Club' AND name = ? AND category = ? AND price_cents = ? AND status = ? AND stock = ? AND modified_at = ?")
     .bind(request.id, seen.name, seen.category, seen.priceCents, seen.status, seen.stock, seen.modifiedAt)
     .run() // The same guard again, in the statement itself, so a change after the read still stops it.
   if (result.meta.changes === 1) { // Deleted.

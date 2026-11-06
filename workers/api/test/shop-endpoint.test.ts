@@ -8,7 +8,7 @@ const SHOP = 'https://kiostz.github.io' // The one allowed origin.
 
 describe('GET /shop', () => {
   beforeEach(async () => {
-    await env.DB.exec('DELETE FROM honors; DELETE FROM clubs; DELETE FROM settings;') // Each test starts empty.
+    await env.DB.exec('DELETE FROM items; DELETE FROM clubs; DELETE FROM settings;') // Each test starts empty.
   })
 
   it('returns exactly items, clubs and settings with their public fields', async () => {

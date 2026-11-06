@@ -85,7 +85,7 @@ describe('removeOldOrders', () => {
     await env.DB.exec("INSERT INTO clubs (name, area, language, location, church_name, position) VALUES ('Gilead', 'KL', 'English', 'KL', 'Church', 1)") // One club.
     await addOrder({ number: 'PF-OLD', createdAt: '2026-01-01T00:00:00.000Z', step: 'cancelled' })
     const snapshot = async () => JSON.stringify([
-      (await env.DB.prepare('SELECT * FROM honors ORDER BY id').all()).results,
+      (await env.DB.prepare('SELECT * FROM items ORDER BY id').all()).results,
       (await env.DB.prepare('SELECT * FROM clubs').all()).results,
       (await env.DB.prepare('SELECT * FROM settings').all()).results,
     ]) // Everything the job must not touch.

@@ -33,16 +33,16 @@ export async function findByRequestId(db: D1Database, requestId: string): Promis
     .first<{ id: number; number: string; created_at: string; currency: string; total_cents: number; club: string }>() // At most one.
   if (row === null) return null // Not saved.
   const { results } = await db
-    .prepare('SELECT honor_id, name, quantity, price_cents FROM order_lines WHERE order_id = ? ORDER BY rowid')
+    .prepare('SELECT item_id, name, quantity, price_cents FROM order_lines WHERE order_id = ? ORDER BY rowid')
     .bind(row.id)
-    .all<{ honor_id: string; name: string; quantity: number; price_cents: number }>() // Lines in insert order.
+    .all<{ item_id: string; name: string; quantity: number; price_cents: number }>() // Lines in insert order.
   return {
     number: row.number, // The order number.
     createdAt: row.created_at, // ISO UTC.
     currency: row.currency, // Three letters.
     totalCents: row.total_cents, // Whole cents.
     club: row.club, // The stored club text.
-    lines: results.map((line) => ({ honorId: line.honor_id, name: line.name, quantity: line.quantity, priceCents: line.price_cents })), // Camel case for the API.
+    lines: results.map((line) => ({ honorId: line.item_id, name: line.name, quantity: line.quantity, priceCents: line.price_cents })), // Camel case for the API.
   }
 }
 
@@ -57,7 +57,7 @@ async function findShort(db: D1Database, lines: OrderRequest['lines']): Promise<
   const statements: D1PreparedStatement[] = [] // One lookup per chunk of ids.
   for (let i = 0; i < lines.length; i += IN_CHUNK) {
     const ids = lines.slice(i, i + IN_CHUNK).map((line) => line.honorId) // This chunk.
-    statements.push(db.prepare(`SELECT id, stock FROM honors WHERE status = 'active' AND id IN (${ids.map(() => '?').join(',')})`).bind(...ids)) // Active only.
+    statements.push(db.prepare(`SELECT id, stock FROM items WHERE status = 'active' AND id IN (${ids.map(() => '?').join(',')})`).bind(...ids)) // Active only.
   }
   for (const result of await db.batch<{ id: string; stock: number }>(statements)) for (const row of result.results) stock.set(row.id, row.stock) // Collect.
   const short: StockRefusalLine[] = [] // The answer.
@@ -94,9 +94,9 @@ export async function insertOrderRows(
   ] // The order first.
   for (const line of request.lines) {
     statements.push(
-      db.prepare("UPDATE honors SET stock = stock - ? WHERE id = ? AND status = 'active'").bind(line.quantity, line.honorId), // The CHECK refuses stock below 0.
+      db.prepare("UPDATE items SET stock = stock - ? WHERE id = ? AND status = 'active'").bind(line.quantity, line.honorId), // The CHECK refuses stock below 0.
       db
-        .prepare("INSERT INTO order_lines (order_id, honor_id, name, quantity, price_cents) VALUES ((SELECT id FROM orders WHERE number = ?), ?, (SELECT name FROM honors WHERE id = ? AND status = 'active'), ?, (SELECT price_cents FROM honors WHERE id = ? AND status = 'active'))")
+        .prepare("INSERT INTO order_lines (order_id, item_id, name, quantity, price_cents) VALUES ((SELECT id FROM orders WHERE number = ?), ?, (SELECT name FROM items WHERE id = ? AND status = 'active'), ?, (SELECT price_cents FROM items WHERE id = ? AND status = 'active'))")
         .bind(number, line.honorId, line.honorId, line.quantity, line.honorId), // A Hidden or missing item gives NULL and NOT NULL refuses it.
     )
   }

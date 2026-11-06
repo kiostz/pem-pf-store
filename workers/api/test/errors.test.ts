@@ -37,21 +37,21 @@ describe('errors', () => {
 
   it('answers 500 server with no SQL text when a table is gone, and logs only route and error name', async () => {
     // Catches SQL or driver messages leaking into the body or the log.
-    await env.DB.exec('DROP TABLE order_lines; DROP TABLE honors') // Break the read.
+    await env.DB.exec('DROP TABLE order_lines; DROP TABLE items') // Break the read.
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {}) // Capture what is logged.
     const res = await call('/items') // Hits the missing table.
     expect(res.status).toBe(500) // Server error.
     expect(await res.text()).toBe('{"error":"server"}') // Exactly the short code.
     expectJsonNoStore(res) // No-store JSON.
     const logged = JSON.stringify(spy.mock.calls) // Everything logged.
-    expect(logged).not.toMatch(/honors|SELECT|no such table/i) // No SQL or table names.
+    expect(logged).not.toMatch(/from items|table items|items\.|SELECT|no such table/i) // No SQL or table names.
     expect(logged).toContain('/items') // Route is logged.
     spy.mockRestore() // Undo the spy.
   })
 
   it('answers 429 rate-limited past the limit without touching D1, keyed on the client IP', async () => {
     // Catches a missing limiter, a wrong key, or a limited request still reaching D1 (a dropped table would give 500).
-    await env.DB.exec('DROP TABLE IF EXISTS honors') // A D1 read would now answer 500 (may already be gone).
+    await env.DB.exec('DROP TABLE IF EXISTS items') // A D1 read would now answer 500 (may already be gone).
     const limit = vi.fn(async () => ({ success: false })) // Always over the limit.
     const res = await call('/items', { headers: { 'CF-Connecting-IP': '203.0.113.9' } }, { limit }) // From one IP.
     expect(res.status).toBe(429) // Limited, not 500.

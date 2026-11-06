@@ -9,6 +9,7 @@ const db = env.DB
 // Reason texts SQLite gives for each kind of refusal.
 const CHECK = 'CHECK constraint failed'
 const UNIQUE = 'UNIQUE constraint failed'
+const NOT_NULL = 'NOT NULL constraint failed'
 const FOREIGN_KEY = 'FOREIGN KEY constraint failed'
 const TYPE = 'cannot store' // STRICT tables refuse a value of the wrong type.
 
@@ -48,7 +49,6 @@ const validOrder = {
   buyer_email: 'ana@example.com',
   buyer_phone: '0123',
   club: 'Gilead',
-  personal_data_removed_at: null,
 }
 
 /**
@@ -126,17 +126,17 @@ beforeEach(async () => {
     db.prepare('DELETE FROM order_lines'),
     db.prepare('DELETE FROM orders'),
     db.prepare('DELETE FROM clubs'),
-    db.prepare('DELETE FROM honors'),
+    db.prepare('DELETE FROM items'),
     db.prepare('DELETE FROM settings'),
   ])
 })
 
-describe('honors', () => {
+describe('items', () => {
   it('accepts a valid row and a picture path that is not patches/<id>.webp', async () => {
     // Catches a base row that is itself invalid (every refusal below would pass for the wrong reason) and an image CHECK tied to the id.
-    expect(await tryInsert('honors', validHonor)).toBeNull()
+    expect(await tryInsert('items', validHonor)).toBeNull()
     expect(
-      await tryInsert('honors', {
+      await tryInsert('items', {
         ...validHonor,
         id: 'other',
         name: 'Other Knots',
@@ -162,27 +162,27 @@ describe('honors', () => {
     ['empty image path', { image: '' }, CHECK],
   ])('refuses %s', async (_label, change, reason) => {
     // Catches a CHECK or type rule that is missing or mistyped.
-    expect(await tryInsert('honors', { ...validHonor, ...change })).toContain(
+    expect(await tryInsert('items', { ...validHonor, ...change })).toContain(
       reason,
     )
   })
 
   it('undoes the first update of a batch when the second one underflows stock', async () => {
     // Catches an order that is half applied: the first honor loses stock while the second fails.
-    await mustInsert('honors', { ...validHonor, id: 'first', stock: 5 })
-    await mustInsert('honors', { ...validHonor, id: 'second', name: 'Second', stock: 0 })
+    await mustInsert('items', { ...validHonor, id: 'first', stock: 5 })
+    await mustInsert('items', { ...validHonor, id: 'second', name: 'Second', stock: 0 })
     await expect(
       db.batch([
         db
-          .prepare('UPDATE honors SET stock = stock - 2 WHERE id = ?')
+          .prepare('UPDATE items SET stock = stock - 2 WHERE id = ?')
           .bind('first'),
         db
-          .prepare('UPDATE honors SET stock = stock - 1 WHERE id = ?')
+          .prepare('UPDATE items SET stock = stock - 1 WHERE id = ?')
           .bind('second'),
       ]),
     ).rejects.toThrow() // The second update breaks the CHECK.
     const row = await db
-      .prepare('SELECT stock FROM honors WHERE id = ?')
+      .prepare('SELECT stock FROM items WHERE id = ?')
       .bind('first')
       .first<{ stock: number }>()
     expect(row!.stock).toBe(5) // A half-applied order would leave 3.
@@ -190,29 +190,30 @@ describe('honors', () => {
 
   it('refuses to update a stock to text', async () => {
     // Catches a text stock slipping past stock >= 0 (text sorts above every number).
-    await mustInsert('honors', validHonor)
+    await mustInsert('items', validHonor)
     expect(
-      await tryRun(`UPDATE honors SET stock = 'abc' WHERE id = 'knots'`),
+      await tryRun(`UPDATE items SET stock = 'abc' WHERE id = 'knots'`),
     ).toContain(TYPE)
   })
 })
 
-describe('honors times and unique names', () => {
+describe('items times and unique names', () => {
   it('backfills nothing for new rows but the constant default, as an import-style INSERT gets it', async () => {
     // Catches an INSERT that names no time columns (the import, an old Worker) failing or leaving NULL.
-    await mustInsert('honors', validHonor) // No time columns named.
-    expect(await db.prepare('SELECT created_at, modified_at FROM honors').first()).toEqual({ created_at: '2026-11-01T00:00:00.000Z', modified_at: '2026-11-01T00:00:00.000Z' })
+    await mustInsert('items', validHonor) // No time columns named.
+    expect(await db.prepare('SELECT created_at, modified_at FROM items').first()).toEqual({ created_at: '2026-11-01T00:00:00.000Z', modified_at: '2026-11-01T00:00:00.000Z' })
   })
 
   it('backfills rows that exist before migration 0003 with 2026-11-01 in both time columns', async () => {
     // Catches a migration whose default text or ADD COLUMN leaves old rows NULL or on another date.
-    await db.batch(['order_lines', 'orders', 'clubs', 'settings', 'honors'].map((table) => db.prepare(`DROP TABLE ${table}`))) // Back to an empty database.
-    const migrations = [...env.TEST_MIGRATIONS].sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)) // 0001, 0002, 0003.
-    expect(migrations.map((migration: { name: string }) => migration.name.slice(0, 4))).toEqual(['0001', '0002', '0003'])
-    for (const migration of migrations.slice(0, 2)) await db.batch(migration.queries.map((query: string) => db.prepare(query))) // The schema as it was before 0003.
-    await db.prepare("INSERT INTO honors (id, name, category, issued_by, status, stock, price_cents) VALUES ('old', 'Old', 'Nature', 'GC', 'active', 1, 400)").run() // A row that exists already.
-    await db.batch(migrations[2].queries.map((query: string) => db.prepare(query))) // Migration 0003 itself.
-    expect(await db.prepare("SELECT created_at, modified_at FROM honors WHERE id = 'old'").first()).toEqual({ created_at: '2026-11-01T00:00:00.000Z', modified_at: '2026-11-01T00:00:00.000Z' })
+    const spare = env.MIGRATION_DB // The spare database, so the main one keeps the full schema for the other tests.
+    await spare.batch(['order_lines', 'orders', 'clubs', 'settings', 'honors', 'items'].map((table) => spare.prepare(`DROP TABLE IF EXISTS ${table}`))) // Back to an empty database.
+    const migrations = [...env.TEST_MIGRATIONS].sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)) // 0001 to 0004.
+    expect(migrations.map((migration: { name: string }) => migration.name.slice(0, 4))).toEqual(['0001', '0002', '0003', '0004'])
+    for (const migration of migrations.slice(0, 2)) await spare.batch(migration.queries.map((query: string) => spare.prepare(query))) // The schema as it was before 0003.
+    await spare.prepare("INSERT INTO honors (id, name, category, issued_by, status, stock, price_cents) VALUES ('old', 'Old', 'Nature', 'GC', 'active', 1, 400)").run() // A row that exists already.
+    await spare.batch(migrations[2].queries.map((query: string) => spare.prepare(query))) // Migration 0003 itself.
+    expect(await spare.prepare("SELECT created_at, modified_at FROM honors WHERE id = 'old'").first()).toEqual({ created_at: '2026-11-01T00:00:00.000Z', modified_at: '2026-11-01T00:00:00.000Z' })
   })
 
   it.each([
@@ -223,14 +224,14 @@ describe('honors times and unique names', () => {
     ['a NULL modified_at', { modified_at: null }],
   ])('refuses %s', async (_label, change) => {
     // Catches a time column without its CHECK, which would break the text sort.
-    expect(await tryInsert('honors', { ...validHonor, ...change })).toMatch(/CHECK constraint failed|NOT NULL constraint failed/)
+    expect(await tryInsert('items', { ...validHonor, ...change })).toMatch(/CHECK constraint failed|NOT NULL constraint failed/)
   })
 
   it('refuses a second name that differs only in case', async () => {
     // Catches the unique index missing or using binary collation, so "Knots" and "knots" could both exist.
-    await mustInsert('honors', validHonor)
-    expect(await tryInsert('honors', { ...validHonor, id: 'knots-2', name: 'KNOTS' })).toContain(UNIQUE)
-    expect(await tryInsert('honors', { ...validHonor, id: 'knots-3', name: 'Knots 3' })).toBeNull() // Another name is fine.
+    await mustInsert('items', validHonor)
+    expect(await tryInsert('items', { ...validHonor, id: 'knots-2', name: 'KNOTS' })).toContain(UNIQUE)
+    expect(await tryInsert('items', { ...validHonor, id: 'knots-3', name: 'Knots 3' })).toBeNull() // Another name is fine.
   })
 })
 
@@ -320,35 +321,11 @@ describe('orders', () => {
       { created_at: '2026-13-45T00:00:00.000Z' },
       CHECK,
     ],
-    [
-      'a removed order that keeps the name',
-      {
-        personal_data_removed_at: '2026-11-02T00:00:00.000Z',
-        buyer_email: null,
-        buyer_phone: null,
-      },
-      CHECK,
-    ],
-    [
-      'a removed order that keeps the email',
-      {
-        personal_data_removed_at: '2026-11-02T00:00:00.000Z',
-        buyer_name: null,
-        buyer_phone: null,
-      },
-      CHECK,
-    ],
-    [
-      'a removed order that keeps the phone',
-      {
-        personal_data_removed_at: '2026-11-02T00:00:00.000Z',
-        buyer_name: null,
-        buyer_email: null,
-      },
-      CHECK,
-    ],
+    ['a NULL buyer name', { buyer_name: null }, NOT_NULL],
+    ['a NULL buyer email', { buyer_email: null }, NOT_NULL],
+    ['a NULL buyer phone', { buyer_phone: null }, NOT_NULL],
   ])('refuses %s', async (_label, change, reason) => {
-    // Catches a missing step, money, date-format or personal-data rule.
+    // Catches a missing step, money, date-format or buyer-details rule.
     expect(await tryInsert('orders', { ...validOrder, ...change })).toContain(
       reason,
     )
@@ -360,55 +337,12 @@ describe('orders', () => {
     expect(await tryInsert('orders', validOrder)).toContain(UNIQUE)
   })
 
-  it('keeps the lines, total and club when the buyer fields are cleared', async () => {
-    // Catches a removal that loses sales history along with the personal data.
-    const orderId = await insertOrder()
-    await mustInsert('order_lines', {
-      order_id: orderId,
-      honor_id: 'h',
-      name: 'H',
-      quantity: 2,
-      price_cents: 400,
-    })
-    expect(
-      await tryRun(
-        `UPDATE orders SET buyer_name = NULL, buyer_email = NULL, buyer_phone = NULL, personal_data_removed_at = '2026-11-02T00:00:00.000Z' WHERE id = ?`,
-        [orderId],
-      ),
-    ).toBeNull() // Clearing the buyer fields is allowed.
-    const order = await db
-      .prepare('SELECT total_cents, club, buyer_email FROM orders WHERE id = ?')
-      .bind(orderId)
-      .first()
-    const lines = await db
-      .prepare('SELECT quantity FROM order_lines WHERE order_id = ?')
-      .bind(orderId)
-      .all()
-    expect(order).toEqual({
-      total_cents: 800,
-      club: 'Gilead',
-      buyer_email: null,
-    })
-    expect(lines.results).toHaveLength(1) // A removal that dropped lines would lose sales history.
-  })
-
-  it('refuses to mark a removal while buyer data remains', async () => {
-    // Catches the removal date being set without clearing the buyer fields.
-    const orderId = await insertOrder()
-    expect(
-      await tryRun(
-        `UPDATE orders SET personal_data_removed_at = '2026-11-02T00:00:00.000Z' WHERE id = ?`,
-        [orderId],
-      ),
-    ).toContain(CHECK)
-  })
-
   it('deletes the lines of a deleted order', async () => {
     // Catches orphan lines staying behind a deleted order.
     const orderId = await insertOrder()
     await mustInsert('order_lines', {
       order_id: orderId,
-      honor_id: 'h',
+      item_id: 'h',
       name: 'H',
       quantity: 1,
       price_cents: 400,
@@ -429,7 +363,7 @@ describe('order lines', () => {
     expect(
       await tryInsert('order_lines', {
         order_id: orderId,
-        honor_id: 'h',
+        item_id: 'h',
         name: 'H',
         quantity: 99,
         price_cents: 0,
@@ -450,7 +384,7 @@ describe('order lines', () => {
     expect(
       await tryInsert('order_lines', {
         order_id: orderId,
-        honor_id: 'h',
+        item_id: 'h',
         name: 'H',
         quantity: 1,
         price_cents: 400,
@@ -464,7 +398,7 @@ describe('order lines', () => {
     const orderId = await insertOrder()
     const line = {
       order_id: orderId,
-      honor_id: 'h',
+      item_id: 'h',
       name: 'H',
       quantity: 1,
       price_cents: 400,

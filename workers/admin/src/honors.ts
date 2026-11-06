@@ -11,7 +11,7 @@ const COLUMNS = "id, name, category, status, stock, price_cents AS priceCents, i
 // The order of a list of named ids (the rows of a save).
 const ORDER = 'ORDER BY name COLLATE NOCASE, id'
 // A statement that raises "integer overflow" (the only way a batch statement can abort the batch) when its honor no longer exists.
-const MISSING_GUARD = 'SELECT CASE WHEN EXISTS (SELECT 1 FROM honors WHERE id = ?) THEN 0 ELSE abs(-9223372036854775807 - 1) END'
+const MISSING_GUARD = 'SELECT CASE WHEN EXISTS (SELECT 1 FROM items WHERE id = ?) THEN 0 ELSE abs(-9223372036854775807 - 1) END'
 
 // A row as D1 returns it: the Club flag is 0 or 1.
 type RawHonor = Omit<AdminHonor, 'clubAdded'> & { clubAdded: number }
@@ -52,7 +52,7 @@ export function pageSql(query: ItemQuery): { sql: string; params: (string | numb
   }
   const order = query.sort === 'name' ? 'name COLLATE NOCASE, id' : `${timeColumn} DESC, name COLLATE NOCASE, id` // The order each index holds.
   const clause = where.length === 0 ? '' : ` WHERE ${where.join(' AND ')}` // No WHERE when nothing filters.
-  return { sql: `SELECT ${COLUMNS} FROM honors${clause} ORDER BY ${order} LIMIT ${PAGE_SIZE + 1}`, params } // Values only ever bound, never joined in.
+  return { sql: `SELECT ${COLUMNS} FROM items${clause} ORDER BY ${order} LIMIT ${PAGE_SIZE + 1}`, params } // Values only ever bound, never joined in.
 }
 
 /**
@@ -90,7 +90,7 @@ export async function readMeta(db: D1Database): Promise<AdminMeta> {
  * @return The honors in name order.
  */
 export async function readAdminHonors(db: D1Database, ids: string[]): Promise<AdminHonor[]> {
-  const { results } = await db.prepare(`SELECT ${COLUMNS} FROM honors WHERE id IN (SELECT value FROM json_each(?)) ${ORDER}`).bind(JSON.stringify(ids)).all<RawHonor>() // One parameter whatever the count.
+  const { results } = await db.prepare(`SELECT ${COLUMNS} FROM items WHERE id IN (SELECT value FROM json_each(?)) ${ORDER}`).bind(JSON.stringify(ids)).all<RawHonor>() // One parameter whatever the count.
   return results.map(toHonor) // In list order.
 }
 
@@ -177,7 +177,7 @@ function guardedUpdate(db: D1Database, change: HonorChange, now: string): D1Prep
   }
   sets.push('modified_at = ?') // Every admin edit stamps the time; an order's stock drop does not go through here.
   values.push(now) // One time per request.
-  return db.prepare(`UPDATE honors SET ${sets.join(', ')} WHERE id = ?`).bind(...values, change.id) // Values first, then the id.
+  return db.prepare(`UPDATE items SET ${sets.join(', ')} WHERE id = ?`).bind(...values, change.id) // Values first, then the id.
 }
 
 /**
@@ -190,7 +190,7 @@ async function nameTakenIds(db: D1Database, changes: HonorChange[]): Promise<str
   const taken: string[] = [] // Ids whose name is taken.
   for (const change of changes) { // Each rename.
     if (change.name === undefined) continue // Not a rename.
-    const holder = await db.prepare('SELECT 1 AS held FROM honors WHERE name = ? COLLATE NOCASE AND id <> ?').bind(change.name.to, change.id).first() // Another row with that name.
+    const holder = await db.prepare('SELECT 1 AS held FROM items WHERE name = ? COLLATE NOCASE AND id <> ?').bind(change.name.to, change.id).first() // Another row with that name.
     if (holder !== null) taken.push(change.id) // Taken.
   }
   return taken // The ids.

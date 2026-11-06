@@ -5,5 +5,7 @@ declare namespace Cloudflare {
   interface Env {
     // Migrations read from workers/migrations, applied by apply-migrations.ts.
     TEST_MIGRATIONS: D1Migration[]
+    // Second, empty database for tests that migrate seeded old-schema data.
+    MIGRATION_DB: D1Database
   }
 }

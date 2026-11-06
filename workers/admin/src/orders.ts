@@ -16,7 +16,6 @@ interface RawOrder { // An order as D1 returns it.
   name: string | null // Buyer name, null once removed.
   email: string | null // Buyer email, null once removed.
   phone: string | null // Buyer phone, null once removed.
-  removedAt: string | null // When the personal data was removed.
 }
 
 interface RawLine { // A line as D1 returns it; `inShop` is 0 or 1.
@@ -34,7 +33,7 @@ interface RawLine { // A line as D1 returns it; `inShop` is 0 or 1.
  * @return The statement text and its values; a list page reads 51 rows in the order of `orders_created_at`.
  */
 export function orderPageSql(query: OrderQuery): { sql: string; params: (string | number)[] } {
-  const columns = 'id, number, created_at AS createdAt, step, currency, total_cents AS totalCents, club, buyer_name AS name, buyer_email AS email, buyer_phone AS phone, personal_data_removed_at AS removedAt' // What the admin sees.
+  const columns = 'id, number, created_at AS createdAt, step, currency, total_cents AS totalCents, club, buyer_name AS name, buyer_email AS email, buyer_phone AS phone' // What the admin sees.
   if (query.number !== null) return { sql: `SELECT ${columns} FROM orders WHERE number = ? LIMIT 1`, params: [query.number] } // The unique index.
   const where: string[] = [] // AND-ed conditions.
   const params: (string | number)[] = [] // Their values, in order.
@@ -59,7 +58,7 @@ export function orderPageSql(query: OrderQuery): { sql: string; params: (string 
 function toOrders(rows: RawOrder[], lines: RawLine[]): AdminOrder[] {
   return rows.map((row) => {
     const own = lines.filter((line) => line.orderId === row.id) // This order's lines, in the order they were saved.
-    const hasBuyer = row.removedAt === null && row.name !== null && row.email !== null && row.phone !== null // Removed or cleared means no buyer.
+    const hasBuyer = row.name !== null && row.email !== null && row.phone !== null // Cleared fields mean no buyer.
     return { // The API shape of one order.
       number: row.number, // As stored.
       createdAt: row.createdAt, // As stored.
@@ -69,7 +68,7 @@ function toOrders(rows: RawOrder[], lines: RawLine[]): AdminOrder[] {
       itemCount: own.reduce((sum, line) => sum + line.quantity, 0), // Quantity, not lines.
       club: row.club, // As stored.
       buyer: hasBuyer ? { name: row.name as string, email: row.email as string, phone: row.phone as string } : null, // Checked above.
-      personalDataRemovedAt: row.removedAt, // Null while the data is kept.
+      personalDataRemovedAt: null, // The column is gone; the field stays until the Admin API drops it.
       lines: own.map((line) => ({ itemId: line.itemId, name: line.name, quantity: line.quantity, priceCents: line.priceCents, inShop: line.inShop === 1 })), // The lines with the live flag.
     }
   })
@@ -86,7 +85,7 @@ export async function readOrderPage(db: D1Database, query: OrderQuery): Promise<
   const [orderResult, lineResult] = await db.batch<RawOrder | RawLine>([
     db.prepare(sql).bind(...params), // The orders.
     db // The lines statement over the same page.
-      .prepare(`SELECT l.order_id AS orderId, l.honor_id AS itemId, l.name, l.quantity, l.price_cents AS priceCents, h.id IS NOT NULL AS inShop FROM order_lines l LEFT JOIN honors h ON h.id = l.honor_id WHERE l.order_id IN (SELECT id FROM (${sql} )) ORDER BY l.order_id, l.rowid`)
+      .prepare(`SELECT l.order_id AS orderId, l.item_id AS itemId, l.name, l.quantity, l.price_cents AS priceCents, h.id IS NOT NULL AS inShop FROM order_lines l LEFT JOIN items h ON h.id = l.item_id WHERE l.order_id IN (SELECT id FROM (${sql} )) ORDER BY l.order_id, l.rowid`)
       .bind(...params), // The lines of the same page, so there is no N+1.
   ])
   const rows = orderResult.results as RawOrder[] // Up to 51.
@@ -121,9 +120,9 @@ export async function changeOrderStep(db: D1Database, change: StepChange): Promi
   if (current.step !== change.from) return { kind: 'conflict', order: current } // Stale before any write.
   const orderId = '(SELECT id FROM orders WHERE number = ?1 AND step = ?2)' // The order, only while it is still at `from`.
   const results = await db.batch<{ restocked: number }>([ // The restock select, the restock update and the step update in one transaction.
-    db.prepare(`SELECT COALESCE(SUM(l.quantity), 0) AS restocked FROM order_lines l JOIN honors h ON h.id = l.honor_id WHERE l.order_id = ${orderId} AND ?3 = 1`).bind(change.number, change.from, change.restock ? 1 : 0), // Quantity that will go back: lines whose item still exists.
+    db.prepare(`SELECT COALESCE(SUM(l.quantity), 0) AS restocked FROM order_lines l JOIN items h ON h.id = l.item_id WHERE l.order_id = ${orderId} AND ?3 = 1`).bind(change.number, change.from, change.restock ? 1 : 0), // Quantity that will go back: lines whose item still exists.
     db // The restock update.
-      .prepare(`UPDATE honors SET stock = stock + (SELECT l.quantity FROM order_lines l WHERE l.order_id = ${orderId} AND l.honor_id = honors.id) WHERE ?3 = 1 AND id IN (SELECT honor_id FROM order_lines WHERE order_id = ${orderId})`)
+      .prepare(`UPDATE items SET stock = stock + (SELECT l.quantity FROM order_lines l WHERE l.order_id = ${orderId} AND l.item_id = items.id) WHERE ?3 = 1 AND id IN (SELECT item_id FROM order_lines WHERE order_id = ${orderId})`)
       .bind(change.number, change.from, change.restock ? 1 : 0), // Never touches modified_at or status; Hidden items too.
     db.prepare('UPDATE orders SET step = ?3 WHERE number = ?1 AND step = ?2').bind(change.number, change.from, change.to), // The step guard.
   ])

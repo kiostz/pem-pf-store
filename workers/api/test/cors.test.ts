@@ -6,7 +6,7 @@ import { call } from './helpers'
 
 describe('cors', () => {
   beforeEach(async () => {
-    await env.DB.exec('DELETE FROM honors') // Known empty body.
+    await env.DB.exec('DELETE FROM items') // Known empty body.
   })
 
   it('allows the exact shop origin and varies on Origin', async () => {

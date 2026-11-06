@@ -16,10 +16,10 @@ function tables(command: string): string[] {
 
 describe('db:export:remote', () => {
   // Catches an export that names orders, order lines or any other table, which would copy buyers' data into the fill file.
-  it('exports exactly honors, clubs and settings', () => {
+  it('exports exactly items, clubs and settings', () => {
     expect(tables(scripts['db:export:remote']).sort()).toEqual([
       'clubs',
-      'honors',
+      'items',
       'settings',
     ])
   })

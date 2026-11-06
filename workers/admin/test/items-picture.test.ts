@@ -102,7 +102,7 @@ describe('POST /api/items/picture', () => {
 
   it('answers 409 with deletedIds when the row is gone, leaving no object', async () => {
     // catches: an orphan object or a 500 for a deleted item
-    await env.DB.prepare("DELETE FROM honors WHERE id = 'africa-lore'").run()
+    await env.DB.prepare("DELETE FROM items WHERE id = 'africa-lore'").run()
     const res = await upload('id=africa-lore&seen=')
     expect(res.status).toBe(409)
     expect(await res.json()).toEqual({ error: 'conflict', honors: [], deletedIds: ['africa-lore'] })
@@ -221,7 +221,7 @@ describe('POST /api/items/picture', () => {
     const spy = vi.spyOn(env.DB, 'prepare').mockImplementation((sql: string) => {
       const statement = real(sql)
       if (!sql.startsWith('UPDATE')) return statement
-      return { bind: (...args: unknown[]) => ({ run: async () => { await real("DELETE FROM honors WHERE id = 'knot-tying'").run(); return statement.bind(...args).run() } }) } as unknown as D1PreparedStatement
+      return { bind: (...args: unknown[]) => ({ run: async () => { await real("DELETE FROM items WHERE id = 'knot-tying'").run(); return statement.bind(...args).run() } }) } as unknown as D1PreparedStatement
     })
     const res = await upload(`id=knot-tying&seen=${encodeURIComponent(OLD)}`)
     spy.mockRestore()
@@ -236,7 +236,7 @@ describe('POST /api/items/picture', () => {
     const spy = vi.spyOn(env.DB, 'prepare').mockImplementation((sql: string) => {
       const statement = real(sql)
       if (!sql.startsWith('UPDATE')) return statement
-      return { bind: (...args: unknown[]) => ({ run: async () => { const result = await statement.bind(...args).run(); await real("DELETE FROM honors WHERE id = 'knot-tying'").run(); return result } }) } as unknown as D1PreparedStatement
+      return { bind: (...args: unknown[]) => ({ run: async () => { const result = await statement.bind(...args).run(); await real("DELETE FROM items WHERE id = 'knot-tying'").run(); return result } }) } as unknown as D1PreparedStatement
     })
     const res = await upload(`id=knot-tying&seen=${encodeURIComponent(OLD)}`)
     spy.mockRestore()

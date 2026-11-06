@@ -13,7 +13,7 @@ import { addHonor, callWith, count, mockSiteverify, postOrder, SHOP, seedShop, v
  * @return The stock.
  */
 async function stockOf(id: string): Promise<number> {
-  return (await env.DB.prepare('SELECT stock FROM honors WHERE id = ?').bind(id).first<{ stock: number }>())!.stock // One row.
+  return (await env.DB.prepare('SELECT stock FROM items WHERE id = ?').bind(id).first<{ stock: number }>())!.stock // One row.
 }
 
 /**
@@ -72,11 +72,11 @@ describe('POST /orders', () => {
   it('lowers stock and leaves the honor\'s created_at and modified_at as they were', async () => {
     // Catches an order's stock drop stamping modified_at, which would put every sold item at the top of Recently changed.
     mockSiteverify() // Captcha passes.
-    await env.DB.exec("UPDATE honors SET created_at = '2026-11-02T03:04:05.678Z', modified_at = '2026-11-02T06:07:08.910Z' WHERE id = 'knots'") // Times an admin edit left.
+    await env.DB.exec("UPDATE items SET created_at = '2026-11-02T03:04:05.678Z', modified_at = '2026-11-02T06:07:08.910Z' WHERE id = 'knots'") // Times an admin edit left.
     const { res } = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 2 }] }))
     expect(res.status).toBe(201) // Created.
     expect(await stockOf('knots')).toBe(3) // 5 - 2.
-    expect(await env.DB.prepare("SELECT created_at, modified_at FROM honors WHERE id = 'knots'").first()).toEqual({ created_at: '2026-11-02T03:04:05.678Z', modified_at: '2026-11-02T06:07:08.910Z' }) // Untouched.
+    expect(await env.DB.prepare("SELECT created_at, modified_at FROM items WHERE id = 'knots'").first()).toEqual({ created_at: '2026-11-02T03:04:05.678Z', modified_at: '2026-11-02T06:07:08.910Z' }) // Untouched.
   })
 
   it('refuses a line above stock, a Hidden item and an unknown id together with 409, writing nothing', async () => {
@@ -94,7 +94,7 @@ describe('POST /orders', () => {
   it('refuses an item whose stock is 0', async () => {
     // Catches treating "sold out" as buyable.
     mockSiteverify() // Captcha passes.
-    await env.DB.exec("UPDATE honors SET stock = 0 WHERE id = 'rope'") // Sold out.
+    await env.DB.exec("UPDATE items SET stock = 0 WHERE id = 'rope'") // Sold out.
     const { res } = await postOrder(validOrder({ lines: [{ honorId: 'rope', quantity: 1 }] })) // Order it.
     expect(res.status).toBe(409) // Refused.
     expect(await res.json()).toEqual({ error: 'stock', lines: [{ honorId: 'rope', stock: 0 }] }) // Stock 0, not null.
@@ -175,7 +175,7 @@ describe('POST /orders', () => {
     let n = 0 // Draw counter.
     const randomValues = (array: Uint8Array<ArrayBuffer>) => array.fill(draws[Math.min(n++, 1)]) // 2222, then 3333.
     const clash = makeOrderNumber(now, (a) => a.fill(0)) // PF-20261102-2222.
-    await env.DB.prepare("INSERT INTO orders (number, created_at, currency, total_cents, club) VALUES (?, '2026-11-01T00:00:00.000Z', 'MYR', 0, 'Gilead')").bind(clash).run() // Taken.
+    await env.DB.prepare("INSERT INTO orders (number, created_at, currency, total_cents, buyer_name, buyer_email, buyer_phone, club) VALUES (?, '2026-11-01T00:00:00.000Z', 'MYR', 0, 'A', 'a@example.test', '1', 'Gilead')").bind(clash).run() // Taken.
     const result = await saveOrder(env.DB, request(), now, randomValues) // Save.
     expect(result.kind).toBe('saved') // Saved.
     if (result.kind === 'saved') expect(result.order.number).toBe('PF-20261102-3333') // The second draw.
@@ -184,7 +184,7 @@ describe('POST /orders', () => {
   it('gives up with an error after three clashes, writing nothing', async () => {
     // Catches an endless retry loop.
     const now = new Date('2026-11-01T17:00:00Z') // A moment.
-    await env.DB.prepare("INSERT INTO orders (number, created_at, currency, total_cents, club) VALUES ('PF-20261102-2222', '2026-11-01T00:00:00.000Z', 'MYR', 0, 'Gilead')").run() // Taken.
+    await env.DB.prepare("INSERT INTO orders (number, created_at, currency, total_cents, buyer_name, buyer_email, buyer_phone, club) VALUES ('PF-20261102-2222', '2026-11-01T00:00:00.000Z', 'MYR', 0, 'A', 'a@example.test', '1', 'Gilead')").run() // Taken.
     await expect(saveOrder(env.DB, request(), now, (a) => a.fill(0))).rejects.toThrow() // Always 2222.
     expect(await stockOf('knots')).toBe(5) // Unchanged.
   })
@@ -263,7 +263,7 @@ describe('POST /orders', () => {
     expect(res.status).toBe(201) // Created.
     expect(((await res.json()) as { totalCents: number }).totalCents).toBe(100000) // 500 x 2 x 100.
     expect(await count('order_lines')).toBe(500) // Every line saved.
-    const low = await env.DB.prepare("SELECT COUNT(*) AS n FROM honors WHERE id LIKE 'bulk-%' AND stock = 1").first<{ n: number }>() // 3 - 2.
+    const low = await env.DB.prepare("SELECT COUNT(*) AS n FROM items WHERE id LIKE 'bulk-%' AND stock = 1").first<{ n: number }>() // 3 - 2.
     expect(low?.n).toBe(500) // Every stock lowered.
     const row = await env.DB.prepare('SELECT total_cents FROM orders').first<{ total_cents: number }>() // Stored total.
     expect(row?.total_cents).toBe(100000) // Same as the answer.

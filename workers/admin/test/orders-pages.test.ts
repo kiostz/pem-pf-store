@@ -103,12 +103,11 @@ describe('GET /api/orders pages', () => {
     expect(order.buyer).toEqual(BUYER)
   })
 
-  it('gives buyer null and the removal time for an order whose details were removed', async () => {
-    // Catches empty-string buyer fields shown as a buyer, or a lost removal time.
-    await seedOrders([{ number: 'PF-20261105-ABCD', removedAt: '2027-11-05T19:00:00.000Z' }])
+  it('serves personalDataRemovedAt as null now that the column is gone', async () => {
+    // Catches the old field vanishing from the JSON before the Admin API drops it on purpose.
+    await seedOrders([{ number: 'PF-20261105-ABCD' }])
     const order = (await page()).body.orders[0]
-    expect(order.buyer).toBeNull()
-    expect(order.personalDataRemovedAt).toBe('2027-11-05T19:00:00.000Z')
+    expect(order.personalDataRemovedAt).toBeNull()
   })
 
   it('answers 400 invalid for a bad query and sets no-store', async () => {

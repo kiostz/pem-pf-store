@@ -32,13 +32,13 @@ export async function addHonor(db: D1Database, input: NewItem, now: string): Pro
     const id = attempt === 1 ? base : `${base}-${attempt}` // This attempt's id.
     try { // A clash throws.
       await db
-        .prepare("INSERT INTO honors (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at) VALUES (?, ?, ?, 'Club', 'hidden', 0, ?, ?, ?)")
+        .prepare("INSERT INTO items (id, name, category, issued_by, status, stock, price_cents, created_at, modified_at) VALUES (?, ?, ?, 'Club', 'hidden', 0, ?, ?, ?)")
         .bind(id, input.name, input.category, input.priceCents, now, now)
         .run() // Hidden, stock 0, issued by the Club.
     } catch (error) { // Refused.
       const reason = reasonOf(error) // Why.
       if (!reason.includes('UNIQUE')) throw error // A real failure.
-      if (reason.includes('honors.id')) continue // The id is taken: try the next suffix.
+      if (reason.includes('items.id')) continue // The id is taken: try the next suffix.
       return { kind: 'name-taken' } // The unique name index.
     }
     return { kind: 'added', honor: (await readAdminHonors(db, [id]))[0] } // Read back with its times.

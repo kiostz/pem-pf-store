@@ -6,7 +6,7 @@ import { addHonor, addSettings, call, expectJsonNoStore } from './helpers'
 
 describe('read endpoints', () => {
   beforeEach(async () => {
-    await env.DB.exec('DELETE FROM honors; DELETE FROM clubs; DELETE FROM settings;') // Each test starts empty.
+    await env.DB.exec('DELETE FROM items; DELETE FROM clubs; DELETE FROM settings;') // Each test starts empty.
   })
 
   it('lists active honors by name with exactly six fields', async () => {

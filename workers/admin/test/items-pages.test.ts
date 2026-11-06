@@ -83,8 +83,8 @@ describe('pages of 50', () => {
     it(`keeps going without repeats when rows change mid-scroll under sort=${sort}`, async () => {
       // Catches offset paging: a row changed or removed after page 1 would shift every later row.
       const pages = await walk(sort, '', async () => {
-        await env.DB.prepare('DELETE FROM honors WHERE id = ?').bind('item-070').run() // Removed before it was reached (it sits on page 2 or 3 in every sort).
-        await env.DB.prepare('UPDATE honors SET modified_at = ?, created_at = ?, stock = 9 WHERE id = ?').bind(at(500), at(500), sort === 'name' ? 'item-010' : 'item-100').run() // A seen row moves to the top of the time sorts.
+        await env.DB.prepare('DELETE FROM items WHERE id = ?').bind('item-070').run() // Removed before it was reached (it sits on page 2 or 3 in every sort).
+        await env.DB.prepare('UPDATE items SET modified_at = ?, created_at = ?, stock = 9 WHERE id = ?').bind(at(500), at(500), sort === 'name' ? 'item-010' : 'item-100').run() // A seen row moves to the top of the time sorts.
       })
       const seen = pages.flat()
       expect(new Set(seen).size).toBe(seen.length) // No repeat.

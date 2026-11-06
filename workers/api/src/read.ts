@@ -4,7 +4,7 @@ import type { ShopClub, ShopHonor, ShopLoad, ShopSettings } from './api-types'
 
 // The three public selects, shared by the single endpoints and /shop.
 const HONORS_SQL =
-  "SELECT id, name, category, price_cents AS priceCents, stock, image FROM honors WHERE status = 'active' ORDER BY name COLLATE NOCASE, id" // Hidden honors never leave D1; ties by id.
+  "SELECT id, name, category, price_cents AS priceCents, stock, image FROM items WHERE status = 'active' ORDER BY name COLLATE NOCASE, id" // Hidden honors never leave D1; ties by id.
 const CLUBS_SQL = 'SELECT name, area, language, location, church_name AS churchName FROM clubs ORDER BY position, id' // Position, ties by id.
 const SETTINGS_SQL = 'SELECT currency FROM settings WHERE id = 1' // The single row.
 

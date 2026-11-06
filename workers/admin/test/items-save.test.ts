@@ -97,7 +97,7 @@ describe('POST /api/items/changes', () => {
     const racing = {
       prepare: (sql: string) => env.DB.prepare(sql), // Reads go through.
       batch: async (statements: D1PreparedStatement[]) => {
-        await env.DB.prepare('UPDATE honors SET stock = 3 WHERE id = ?').bind('knot-tying').run() // A sale lands first.
+        await env.DB.prepare('UPDATE items SET stock = 3 WHERE id = ?').bind('knot-tying').run() // A sale lands first.
         return env.DB.batch(statements)
       },
     } as unknown as D1Database
@@ -116,7 +116,7 @@ describe('POST /api/items/changes', () => {
     const racing = {
       prepare: (sql: string) => env.DB.prepare(sql), // Reads go through.
       batch: async (statements: D1PreparedStatement[]) => {
-        await env.DB.prepare("UPDATE honors SET status = 'hidden' WHERE id = ?").bind('knot-tying').run() // Another tab hides it first.
+        await env.DB.prepare("UPDATE items SET status = 'hidden' WHERE id = ?").bind('knot-tying').run() // Another tab hides it first.
         return env.DB.batch(statements)
       },
     } as unknown as D1Database
@@ -182,7 +182,7 @@ describe('POST /api/items/changes', () => {
     const racing = {
       prepare: (sql: string) => env.DB.prepare(sql), // Reads go through.
       batch: async (statements: D1PreparedStatement[]) => {
-        await env.DB.prepare('DELETE FROM honors WHERE id = ?').bind('africa-lore').run() // Another admin deletes it first.
+        await env.DB.prepare('DELETE FROM items WHERE id = ?').bind('africa-lore').run() // Another admin deletes it first.
         return env.DB.batch(statements)
       },
     } as unknown as D1Database
@@ -248,7 +248,7 @@ describe('POST /api/items/changes', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const broken = {
       prepare: () => {
-        throw new Error('D1_ERROR: SELECT secret FROM honors admin@example.test')
+        throw new Error('D1_ERROR: SELECT secret FROM items admin@example.test')
       },
     } as unknown as D1Database
     const res = await postChanges(
@@ -322,7 +322,7 @@ describe('name, category and price', () => {
 
   it('does not use modified_at as a guard: a sale moves stock without touching it', async () => {
     // Catches a guard on the time, which a sale never changes, so a stale stock would pass; and the reverse, a time-only difference blocking a save.
-    await env.DB.prepare("UPDATE honors SET modified_at = '2026-11-02T00:00:00.000Z' WHERE id = 'knot-tying'").run() // Changed since the admin looked, in a field the admin is not editing.
+    await env.DB.prepare("UPDATE items SET modified_at = '2026-11-02T00:00:00.000Z' WHERE id = 'knot-tying'").run() // Changed since the admin looked, in a field the admin is not editing.
     const res = await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 12, to: 13 } }] })
     expect(res.status).toBe(200) // Per-field guards only.
   })
@@ -332,7 +332,7 @@ describe('name, category and price', () => {
     const racing = {
       prepare: (sql: string) => env.DB.prepare(sql),
       batch: async (statements: D1PreparedStatement[]) => {
-        await env.DB.prepare("UPDATE honors SET name = 'Renamed' WHERE id = 'knot-tying'").run() // Another admin renames it.
+        await env.DB.prepare("UPDATE items SET name = 'Renamed' WHERE id = 'knot-tying'").run() // Another admin renames it.
         return env.DB.batch(statements)
       },
     } as unknown as D1Database
