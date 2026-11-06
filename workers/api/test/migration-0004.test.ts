@@ -8,11 +8,11 @@ import { beforeEach, describe, expect, it } from 'vitest'
 const db = env.MIGRATION_DB
 // Migrations before and after the rebuild.
 const OLD = env.TEST_MIGRATIONS.slice(0, 3)
-const REBUILD = env.TEST_MIGRATIONS.slice(3)
+const REBUILD = env.TEST_MIGRATIONS.slice(3, 4) // Only 0004; later migrations are tested in their own files.
 
 /** Drops every table so each test starts from an empty database. */
 async function reset(): Promise<void> {
-  for (const table of ['order_lines', 'orders', 'honors', 'items', 'clubs', 'settings', 'd1_migrations', 'orders_copy', 'order_lines_copy'])
+  for (const table of ['order_lines', 'orders', 'honors', 'items', 'subcategories', 'clubs', 'settings', 'd1_migrations', 'orders_copy', 'order_lines_copy']) // Children first.
     await db.exec(`DROP TABLE IF EXISTS ${table}`) // Children first, so no cascade runs.
 }
 

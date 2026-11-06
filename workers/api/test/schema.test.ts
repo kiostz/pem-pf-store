@@ -127,6 +127,7 @@ beforeEach(async () => {
     db.prepare('DELETE FROM orders'),
     db.prepare('DELETE FROM clubs'),
     db.prepare('DELETE FROM items'),
+    db.prepare('DELETE FROM subcategories WHERE id > 9'), // Keeps the nine rows migration 0005 fills; drops rows a test added.
     db.prepare('DELETE FROM settings'),
   ])
 })
@@ -207,9 +208,9 @@ describe('items times and unique names', () => {
   it('backfills rows that exist before migration 0003 with 2026-11-01 in both time columns', async () => {
     // Catches a migration whose default text or ADD COLUMN leaves old rows NULL or on another date.
     const spare = env.MIGRATION_DB // The spare database, so the main one keeps the full schema for the other tests.
-    await spare.batch(['order_lines', 'orders', 'clubs', 'settings', 'honors', 'items'].map((table) => spare.prepare(`DROP TABLE IF EXISTS ${table}`))) // Back to an empty database.
-    const migrations = [...env.TEST_MIGRATIONS].sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)) // 0001 to 0004.
-    expect(migrations.map((migration: { name: string }) => migration.name.slice(0, 4))).toEqual(['0001', '0002', '0003', '0004'])
+    await spare.batch(['order_lines', 'orders', 'clubs', 'settings', 'honors', 'items', 'subcategories'].map((table) => spare.prepare(`DROP TABLE IF EXISTS ${table}`))) // Back to an empty database.
+    const migrations = [...env.TEST_MIGRATIONS].sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)) // 0001 to 0005.
+    expect(migrations.map((migration: { name: string }) => migration.name.slice(0, 4))).toEqual(['0001', '0002', '0003', '0004', '0005']) // All five, in order.
     for (const migration of migrations.slice(0, 2)) await spare.batch(migration.queries.map((query: string) => spare.prepare(query))) // The schema as it was before 0003.
     await spare.prepare("INSERT INTO honors (id, name, category, issued_by, status, stock, price_cents) VALUES ('old', 'Old', 'Nature', 'GC', 'active', 1, 400)").run() // A row that exists already.
     await spare.batch(migrations[2].queries.map((query: string) => spare.prepare(query))) // Migration 0003 itself.
@@ -232,6 +233,41 @@ describe('items times and unique names', () => {
     await mustInsert('items', validItem)
     expect(await tryInsert('items', { ...validItem, id: 'knots-2', name: 'KNOTS' })).toContain(UNIQUE)
     expect(await tryInsert('items', { ...validItem, id: 'knots-3', name: 'Knots 3' })).toBeNull() // Another name is fine.
+  })
+})
+
+describe('subcategories', () => { // Migration 0005 table.
+  it('holds the nine honor areas from migration 0005', async () => { // Seed rows.
+    // Catches a migration that leaves the table empty in a fresh database.
+    expect(await db.prepare('SELECT count(*) AS n FROM subcategories').first()).toEqual({ n: 9 }) // Nine rows.
+  })
+
+  it('refuses a repeated name in a category, ignoring case, but allows it in another category', async () => { // Unique index.
+    // Catches a plain UNIQUE (case-sensitive) or a name unique across categories.
+    expect(await tryInsert('subcategories', { category: 'Honors', name: 'nature' })).toContain(UNIQUE) // Same category, other case.
+    expect(await tryInsert('subcategories', { category: 'Shirts', name: 'Nature' })).toBeNull() // Other category.
+  })
+
+  it.each([
+    ['an empty name', ''], // Fails the length CHECK.
+    ['a name with a leading space', ' Nature'], // Fails the trim CHECK.
+  ])('refuses %s', async (_label, name) => { // Name checks.
+    // Catches a missing length or trim CHECK.
+    expect(await tryInsert('subcategories', { category: 'Shirts', name })).toContain(CHECK) // Refused.
+  })
+
+  it('refuses an item whose subcategory_id does not exist', async () => { // Foreign key.
+    // Catches a missing foreign key, which would store a subcategory that is not there.
+    expect(await tryInsert('items', { ...validItem, subcategory_id: 999 })).toContain(FOREIGN_KEY) // No such row.
+    expect(await tryInsert('items', { ...validItem, subcategory_id: 5 })).toBeNull() // An existing one is fine.
+  })
+
+  it('refuses to delete a subcategory that is in use and deletes an unused one', async () => { // Delete rule.
+    // Catches a foreign key with an ON DELETE action that would clear or cascade items.
+    await mustInsert('subcategories', { category: 'Shirts', name: 'Spare' }) // The test's own row, so the nine stay.
+    await mustInsert('items', { ...validItem, subcategory_id: 5 }) // Puts subcategory 5 in use.
+    expect(await tryRun('DELETE FROM subcategories WHERE id = 5')).toContain(FOREIGN_KEY) // In use: refused.
+    expect(await tryRun(`DELETE FROM subcategories WHERE category = 'Shirts' AND name = 'Spare'`)).toBeNull() // Unused: deleted.
   })
 })
 
