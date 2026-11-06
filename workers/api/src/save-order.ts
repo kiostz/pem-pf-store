@@ -42,7 +42,7 @@ export async function findByRequestId(db: D1Database, requestId: string): Promis
     currency: row.currency, // Three letters.
     totalCents: row.total_cents, // Whole cents.
     club: row.club, // The stored club text.
-    lines: results.map((line) => ({ honorId: line.item_id, name: line.name, quantity: line.quantity, priceCents: line.price_cents })), // Camel case for the API.
+    lines: results.map((line) => ({ itemId: line.item_id, name: line.name, quantity: line.quantity, priceCents: line.price_cents })), // Camel case for the API.
   }
 }
 
@@ -53,18 +53,18 @@ export async function findByRequestId(db: D1Database, requestId: string): Promis
  * @return The short lines in request order; stock is null for a Hidden or missing item.
  */
 async function findShort(db: D1Database, lines: OrderRequest['lines']): Promise<StockRefusalLine[]> {
-  const stock = new Map<string, number>() // Active honors and their stock.
+  const stock = new Map<string, number>() // Active items and their stock.
   const statements: D1PreparedStatement[] = [] // One lookup per chunk of ids.
   for (let i = 0; i < lines.length; i += IN_CHUNK) {
-    const ids = lines.slice(i, i + IN_CHUNK).map((line) => line.honorId) // This chunk.
+    const ids = lines.slice(i, i + IN_CHUNK).map((line) => line.itemId) // This chunk.
     statements.push(db.prepare(`SELECT id, stock FROM items WHERE status = 'active' AND id IN (${ids.map(() => '?').join(',')})`).bind(...ids)) // Active only.
   }
   for (const result of await db.batch<{ id: string; stock: number }>(statements)) for (const row of result.results) stock.set(row.id, row.stock) // Collect.
   const short: StockRefusalLine[] = [] // The answer.
   for (const line of lines) {
-    const left = stock.get(line.honorId) // Undefined when Hidden or unknown.
-    if (left === undefined) short.push({ honorId: line.honorId, stock: null }) // Not for sale.
-    else if (left < line.quantity) short.push({ honorId: line.honorId, stock: left }) // Not enough.
+    const left = stock.get(line.itemId) // Undefined when Hidden or unknown.
+    if (left === undefined) short.push({ itemId: line.itemId, stock: null }) // Not for sale.
+    else if (left < line.quantity) short.push({ itemId: line.itemId, stock: left }) // Not enough.
   }
   return short // Empty when every line can be filled.
 }
@@ -94,10 +94,10 @@ export async function insertOrderRows(
   ] // The order first.
   for (const line of request.lines) {
     statements.push(
-      db.prepare("UPDATE items SET stock = stock - ? WHERE id = ? AND status = 'active'").bind(line.quantity, line.honorId), // The CHECK refuses stock below 0.
+      db.prepare("UPDATE items SET stock = stock - ? WHERE id = ? AND status = 'active'").bind(line.quantity, line.itemId), // The CHECK refuses stock below 0.
       db
         .prepare("INSERT INTO order_lines (order_id, item_id, name, quantity, price_cents) VALUES ((SELECT id FROM orders WHERE number = ?), ?, (SELECT name FROM items WHERE id = ? AND status = 'active'), ?, (SELECT price_cents FROM items WHERE id = ? AND status = 'active'))")
-        .bind(number, line.honorId, line.honorId, line.quantity, line.honorId), // A Hidden or missing item gives NULL and NOT NULL refuses it.
+        .bind(number, line.itemId, line.itemId, line.quantity, line.itemId), // A Hidden or missing item gives NULL and NOT NULL refuses it.
     )
   }
   statements.push(

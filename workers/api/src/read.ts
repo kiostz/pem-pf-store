@@ -1,22 +1,22 @@
 // Read queries for the public endpoints: runs the SQL and maps rows to the response types.
 
-import type { ShopClub, ShopHonor, ShopLoad, ShopSettings } from './api-types'
+import type { ShopClub, ShopItem, ShopLoad, ShopSettings } from './api-types'
 
 // The three public selects, shared by the single endpoints and /shop.
-const HONORS_SQL =
-  "SELECT id, name, category, price_cents AS priceCents, stock, image FROM items WHERE status = 'active' ORDER BY name COLLATE NOCASE, id" // Hidden honors never leave D1; ties by id.
+const ITEMS_SQL =
+  "SELECT id, name, category, price_cents AS priceCents, stock, image FROM items WHERE status = 'active' ORDER BY name COLLATE NOCASE, id" // Hidden items never leave D1; ties by id.
 const CLUBS_SQL = 'SELECT name, area, language, location, church_name AS churchName FROM clubs ORDER BY position, id' // Position, ties by id.
 const SETTINGS_SQL = 'SELECT currency FROM settings WHERE id = 1' // The single row.
 
 /**
- * Reads the active honors, ordered by name ignoring case, ties by id.
+ * Reads the active items, ordered by name ignoring case, ties by id.
  * @param db The D1 database.
- * @return The shop honors.
+ * @return The shop items.
  */
-export async function readHonors(db: D1Database): Promise<ShopHonor[]> {
+export async function readItems(db: D1Database): Promise<ShopItem[]> {
   const { results } = await db // Only the six public columns are selected.
-    .prepare(HONORS_SQL) // Shared statement text.
-    .all<ShopHonor>() // Rows typed as the response.
+    .prepare(ITEMS_SQL) // Shared statement text.
+    .all<ShopItem>() // Rows typed as the response.
   return results // Column aliases already match the response type.
 }
 
@@ -51,12 +51,12 @@ export async function readSettings(db: D1Database): Promise<ShopSettings> {
  * @throws Error when the settings row is missing.
  */
 export async function readShop(db: D1Database): Promise<ShopLoad> {
-  const [honors, clubs, settings] = await db.batch([
-    db.prepare(HONORS_SQL), // Items.
+  const [items, clubs, settings] = await db.batch([
+    db.prepare(ITEMS_SQL), // Items.
     db.prepare(CLUBS_SQL), // Clubs.
     db.prepare(SETTINGS_SQL), // Settings.
   ]) // One round trip.
   const row = (settings.results as ShopSettings[])[0] // First settings row, if any.
   if (row === undefined) throw new Error('settings-missing') // Surfaces as a 500 with a short code.
-  return { items: honors.results as ShopHonor[], clubs: clubs.results as ShopClub[], settings: row } // Typed rows.
+  return { items: items.results as ShopItem[], clubs: clubs.results as ShopClub[], settings: row } // Typed rows.
 }

@@ -248,7 +248,7 @@ const savedOrder = {
   currency: 'MYR',
   totalCents: 900,
   club: 'Eagles',
-  lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }],
+  lines: [{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }],
 } // what the Worker saved
 
 /**
@@ -509,11 +509,11 @@ describe('OrderForm sending', () => {
   it('hands a stock refusal to the screen, shows no failure note, and leaves the cart as it was', async () => {
     // catches: a refused order emptying the cart, a "check your connection" note for a stock problem, or the refused lines never reaching the shop's data
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    stubFetch(refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }))
+    stubFetch(refused(409, { error: 'stock', lines: [{ itemId: 'knot-tying', stock: 1 }] }))
     const onStockRefused = vi.fn()
     renderForm(clubs, onStockRefused)
     fillTickAndSend()
-    await waitFor(() => expect(onStockRefused).toHaveBeenCalledWith([{ honorId: 'knot-tying', stock: 1 }]))
+    await waitFor(() => expect(onStockRefused).toHaveBeenCalledWith([{ itemId: 'knot-tying', stock: 1 }]))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByTestId('cart')).toHaveTextContent('{"knot-tying":3}')
     expect(window.localStorage.getItem(CART_STORAGE_KEY)).toBe('{"version":1,"quantities":{"knot-tying":3}}')
@@ -522,8 +522,8 @@ describe('OrderForm sending', () => {
 
   it.each([
     ['an empty list', []],
-    ['lines whose stock still covers the cart', [{ honorId: 'knot-tying', stock: 3 }]],
-    ['lines for items not in the cart', [{ honorId: 'ants', stock: 0 }]],
+    ['lines whose stock still covers the cart', [{ itemId: 'knot-tying', stock: 3 }]],
+    ['lines for items not in the cart', [{ itemId: 'ants', stock: 0 }]],
   ])('shows the general failure note when a stock refusal names %s', async (_name, refusedLines) => {
     // catches: a 409 that leaves nothing to fix doing nothing visible on the details page
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -558,7 +558,7 @@ describe('OrderForm sending', () => {
       email: 'jc@mail.com',
       phone: '+60 12-345 6789',
       club: { name: 'Riverside', typed: true },
-      lines: [{ honorId: 'knot-tying', quantity: 3 }],
+      lines: [{ itemId: 'knot-tying', quantity: 3 }],
     })
   })
 
@@ -1218,7 +1218,7 @@ describe('OrderForm reload mid-send', () => {
     ['a rejection', () => new Response('{}', { status: 500 })],
     [
       'a stock refusal that patches the cart',
-      () => refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }),
+      () => refused(409, { error: 'stock', lines: [{ itemId: 'knot-tying', stock: 1 }] }),
     ],
     ['a stock refusal with nothing to patch', () => refused(409, { error: 'stock', lines: [] })],
   ])('keeps the pending send after %s', async (_name, answer) => {
@@ -1372,7 +1372,7 @@ describe('OrderForm lookup after a lost send', () => {
 
   it('shows the earlier order with the note when the first send landed between the lookup and the resend', async () => {
     // catches: a confirmation for the changed lines when the Worker kept the earlier send's
-    await sendThenDrop(earlier({ club: 'Eagles', lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }] }))
+    await sendThenDrop(earlier({ club: 'Eagles', lines: [{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }] }))
     pickClub('Falcons')
     tickAndSend()
     await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
@@ -1422,7 +1422,7 @@ describe('OrderForm lookup after a lost send', () => {
   })
 
   it.each([
-    ['a stock refusal', () => refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] })],
+    ['a stock refusal', () => refused(409, { error: 'stock', lines: [{ itemId: 'knot-tying', stock: 1 }] })],
     ['a failed captcha', () => refused(403, { error: 'captcha' })],
     ['a 400', () => refused(400, { error: 'invalid' })],
     ['a rate limit', () => new Response('{}', { status: 429 })],
@@ -1610,7 +1610,7 @@ describe('OrderForm lookup after a lost send', () => {
     await waitFor(() => expect(window.location.hash).toBe('#/order-sent'))
     expect(fetchFn).toHaveBeenCalledTimes(1) // no second POST
     expect(storedOrder()).toMatchObject({ number: 'PF-20261102-4K7Q', changesNotSent: true }) // the saved order, flagged
-    expect(JSON.parse(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY) ?? '{}').order.lines).toEqual([{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }]) // three, not the lowered one
+    expect(JSON.parse(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY) ?? '{}').order.lines).toEqual([{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }]) // three, not the lowered one
     expect(screen.getByTestId('cart')).toHaveTextContent('{}') // the line is out of the cart
     expect(window.sessionStorage.getItem(PENDING_KEY)).toBeNull() // spent
   })
@@ -1618,7 +1618,7 @@ describe('OrderForm lookup after a lost send', () => {
   it('looks up before the next send after a stock refusal and shows the order when the first send had landed', async () => {
     // catches: a refusal that skips the lookup, so the late first send is followed by a second order
     lookupAnswers.push(notFound(), found()) // not yet landed at the refused resend, landed by the next
-    const fetchFn = await sendThenDrop(refused(409, { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }))
+    const fetchFn = await sendThenDrop(refused(409, { error: 'stock', lines: [{ itemId: 'knot-tying', stock: 1 }] }))
     tickAndSend() // refused for stock
     await waitFor(() => expect(captcha.reset).toHaveBeenCalledTimes(2))
     tickAndSend() // the cart is unchanged, the first send has since landed

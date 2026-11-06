@@ -12,7 +12,7 @@ const request: OrderRequest = {
   email: 'jc@mail.com',
   phone: '+60 12-345 6789',
   club: { name: 'Eagles', typed: false },
-  lines: [{ honorId: 'knot-tying', quantity: 3 }],
+  lines: [{ itemId: 'knot-tying', quantity: 3 }],
 } // the order under test
 
 const saved = {
@@ -21,7 +21,7 @@ const saved = {
   currency: 'MYR',
   totalCents: 900,
   club: 'Eagles',
-  lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }],
+  lines: [{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }],
 } // what the Worker answers for it, without the kept flag
 
 afterEach(() => {
@@ -92,6 +92,7 @@ describe('sendOrder', () => {
     ['a negative total', { ...saved, totalCents: -1 }],
     ['a fractional quantity', { ...saved, lines: [{ ...saved.lines[0], quantity: 1.5 }] }],
     ['lines that are not a list', { ...saved, lines: 'x' }],
+    ['lines that say honorId (an old Worker)', { ...saved, lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }] }],
     ['no body', null],
   ])('rejects a 201 whose body has %s', async (_label, body) => {
     // catches: a malformed answer written to the confirmation page as if it were an order
@@ -104,8 +105,8 @@ describe('sendOrder', () => {
   it('throws OrderStockError with every short line for HTTP 409', async () => {
     // catches: a stock refusal shown as a generic failure, or the short lines dropped
     const lines = [
-      { honorId: 'knot-tying', stock: 1 },
-      { honorId: 'ants', stock: null },
+      { itemId: 'knot-tying', stock: 1 },
+      { itemId: 'ants', stock: null },
     ]
     const error = await sendOrder(request, fetchAnswering(409, { error: 'stock', lines })).catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(OrderStockError)
@@ -115,17 +116,18 @@ describe('sendOrder', () => {
   it('rejects a 409 whose lines are malformed', async () => {
     // catches: garbage stock numbers patched into the loaded catalogue
     await expect(
-      sendOrder(request, fetchAnswering(409, { error: 'stock', lines: [{ honorId: 'a', stock: -2 }] })),
+      sendOrder(request, fetchAnswering(409, { error: 'stock', lines: [{ itemId: 'a', stock: -2 }] })),
     ).rejects.toMatchObject({ kind: 'rejected' })
   })
 
   it.each([
-    ['another error name', { error: 'conflict', lines: [{ honorId: 'knot-tying', stock: 1 }] }],
+    ['another error name', { error: 'conflict', lines: [{ itemId: 'knot-tying', stock: 1 }] }],
     ['no lines list', { error: 'stock' }],
     ['a line without an id', { error: 'stock', lines: [{ stock: 1 }] }],
-    ['a fractional stock', { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1.5 }] }],
-    ['a stock written as text', { error: 'stock', lines: [{ honorId: 'knot-tying', stock: '1' }] }],
-    ['a missing stock', { error: 'stock', lines: [{ honorId: 'knot-tying' }] }],
+    ['a fractional stock', { error: 'stock', lines: [{ itemId: 'knot-tying', stock: 1.5 }] }],
+    ['a stock written as text', { error: 'stock', lines: [{ itemId: 'knot-tying', stock: '1' }] }],
+    ['lines that say honorId (an old Worker)', { error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }],
+    ['a missing stock', { error: 'stock', lines: [{ itemId: 'knot-tying' }] }],
   ])('rejects a 409 with %s', async (_label, body) => {
     // catches: any 409 treated as a stock refusal, or a stock of text or undefined patched into the shop's data
     await expect(sendOrder(request, fetchAnswering(409, body))).rejects.toMatchObject({ name: 'OrderSendError', kind: 'rejected' })
@@ -280,7 +282,7 @@ describe('toOrderRequest', () => {
       email: 'jc@mail.com',
       phone: '+60 12',
       club: { name: 'Eagles', typed: false },
-      lines: [{ honorId: 'knot-tying', quantity: 3 }],
+      lines: [{ itemId: 'knot-tying', quantity: 3 }],
     })
   })
 

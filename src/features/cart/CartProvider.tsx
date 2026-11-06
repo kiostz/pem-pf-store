@@ -40,10 +40,10 @@ export function CartProvider({ honors, children }: { honors: Honor[] | null; chi
    * @param orderLines each sent honor and the quantity the order listed
    */
   const removeOrderLines = useCallback(
-    (orderLines: Array<{ honorId: string; quantity: number }>) =>
+    (orderLines: Array<{ itemId: string; quantity: number }>) =>
       setQuantities((current) =>
         orderLines.reduce(
-          (next, { honorId, quantity }) => withQuantity(next, honorId, (next[honorId] ?? 0) - quantity), // what is left of this honor; 0 or less removes it
+          (next, { itemId, quantity }) => withQuantity(next, itemId, (next[itemId] ?? 0) - quantity), // what is left of this item; 0 or less removes it
           current, // the cart as it is now, edits made during the send included
         ),
       ), // saved by the effect above

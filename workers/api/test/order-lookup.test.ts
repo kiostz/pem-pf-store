@@ -44,7 +44,7 @@ describe('GET /orders/status/<requestId>', () => {
     expect(json.found).toBe(true) // Found.
     expect(Object.keys(json.order).sort()).toEqual(['club', 'createdAt', 'currency', 'lines', 'number', 'totalCents']) // Exactly these.
     expect(json.order.club).toBe('Gilead') // The stored club.
-    expect(json.order.lines).toEqual([{ honorId: 'knots', name: 'Knot Tying', quantity: 2, priceCents: 300 }]) // Saved lines.
+    expect(json.order.lines).toEqual([{ itemId: 'knots', name: 'Knot Tying', quantity: 2, priceCents: 300 }]) // Saved lines.
     expect(JSON.stringify(json)).not.toMatch(/Ana|ana@|0123|12-345|00000000-0000-4000/) // No name, email, phone or id.
   })
 

@@ -4,15 +4,15 @@ import { fireEvent, render, screen, within } from '@testing-library/react' // re
 import { afterEach, describe, expect, it, vi } from 'vitest' // test API and mocks
 import { ConfirmationScreen } from './ConfirmationScreen.tsx' // code under test
 import type { SentOrder } from './order-email.ts' // the stored shape
-import { writeSentOrder } from './sent-order-storage.ts' // fills the stored order
+import { SENT_ORDER_STORAGE_KEY, writeSentOrder } from './sent-order-storage.ts' // fills the stored order
 
 const order: SentOrder = {
   number: 'PF-20261028-4K7Q',
   sentAt: '2026-10-28T10:00:00.000Z',
   currency: 'MYR',
   lines: [
-    { honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 },
-    { honorId: 'first-aid', name: 'First Aid', quantity: 1, priceCents: 350 },
+    { itemId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 },
+    { itemId: 'first-aid', name: 'First Aid', quantity: 1, priceCents: 350 },
   ],
   totalCents: 1250,
   contact: { name: 'J. Cruz', email: 'jc@mail.com', phone: '+60 12-345 6789' },
@@ -48,6 +48,17 @@ describe('ConfirmationScreen', () => {
     expect(within(lines[1]).getByText(/1 × RM\s3\.50/)).toBeInTheDocument()
     expect(screen.getByText('Estimated total')).toBeInTheDocument()
     expect(screen.getByText(/RM\s12\.50/)).toBeInTheDocument()
+  })
+
+  it('shows a version 2 order stored with honorId lines', () => {
+    // catches: an order sent before the rename showing "no order" on the confirmation after an update
+    window.sessionStorage.setItem(
+      SENT_ORDER_STORAGE_KEY,
+      JSON.stringify({ version: 2, order: { ...order, lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }] } }),
+    )
+    render(<ConfirmationScreen onBack={() => {}} />)
+    expect(screen.getByText('PF-20261028-4K7Q')).toBeInTheDocument()
+    expect(within(screen.getAllByRole('listitem')[0]).getByText('Knot Tying')).toBeInTheDocument()
   })
 
   it('shows the buyer, phone, club and the send date', () => {

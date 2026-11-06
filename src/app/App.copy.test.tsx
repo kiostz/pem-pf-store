@@ -62,7 +62,7 @@ describe('buyer copy', () => {
       number: 'PF-20261028-4K7Q',
       sentAt: '2026-10-28T10:00:00.000Z',
       currency: 'MYR',
-      lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 2, priceCents: 400 }],
+      lines: [{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 2, priceCents: 400 }],
       totalCents: 800,
       contact: { name: 'J. Cruz', email: 'jc@mail.com', phone: '+60 12-345 6789' },
       club: { subject: 'Eagles', email: 'Eagles' },
@@ -129,7 +129,7 @@ describe('buyer copy', () => {
       'fetch',
       shopFetch([honor('knot-tying', 'Knot Tying')], [], (url) =>
         url.endsWith('/orders')
-          ? new Response(JSON.stringify({ error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }), { status: 409 })
+          ? new Response(JSON.stringify({ error: 'stock', lines: [{ itemId: 'knot-tying', stock: 1 }] }), { status: 409 })
           : undefined,
       ),
     ) // every send is refused

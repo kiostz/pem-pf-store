@@ -189,7 +189,7 @@ describe('useCatalogueData', () => {
     serve(ok([knot, honor('ants', 'Ants')]))
     const { result } = renderHook(() => useCatalogueData())
     await waitFor(() => expect(result.current.state.status).toBe('ready'))
-    act(() => result.current.applyStock([{ honorId: 'knot-tying', stock: 1 }, { honorId: 'ants', stock: null }]))
+    act(() => result.current.applyStock([{ itemId: 'knot-tying', stock: 1 }, { itemId: 'ants', stock: null }]))
     expect(result.current.state).toEqual({
       status: 'ready',
       honors: [{ ...knot, stock: 1 }],
@@ -203,7 +203,7 @@ describe('useCatalogueData', () => {
     serve(ok([knot, honor('ants', 'Ants'), honor('birds', 'Birds')]))
     const { result } = renderHook(() => useCatalogueData())
     await waitFor(() => expect(result.current.state.status).toBe('ready'))
-    act(() => result.current.applyStock([{ honorId: 'ants', stock: 2 }, { honorId: 'no-such-honor', stock: 5 }]))
+    act(() => result.current.applyStock([{ itemId: 'ants', stock: 2 }, { itemId: 'no-such-honor', stock: 5 }]))
     expect(result.current.state).toMatchObject({
       status: 'ready',
       honors: [knot, { ...honor('ants', 'Ants'), stock: 2 }, honor('birds', 'Birds')],
@@ -215,7 +215,7 @@ describe('useCatalogueData', () => {
     serve(ok([knot, honor('ants', 'Ants')]))
     const { result } = renderHook(() => useCatalogueData())
     await waitFor(() => expect(result.current.state.status).toBe('ready'))
-    act(() => result.current.applyStock([{ honorId: 'knot-tying', stock: 0 }]))
+    act(() => result.current.applyStock([{ itemId: 'knot-tying', stock: 0 }]))
     expect(result.current.state).toMatchObject({ honors: [{ ...knot, stock: 0 }, honor('ants', 'Ants')] })
   })
 
@@ -224,8 +224,8 @@ describe('useCatalogueData', () => {
     serve(ok([knot, honor('ants', 'Ants')]))
     const { result } = renderHook(() => useCatalogueData())
     await waitFor(() => expect(result.current.state.status).toBe('ready'))
-    act(() => result.current.applyStock([{ honorId: 'knot-tying', stock: 1 }]))
-    act(() => result.current.applyStock([{ honorId: 'ants', stock: null }]))
+    act(() => result.current.applyStock([{ itemId: 'knot-tying', stock: 1 }]))
+    act(() => result.current.applyStock([{ itemId: 'ants', stock: null }]))
     act(() => result.current.applyStock([]))
     expect(result.current.state).toMatchObject({ honors: [{ ...knot, stock: 1 }] })
   })
@@ -234,13 +234,13 @@ describe('useCatalogueData', () => {
     // catches: a stock refusal turning a loading or failed screen into a half-built ready one
     serve(hang)
     const loading = renderHook(() => useCatalogueData())
-    act(() => loading.result.current.applyStock([{ honorId: 'knot-tying', stock: 0 }]))
+    act(() => loading.result.current.applyStock([{ itemId: 'knot-tying', stock: 0 }]))
     expect(loading.result.current.state).toEqual({ status: 'loading' })
     loading.unmount()
     serve(async () => new Response('', { status: 500 }))
     const failed = renderHook(() => useCatalogueData())
     await waitFor(() => expect(failed.result.current.state.status).toBe('error'))
-    act(() => failed.result.current.applyStock([{ honorId: 'knot-tying', stock: 0 }]))
+    act(() => failed.result.current.applyStock([{ itemId: 'knot-tying', stock: 0 }]))
     expect(failed.result.current.state).toEqual({ status: 'error', reason: 'failed' })
   })
 })

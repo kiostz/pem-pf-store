@@ -212,7 +212,7 @@ describe('DetailsScreen', () => {
           createdAt: '2026-11-01T17:00:00.000Z',
           currency: 'MYR',
           totalCents: 800,
-          lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 2, priceCents: 400 }],
+          lines: [{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 2, priceCents: 400 }],
         }),
         { status: 201 },
       ),
@@ -240,9 +240,9 @@ describe('DetailsScreen', () => {
     })
     expect(fetchFn).toHaveBeenCalledTimes(1)
     const body = JSON.parse((fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1].body as string) as {
-      lines: Array<{ honorId: string; quantity: number }>
+      lines: Array<{ itemId: string; quantity: number }>
     }
-    expect(body.lines).toEqual([{ honorId: 'knot-tying', quantity: 2 }]) // the unlisted item is not in the request
+    expect(body.lines).toEqual([{ itemId: 'knot-tying', quantity: 2 }]) // the unlisted item is not in the request
   })
 
   it('is inert and busy while an order is sending, then free', async () => {

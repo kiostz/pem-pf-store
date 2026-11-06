@@ -103,7 +103,7 @@ describe('POST /api/settings/prices', () => {
     await seedHonors([{ id: 'knot-tying', name: 'Knot Tying', stock: 5 }])
     await save({ currency: { from: 'MYR', to: 'CNY' } })
     expect((await readShop(env.DB)).settings).toEqual({ currency: 'CNY' })
-    const request = parseOrderRequest({ requestId: '00000000-0000-4000-8000-000000000019', turnstileToken: 't', name: 'Ana Tester', email: 'ana@example.com', phone: '+60 12-345 6789', club: { name: 'Gilead', typed: false }, lines: [{ honorId: 'knot-tying', quantity: 2 }] })!
+    const request = parseOrderRequest({ requestId: '00000000-0000-4000-8000-000000000019', turnstileToken: 't', name: 'Ana Tester', email: 'ana@example.com', phone: '+60 12-345 6789', club: { name: 'Gilead', typed: false }, lines: [{ itemId: 'knot-tying', quantity: 2 }] })!
     const sold = await saveOrder(env.DB, request, new Date('2026-11-05T00:00:00Z'))
     expect(sold.kind).toBe('saved')
     const row = await env.DB.prepare('SELECT currency FROM orders WHERE request_id = ?').bind('00000000-0000-4000-8000-000000000019').first<{ currency: string }>()

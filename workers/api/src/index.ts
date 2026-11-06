@@ -5,11 +5,11 @@ import { sendOrderEmail } from './order-email'
 import { removeOldOrders } from './remove-old-orders'
 import { findByRequestId, saveOrder } from './save-order'
 import { verifyTurnstile } from './turnstile'
-import { readClubs, readHonors, readSettings, readShop } from './read'
+import { readClubs, readItems, readSettings, readShop } from './read'
 
 // Maps each exact path to its reader.
 const routes = new Map<string, (db: D1Database) => Promise<unknown>>([
-  ['/items', readHonors], // The public path says items; code says honors.
+  ['/items', readItems], // The public path and the code both say items.
   ['/clubs', readClubs], // Clubs in order.
   ['/settings', readSettings], // Currency only.
   ['/shop', readShop], // Items, clubs and settings in one request.

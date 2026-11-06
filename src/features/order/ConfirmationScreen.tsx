@@ -90,7 +90,7 @@ export function ConfirmationScreen({ onBack }: { onBack: () => void }) {
         {order.lines.map((line) => (
           // the order line, keyed by honor, with a rule between order lines and kept whole across a printed page break
           <li
-            key={line.honorId}
+            key={line.itemId}
             className="border-border-subtle flex items-start justify-between gap-3 border-b px-4 py-3 last:border-b-0 print:break-inside-avoid"
           >
             {/* the name and the quantity at its price; min-w-0 lets a long name wrap */}

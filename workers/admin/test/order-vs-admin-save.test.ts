@@ -15,7 +15,7 @@ beforeEach(async () => {
 describe('an order between the admin load and save', () => {
   it('makes the admin save 409 with the lowered stock, keeping the sale, and a re-save from the new value works', async () => {
     // Catches an admin save that overwrites the stock a real order just lowered (a silently undone sale).
-    const request = parseOrderRequest({ requestId: '00000000-0000-4000-8000-000000000001', turnstileToken: 't', name: 'Ana Tester', email: 'ana@example.com', phone: '+60 12-345 6789', club: { name: 'Gilead', typed: false }, lines: [{ honorId: 'knot-tying', quantity: 2 }] })! // Valid.
+    const request = parseOrderRequest({ requestId: '00000000-0000-4000-8000-000000000001', turnstileToken: 't', name: 'Ana Tester', email: 'ana@example.com', phone: '+60 12-345 6789', club: { name: 'Gilead', typed: false }, lines: [{ itemId: 'knot-tying', quantity: 2 }] })! // Valid.
     const sold = await saveOrder(env.DB, request, new Date('2026-11-02T00:00:00Z')) // The sale: stock 5 to 3.
     expect(sold.kind).toBe('saved') // Saved.
     const stale = await postChanges({ changes: [{ id: 'knot-tying', stock: { from: 5, to: 8 } }] }) // The admin still sees 5.
@@ -36,7 +36,7 @@ describe('an order for an item the admin just edited', () => {
     await seedHonors([{ id: 'africa-lore', name: 'Africa Lore', stock: 5 }, { id: 'knot-tying', name: 'Knot Tying', stock: 5 }])
     expect((await postChanges({ changes: [{ id: 'africa-lore', priceCents: { from: 400, to: 650 } }] })).status).toBe(200) // The edit stamps Africa Lore.
     const edited = (await fullRowOf('africa-lore'))!.modified_at
-    const request = parseOrderRequest({ requestId: '00000000-0000-4000-8000-000000000002', turnstileToken: 't', name: 'Ana Tester', email: 'ana@example.com', phone: '+60 12-345 6789', club: { name: 'Gilead', typed: false }, lines: [{ honorId: 'africa-lore', quantity: 2 }] })!
+    const request = parseOrderRequest({ requestId: '00000000-0000-4000-8000-000000000002', turnstileToken: 't', name: 'Ana Tester', email: 'ana@example.com', phone: '+60 12-345 6789', club: { name: 'Gilead', typed: false }, lines: [{ itemId: 'africa-lore', quantity: 2 }] })!
     expect((await saveOrder(env.DB, request, new Date('2030-01-01T00:00:00Z'))).kind).toBe('saved') // The sale, far later.
     expect(await fullRowOf('africa-lore')).toMatchObject({ stock: 3, modified_at: edited }) // Stock down, time kept.
     const page = (await (await call('/api/items?sort=changed')).json()) as { honors: { id: string; modifiedAt: string }[] }

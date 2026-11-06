@@ -29,7 +29,7 @@ afterEach(() => {
  * @return the 201 response
  */
 function savedFor(init: RequestInit | undefined): Response {
-  const request = JSON.parse(init?.body as string) as { lines: Array<{ honorId: string; quantity: number }> } // what the shop sent
+  const request = JSON.parse(init?.body as string) as { lines: Array<{ itemId: string; quantity: number }> } // what the shop sent
   const lines = request.lines.map((line) => ({ ...line, name: 'Knot Tying', priceCents: 400 })) // the saved lines at RM 4.00
   return new Response(
     JSON.stringify({
@@ -80,7 +80,7 @@ function sentHonorIds(fetchFn: ReturnType<typeof serve>): string[][] {
   const calls = fetchFn.mock.calls as unknown as Array<[string, RequestInit]> // url and init of each call
   return calls
     .filter(([url]) => url.endsWith('/orders')) // the order endpoint only
-    .map(([, init]) => (JSON.parse(init.body as string) as { lines: Array<{ honorId: string }> }).lines.map((line) => line.honorId)) // one list per send
+    .map(([, init]) => (JSON.parse(init.body as string) as { lines: Array<{ itemId: string }> }).lines.map((line) => line.itemId)) // one list per send
 }
 
 describe('App checkout path', () => {
@@ -236,7 +236,7 @@ describe('App checkout path', () => {
     let call = 0 // order calls so far
     serve(async (init) => {
       call += 1 // this call
-      if (call === 1) return new Response(JSON.stringify({ error: 'stock', lines: [{ honorId: 'knot-tying', stock: 1 }] }), { status: 409 }) // the admin lowered it meanwhile
+      if (call === 1) return new Response(JSON.stringify({ error: 'stock', lines: [{ itemId: 'knot-tying', stock: 1 }] }), { status: 409 }) // the admin lowered it meanwhile
       return savedFor(init)
     })
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":3}}')
@@ -277,7 +277,7 @@ describe('App checkout path', () => {
       'fetch',
       shopFetch([honor('knot-tying', 'Knot Tying'), honor('ants', 'Ants')], [], (url) =>
         url.endsWith('/orders')
-          ? new Response(JSON.stringify({ error: 'stock', lines: [{ honorId: 'knot-tying', stock: null }] }), { status: 409 })
+          ? new Response(JSON.stringify({ error: 'stock', lines: [{ itemId: 'knot-tying', stock: null }] }), { status: 409 })
           : undefined,
       ),
     ) // Knot Tying was hidden meanwhile; Ants still sells
@@ -305,8 +305,8 @@ describe('App checkout path', () => {
               JSON.stringify({
                 error: 'stock',
                 lines: [
-                  { honorId: 'knot-tying', stock: 1 },
-                  { honorId: 'ants', stock: null },
+                  { itemId: 'knot-tying', stock: 1 },
+                  { itemId: 'ants', stock: null },
                 ],
               }),
               { status: 409 },
@@ -338,7 +338,7 @@ describe('App checkout path', () => {
       'fetch',
       shopFetch([honor('knot-tying', 'Knot Tying', { stock: 1 })], [], (url) =>
         url.endsWith('/orders')
-          ? new Response(JSON.stringify({ error: 'stock', lines: [{ honorId: 'knot-tying', stock: 0 }] }), { status: 409 })
+          ? new Response(JSON.stringify({ error: 'stock', lines: [{ itemId: 'knot-tying', stock: 0 }] }), { status: 409 })
           : undefined,
       ),
     ) // another buyer took the one left

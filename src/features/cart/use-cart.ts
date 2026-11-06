@@ -9,7 +9,7 @@ export type CartValue = {
   quantityOf: (honorId: string) => number // 0 when the honor is not in the cart
   setQuantity: (honorId: string, quantity: number) => void // change one honor, 0 removes it
   removeOrderLines: (
-    orderLines: Array<{ honorId: string; quantity: number }>,
+    orderLines: Array<{ itemId: string; quantity: number }>,
   ) => void // takes a sent order's quantities out, called once an order is sent
   takeOutUnavailable: () => void // removes every unavailable honor id in one write; called by Checkout
 }

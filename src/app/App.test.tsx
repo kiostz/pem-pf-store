@@ -401,7 +401,7 @@ describe('App', () => {
                 createdAt: '2026-11-01T17:00:00.000Z',
                 currency: 'MYR',
                 totalCents: 400,
-                lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 1, priceCents: 400 }],
+                lines: [{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 1, priceCents: 400 }],
               }),
               { status: 201 },
             )

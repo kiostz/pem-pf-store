@@ -171,7 +171,7 @@ export function OrderForm({
       if (
         error instanceof OrderStockError &&
         error.lines.some((short) => {
-          const cartLine = lines.find((line) => line.honor.id === short.honorId) // the cart's line for it
+          const cartLine = lines.find((line) => line.honor.id === short.itemId) // the cart's line for it
           return cartLine !== undefined && (short.stock === null || short.stock < cartLine.quantity) // gone, or short of the quantity
         })
       ) {

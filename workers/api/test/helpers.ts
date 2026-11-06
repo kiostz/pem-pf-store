@@ -96,7 +96,7 @@ export function validOrder(overrides: Record<string, unknown> = {}): Record<stri
     email: 'ana@example.com', // Made-up buyer.
     phone: '+60 12-345 6789', // 11 digits.
     club: { name: 'Gilead', typed: false }, // A listed club.
-    lines: [{ honorId: 'knots', quantity: 2 }], // One line.
+    lines: [{ itemId: 'knots', quantity: 2 }], // One line.
     ...overrides, // The test's change.
   }
 }

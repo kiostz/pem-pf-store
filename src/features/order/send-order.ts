@@ -14,7 +14,7 @@ export type OrderRequest = {
   email: string // the buyer's email, one line
   phone: string // the buyer's phone, one line
   club: { name: string; typed: boolean } // the club's name, and whether the buyer typed it by hand
-  lines: Array<{ honorId: string; quantity: number }> // which items and how many
+  lines: Array<{ itemId: string; quantity: number }> // which items and how many
 }
 
 // The saved order the Worker answers with: no buyer fields, prices as saved.
@@ -24,7 +24,7 @@ export type SavedOrder = {
   currency: string // ISO code
   totalCents: number // the saved total
   club?: string // the stored club text, "Other: <name>" when typed; absent from an older Worker's answer
-  lines: Array<{ honorId: string; name: string; quantity: number; priceCents: number }> // names and prices as saved
+  lines: Array<{ itemId: string; name: string; quantity: number; priceCents: number }> // names and prices as saved
 }
 
 // Whose body the saved order holds: the one just sent, or an earlier send under the same request id.
@@ -49,12 +49,12 @@ export class OrderSendError extends Error {
 
 // The error thrown when the Worker refuses the order because lines are short of stock or not for sale.
 export class OrderStockError extends Error {
-  readonly lines: Array<{ honorId: string; stock: number | null }> // every line the Worker could not fill; null stock means not for sale
+  readonly lines: Array<{ itemId: string; stock: number | null }> // every line the Worker could not fill; null stock means not for sale
 
   /**
    * @param lines every line the Worker could not fill
    */
-  constructor(lines: Array<{ honorId: string; stock: number | null }>) {
+  constructor(lines: Array<{ itemId: string; stock: number | null }>) {
     super(`Order refused: ${lines.length} line(s) short of stock`) // a count only
     this.name = 'OrderStockError' // for logs and tests
     this.lines = lines // what the cart marks
@@ -95,7 +95,7 @@ export function toOrderRequest(
     email: oneLine(values.email), // one line
     phone: oneLine(values.phone), // one line
     club: { name: typed ? oneLine(values.otherClub) : values.club, typed }, // the name, and how it was chosen
-    lines: lines.map((line) => ({ honorId: line.honor.id, quantity: line.quantity })), // ids and quantities only
+    lines: lines.map((line) => ({ itemId: line.honor.id, quantity: line.quantity })), // ids and quantities only
   }
 }
 
@@ -125,9 +125,9 @@ function parseSavedOrder(body: unknown, clubRequired: boolean): SavedOrder | nul
   for (const raw of order.lines as unknown[]) {
     const line = raw as Record<string, unknown> | null // one line, unchecked
     if (typeof line !== 'object' || line === null) return null // not an object
-    if (typeof line.honorId !== 'string' || typeof line.name !== 'string') return null // which item
+    if (typeof line.itemId !== 'string' || typeof line.name !== 'string') return null // which item
     if (!isWhole(line.quantity, 1) || !isWhole(line.priceCents, 0)) return null // how many, at what price
-    lines.push({ honorId: line.honorId, name: line.name, quantity: line.quantity, priceCents: line.priceCents }) // kept
+    lines.push({ itemId: line.itemId, name: line.name, quantity: line.quantity, priceCents: line.priceCents }) // kept
   }
   const saved: SavedOrder = { number: order.number, createdAt: order.createdAt, currency: order.currency, totalCents: order.totalCents, lines } // the order
   if (typeof order.club === 'string') saved.club = order.club // kept only when sent
@@ -145,9 +145,9 @@ function parseStockLines(body: unknown): OrderStockError['lines'] | null {
   const checked: OrderStockError['lines'] = [] // the checked lines
   for (const raw of lines as unknown[]) {
     const line = raw as Record<string, unknown> | null // one line, unchecked
-    if (typeof line !== 'object' || line === null || typeof line.honorId !== 'string') return null // which item
+    if (typeof line !== 'object' || line === null || typeof line.itemId !== 'string') return null // which item
     if (line.stock !== null && !isWhole(line.stock, 0)) return null // units left, or null
-    checked.push({ honorId: line.honorId, stock: line.stock as number | null }) // kept
+    checked.push({ itemId: line.itemId, stock: line.stock as number | null }) // kept
   }
   return checked // every short line
 }

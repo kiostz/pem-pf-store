@@ -11,8 +11,8 @@ const saved = {
   currency: 'MYR',
   totalCents: 1050,
   lines: [
-    { honorId: 'knots', name: 'Knot Tying', quantity: 2, priceCents: 300 },
-    { honorId: 'rope', name: 'Rope Work', quantity: 1, priceCents: 450 },
+    { itemId: 'knots', name: 'Knot Tying', quantity: 2, priceCents: 300 },
+    { itemId: 'rope', name: 'Rope Work', quantity: 1, priceCents: 450 },
   ],
 } // An order as saved.
 
@@ -71,7 +71,7 @@ describe('orderEmail money formatting', () => {
 
   it('groups thousands in a line and in the total', async () => {
     // Catches an email that prints "RM 1200.00" after the shop prints "RM 1,200.00".
-    const big = { ...saved, totalCents: 120000, lines: [{ honorId: 'knots', name: 'Knot Tying', quantity: 30, priceCents: 4000 }] } // 30 x 40.00.
+    const big = { ...saved, totalCents: 120000, lines: [{ itemId: 'knots', name: 'Knot Tying', quantity: 30, priceCents: 4000 }] } // 30 x 40.00.
     const text = orderEmail(big, buyer, 'https://admin.example.test').text // The email text.
     expect(text).toContain('30 × Knot Tying @ RM 40.00 = RM 1,200.00') // Line total grouped.
     expect(text).toContain('Estimated total: RM 1,200.00') // Total grouped.
@@ -79,7 +79,7 @@ describe('orderEmail money formatting', () => {
 
   it('prints a currency outside the list as its code', async () => {
     // Catches Intl's "$" for BND coming back.
-    const bnd = { ...saved, currency: 'BND', totalCents: 300, lines: [{ honorId: 'knots', name: 'Knot Tying', quantity: 1, priceCents: 300 }] } // One line in BND.
+    const bnd = { ...saved, currency: 'BND', totalCents: 300, lines: [{ itemId: 'knots', name: 'Knot Tying', quantity: 1, priceCents: 300 }] } // One line in BND.
     expect(orderEmail(bnd, buyer, 'https://admin.example.test').text).toContain('Estimated total: BND 3.00') // Code, not a sign.
   })
 })
@@ -141,7 +141,7 @@ describe('order email on POST /orders', () => {
     const body = validOrder() // One id.
     const first = await postOrder(body, { overrides: { ORDER_EMAIL: email } }) // Saved: one email.
     const repeat = await postOrder(body, { overrides: { ORDER_EMAIL: email } }) // Repeat.
-    const refused = await postOrder(validOrder({ lines: [{ honorId: 'secret', quantity: 1 }] }), { overrides: { ORDER_EMAIL: email } }) // Hidden item.
+    const refused = await postOrder(validOrder({ lines: [{ itemId: 'secret', quantity: 1 }] }), { overrides: { ORDER_EMAIL: email } }) // Hidden item.
     const invalid = await postOrder(validOrder({ phone: '1' }), { overrides: { ORDER_EMAIL: email } }) // Bad phone.
     const { waitOnExecutionContext } = await import('cloudflare:test') // Finish.
     for (const sent of [first, repeat, refused, invalid]) await waitOnExecutionContext(sent.ctx) // All done.

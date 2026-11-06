@@ -1,7 +1,7 @@
 // Response types of the public read endpoints: the only fields buyers may see.
 
-// One active honor as the shop lists it.
-export interface ShopHonor {
+// One active item as the shop lists it.
+export interface ShopItem {
   id: string // Never changes.
   name: string // Shown name.
   category: string // Category label.
@@ -26,7 +26,7 @@ export interface ShopSettings {
 
 // Everything the shop needs in one answer.
 export interface ShopLoad {
-  items: ShopHonor[] // Active honors, name order.
+  items: ShopItem[] // Active items, name order.
   clubs: ShopClub[] // Clubs in their shown order.
   settings: ShopSettings // Public settings.
 }
@@ -39,7 +39,7 @@ export interface OrderRequest {
   email: string // Buyer email, one line.
   phone: string // Buyer phone, one line.
   club: { name: string; typed: boolean } // Club name, and whether the buyer typed it by hand.
-  lines: Array<{ honorId: string; quantity: number }> // Ids and quantities only; D1 sets names and prices.
+  lines: Array<{ itemId: string; quantity: number }> // Ids and quantities only; D1 sets names and prices.
 }
 
 // An order as saved; no buyer fields, so it can go back to the browser.
@@ -49,11 +49,11 @@ export interface SavedOrder {
   currency: string // Three capital letters.
   totalCents: number // Whole cents, from the saved lines.
   club: string // The stored club text, "Other: <name>" when typed.
-  lines: Array<{ honorId: string; name: string; quantity: number; priceCents: number }> // Saved names and prices.
+  lines: Array<{ itemId: string; name: string; quantity: number; priceCents: number }> // Saved names and prices.
 }
 
 // One line the Worker cannot fill: stock left, or null for a Hidden or missing item.
 export interface StockRefusalLine {
-  honorId: string // Which item.
+  itemId: string // Which item.
   stock: number | null // Units left, or null when it is not for sale.
 }

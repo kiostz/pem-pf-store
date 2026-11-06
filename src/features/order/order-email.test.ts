@@ -13,8 +13,8 @@ const saved: SavedOrder = {
   totalCents: 1200,
   club: 'Eagles',
   lines: [
-    { honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 },
-    { honorId: 'birds', name: 'Birds', quantity: 1, priceCents: 300 },
+    { itemId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 },
+    { itemId: 'birds', name: 'Birds', quantity: 1, priceCents: 300 },
   ],
 } // the Worker's answer, RM 12.00
 

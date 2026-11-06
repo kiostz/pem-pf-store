@@ -73,9 +73,9 @@ describe('a lost answer then a retry', () => {
   it('answers a retry that reuses the request id with an edited cart by the saved order, not a second one', async () => {
     // Catches a repeat that saves the edited cart too, so one request id makes two orders.
     mockSiteverify() // Captcha passes.
-    const body = validOrder({ lines: [{ honorId: 'knots', quantity: 2 }] }) // First cart.
+    const body = validOrder({ lines: [{ itemId: 'knots', quantity: 2 }] }) // First cart.
     const first = await postOrder(body) // Saved.
-    const retry = await postOrder({ ...body, lines: [{ honorId: 'knots', quantity: 5 }, { honorId: 'rope', quantity: 1 }] }) // Same id, bigger cart.
+    const retry = await postOrder({ ...body, lines: [{ itemId: 'knots', quantity: 5 }, { itemId: 'rope', quantity: 1 }] }) // Same id, bigger cart.
     expect(retry.res.status).toBe(200) // Repeat.
     expect(await retry.res.json()).toEqual({ ...((await first.res.json()) as object), kept: 'earlier-send' }) // The first cart's order.
     expect(await count('orders')).toBe(1) // One order.
@@ -96,8 +96,8 @@ describe('a late first send meeting a changed resend', () => {
     mockSiteverify() // Captcha passes.
     const email = fakeEmail() // Records sends.
     const id = '00000000-0000-4000-8000-0000000000c1' // One id.
-    const a = validOrder({ requestId: id, club: clubA, lines: [{ honorId: 'knots', quantity: 2 }] }) // First body.
-    const b = validOrder({ requestId: id, club: clubB, lines: [{ honorId: 'knots', quantity: 1 }, { honorId: 'rope', quantity: 1 }] }) // Changed body.
+    const a = validOrder({ requestId: id, club: clubA, lines: [{ itemId: 'knots', quantity: 2 }] }) // First body.
+    const b = validOrder({ requestId: id, club: clubB, lines: [{ itemId: 'knots', quantity: 1 }, { itemId: 'rope', quantity: 1 }] }) // Changed body.
     const [firstBody, secondBody] = bFirst ? [b, a] : [a, b] // Landing order.
     const first = await postOrder(firstBody, { overrides: { ORDER_EMAIL: email } }) // Lands first.
     const second = await postOrder(secondBody, { overrides: { ORDER_EMAIL: email } }) // Lands late.
@@ -117,8 +117,8 @@ describe('a late first send meeting a changed resend', () => {
     mockSiteverify() // Captcha passes.
     const email = fakeEmail() // Records sends.
     const id = '00000000-0000-4000-8000-0000000000c4' // One id.
-    const a = validOrder({ requestId: id, club: clubA, lines: [{ honorId: 'knots', quantity: 2 }] }) // First body.
-    const b = validOrder({ requestId: id, club: clubB, lines: [{ honorId: 'knots', quantity: 1 }, { honorId: 'rope', quantity: 1 }] }) // Changed body.
+    const a = validOrder({ requestId: id, club: clubA, lines: [{ itemId: 'knots', quantity: 2 }] }) // First body.
+    const b = validOrder({ requestId: id, club: clubB, lines: [{ itemId: 'knots', quantity: 1 }, { itemId: 'rope', quantity: 1 }] }) // Changed body.
     const [ra, rb] = await Promise.all([postOrder(a, { overrides: { ORDER_EMAIL: email } }), postOrder(b, { overrides: { ORDER_EMAIL: email } })]) // At once.
     await waitOnExecutionContext(ra.ctx) // Email goes out.
     await waitOnExecutionContext(rb.ctx) // Nothing queued.
@@ -151,8 +151,8 @@ describe('a late first send meeting a changed resend', () => {
     const miss = await call(`/orders/status/${id}`, { headers: { Origin: SHOP } }) // Before A lands.
     expect(await miss.json()).toEqual({ found: false }) // Not found.
     await postOrder(validOrder({ requestId: id, club: clubA })) // A lands.
-    const b = await postOrder(validOrder({ requestId: id, club: clubB, lines: [{ honorId: 'knots', quantity: 1 }] })) // B arrives.
-    expect(await b.res.json()).toMatchObject({ kept: 'earlier-send', club: 'Gilead', lines: [{ honorId: 'knots', quantity: 2 }] }) // Holds A.
+    const b = await postOrder(validOrder({ requestId: id, club: clubB, lines: [{ itemId: 'knots', quantity: 1 }] })) // B arrives.
+    expect(await b.res.json()).toMatchObject({ kept: 'earlier-send', club: 'Gilead', lines: [{ itemId: 'knots', quantity: 2 }] }) // Holds A.
     expect(await count('orders')).toBe(1) // One order.
   })
 
@@ -160,7 +160,7 @@ describe('a late first send meeting a changed resend', () => {
     // Catches a refused resend that wrote something or hid the later landing of A.
     mockSiteverify() // Captcha passes.
     const id = '00000000-0000-4000-8000-0000000000c3' // One id.
-    const b = await postOrder(validOrder({ requestId: id, club: clubB, lines: [{ honorId: 'rope', quantity: 2 }] })) // Rope has 1.
+    const b = await postOrder(validOrder({ requestId: id, club: clubB, lines: [{ itemId: 'rope', quantity: 2 }] })) // Rope has 1.
     expect(b.res.status).toBe(409) // Refused.
     expect(await count('orders')).toBe(0) // Nothing written.
     expect(await stockOf('rope')).toBe(1) // Untouched.
@@ -175,14 +175,14 @@ describe('races for the last items', () => {
     // Catches an oversell or a stock below 0 when several sends pass the pre-check together.
     mockSiteverify() // Captcha passes.
     await env.DB.exec("UPDATE items SET stock = 3 WHERE id = 'knots'") // Three left.
-    const results = await Promise.all(Array.from({ length: 5 }, () => postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 1 }] })))) // Five buyers.
+    const results = await Promise.all(Array.from({ length: 5 }, () => postOrder(validOrder({ lines: [{ itemId: 'knots', quantity: 1 }] })))) // Five buyers.
     const statuses = results.map(({ res }) => res.status).sort() // Outcomes.
     expect(statuses).toEqual([201, 201, 201, 409, 409]) // Three sold, two refused.
     expect(await stockOf('knots')).toBe(0) // Not negative.
     expect(await count('orders')).toBe(3) // Three orders.
     expect(await count('order_lines')).toBe(3) // Three lines.
     for (const { res } of results.filter(({ res }) => res.status === 409)) {
-      expect(await res.json()).toEqual({ error: 'stock', lines: [{ honorId: 'knots', stock: 0 }] }) // Current stock, not null.
+      expect(await res.json()).toEqual({ error: 'stock', lines: [{ itemId: 'knots', stock: 0 }] }) // Current stock, not null.
     }
   })
 
@@ -190,8 +190,8 @@ describe('races for the last items', () => {
     // Catches a half-written order: the item still in stock must not be lowered when the other line is lost.
     mockSiteverify() // Captcha passes.
     const results = await Promise.all([
-      postOrder(validOrder({ lines: [{ honorId: 'rope', quantity: 1 }] })), // Takes the last rope.
-      postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 2 }, { honorId: 'rope', quantity: 1 }] })), // Wants it too.
+      postOrder(validOrder({ lines: [{ itemId: 'rope', quantity: 1 }] })), // Takes the last rope.
+      postOrder(validOrder({ lines: [{ itemId: 'knots', quantity: 2 }, { itemId: 'rope', quantity: 1 }] })), // Wants it too.
     ])
     expect(results.map(({ res }) => res.status).sort()).toEqual([201, 409]) // One wins.
     expect(await stockOf('rope')).toBe(0) // Gone.
@@ -206,11 +206,11 @@ describe('stock changed by the admin during a send', () => {
     // Catches an order filled from a stale view: the buyer's cart said 3, the admin has since set 1.
     mockSiteverify() // Captcha passes.
     await env.DB.exec("UPDATE items SET stock = 1 WHERE id = 'knots'") // The admin saved a lower stock.
-    const refused = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 3 }] })) // The old cart.
+    const refused = await postOrder(validOrder({ lines: [{ itemId: 'knots', quantity: 3 }] })) // The old cart.
     expect(refused.res.status).toBe(409) // Refused.
-    expect(await refused.res.json()).toEqual({ error: 'stock', lines: [{ honorId: 'knots', stock: 1 }] }) // The new stock.
+    expect(await refused.res.json()).toEqual({ error: 'stock', lines: [{ itemId: 'knots', stock: 1 }] }) // The new stock.
     expect(await count('orders')).toBe(0) // Nothing written.
-    const ok = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 1 }] })) // The buyer lowers it.
+    const ok = await postOrder(validOrder({ lines: [{ itemId: 'knots', quantity: 1 }] })) // The buyer lowers it.
     expect(ok.res.status).toBe(201) // Saved.
     expect(await stockOf('knots')).toBe(0) // Sold.
   })
@@ -221,9 +221,9 @@ describe('stock changed by the admin during a send', () => {
     const db = watchedDb(async (n) => {
       if (n === 2) await env.DB.exec("UPDATE items SET stock = 1 WHERE id = 'knots'") // After the pre-check, before the write.
     }) // The admin saves in the gap.
-    const { res } = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 2 }] }), { overrides: { DB: db } }) // Send.
+    const { res } = await postOrder(validOrder({ lines: [{ itemId: 'knots', quantity: 2 }] }), { overrides: { DB: db } }) // Send.
     expect(res.status).toBe(409) // Refused.
-    expect(await res.json()).toEqual({ error: 'stock', lines: [{ honorId: 'knots', stock: 1 }] }) // Fresh stock.
+    expect(await res.json()).toEqual({ error: 'stock', lines: [{ itemId: 'knots', stock: 1 }] }) // Fresh stock.
     expect(await count('orders')).toBe(0) // No order.
     expect(await stockOf('knots')).toBe(1) // The admin's value, untouched.
   })
@@ -234,9 +234,9 @@ describe('stock changed by the admin during a send', () => {
     const db = watchedDb(async (n) => {
       if (n === 2) await env.DB.exec("UPDATE items SET status = 'hidden' WHERE id = 'knots'") // Hidden in the gap.
     })
-    const { res } = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 1 }] }), { overrides: { DB: db } }) // Send.
+    const { res } = await postOrder(validOrder({ lines: [{ itemId: 'knots', quantity: 1 }] }), { overrides: { DB: db } }) // Send.
     expect(res.status).toBe(409) // Refused.
-    expect(await res.json()).toEqual({ error: 'stock', lines: [{ honorId: 'knots', stock: null }] }) // Not for sale.
+    expect(await res.json()).toEqual({ error: 'stock', lines: [{ itemId: 'knots', stock: null }] }) // Not for sale.
     expect(await count('orders')).toBe(0) // No order.
     expect(await stockOf('knots')).toBe(5) // Untouched.
   })

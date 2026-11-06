@@ -13,11 +13,11 @@ export type SentOrder = {
   sentAt: string // ISO time the Worker saved it
   currency: string // ISO code from settings
   lines: Array<{
-    honorId: string // which honor
+    itemId: string // which item
     name: string // as saved
     quantity: number // how many
-    priceCents: number // one honor's price in cents, as saved
-  }> // one per honor, at the saved price
+    priceCents: number // one item's price in cents, as saved
+  }> // one per item, at the saved price
   totalCents: number // the saved total
   contact: Contact | null // the buyer's contact; null when the sends behind this order carried different ones
   club: { subject: string; email: string } // the club's name, and the body text ("Other: " first when typed)
@@ -78,7 +78,7 @@ export function toEarlierSentOrder(saved: SavedOrder, contacts: Contact[], value
   const now = formContact(values) // what the buyer has typed now
   const sameLines =
     saved.lines.length === lines.length &&
-    saved.lines.every((line) => lines.some((cartLine) => cartLine.honor.id === line.honorId && cartLine.quantity === line.quantity)) // the same items and quantities
+    saved.lines.every((line) => lines.some((cartLine) => cartLine.honor.id === line.itemId && cartLine.quantity === line.quantity)) // the same items and quantities
   const formClub = clubText({ ...values, otherClub: oneLine(values.otherClub) }) // the club the form holds
   const sameClub = saved.club === undefined || saved.club === formClub.email // an absent club counts as the form's
   const sameContact = contact !== null && contact.name === now.name && contact.email === now.email && contact.phone === now.phone // the shown contact is the typed one

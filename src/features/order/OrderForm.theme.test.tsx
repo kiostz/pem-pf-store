@@ -15,7 +15,7 @@ const saved = {
   createdAt: '2026-11-01T17:00:00.000Z',
   currency: 'MYR',
   totalCents: 900,
-  lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }],
+  lines: [{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }],
 } // what the Worker saved
 
 const tickCount = vi.hoisted(() => ({ n: 0 })) // how many times the widget was ticked, so each token is distinct

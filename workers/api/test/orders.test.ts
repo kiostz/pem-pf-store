@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { insertOrderRows, saveOrder } from '../src/save-order'
 import { makeOrderNumber } from '../src/order-number'
 import { parseOrderRequest } from '../src/order-request'
-import { addHonor, callWith, count, mockSiteverify, postOrder, SHOP, seedShop, validOrder } from './helpers'
+import { addHonor, callWith, count, fakeEmail, mockSiteverify, postOrder, SHOP, seedShop, validOrder } from './helpers'
 
 /**
  * Reads one honor's stock.
@@ -39,7 +39,7 @@ describe('POST /orders', () => {
     mockSiteverify() // Captcha passes.
     vi.useFakeTimers({ toFake: ['Date'] }) // Only the clock.
     vi.setSystemTime(new Date('2026-11-01T17:00:00Z')) // 01:00 on the 2nd in Kuala Lumpur.
-    const { res } = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 2, priceCents: 1, name: 'Free' }, { honorId: 'rope', quantity: 1 }] })) // Extra keys ignored.
+    const { res } = await postOrder(validOrder({ lines: [{ itemId: 'knots', quantity: 2, priceCents: 1, name: 'Free' }, { itemId: 'rope', quantity: 1 }] })) // Extra keys ignored.
     expect(res.status).toBe(201) // Created.
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://kiostz.github.io') // The shop can read it.
     const saved = (await res.json()) as { number: string; createdAt: string; currency: string; totalCents: number; lines: unknown[]; club: string } // The answer.
@@ -48,8 +48,8 @@ describe('POST /orders', () => {
     expect(saved.currency).toBe('MYR') // From settings.
     expect(saved.totalCents).toBe(1050) // 2 x 300 + 450.
     expect(saved.lines).toEqual([
-      { honorId: 'knots', name: 'Knot Tying', quantity: 2, priceCents: 300 },
-      { honorId: 'rope', name: 'Rope Work', quantity: 1, priceCents: 450 },
+      { itemId: 'knots', name: 'Knot Tying', quantity: 2, priceCents: 300 },
+      { itemId: 'rope', name: 'Rope Work', quantity: 1, priceCents: 450 },
     ]) // D1's names and prices, request order.
     expect(JSON.stringify(saved)).not.toMatch(/Ana|ana@|0123/) // No buyer fields in the answer.
     expect(saved.club).toBe('Gilead') // The club is part of the order.
@@ -73,7 +73,7 @@ describe('POST /orders', () => {
     // Catches an order's stock drop stamping modified_at, which would put every sold item at the top of Recently changed.
     mockSiteverify() // Captcha passes.
     await env.DB.exec("UPDATE items SET created_at = '2026-11-02T03:04:05.678Z', modified_at = '2026-11-02T06:07:08.910Z' WHERE id = 'knots'") // Times an admin edit left.
-    const { res } = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 2 }] }))
+    const { res } = await postOrder(validOrder({ lines: [{ itemId: 'knots', quantity: 2 }] }))
     expect(res.status).toBe(201) // Created.
     expect(await stockOf('knots')).toBe(3) // 5 - 2.
     expect(await env.DB.prepare("SELECT created_at, modified_at FROM items WHERE id = 'knots'").first()).toEqual({ created_at: '2026-11-02T03:04:05.678Z', modified_at: '2026-11-02T06:07:08.910Z' }) // Untouched.
@@ -82,9 +82,9 @@ describe('POST /orders', () => {
   it('refuses a line above stock, a Hidden item and an unknown id together with 409, writing nothing', async () => {
     // Catches a refusal that lists only the first short line, or that writes anything.
     mockSiteverify() // Captcha passes.
-    const { res } = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 6 }, { honorId: 'secret', quantity: 1 }, { honorId: 'nope', quantity: 1 }, { honorId: 'rope', quantity: 1 }] })) // Three bad, one fine.
+    const { res } = await postOrder(validOrder({ lines: [{ itemId: 'knots', quantity: 6 }, { itemId: 'secret', quantity: 1 }, { itemId: 'nope', quantity: 1 }, { itemId: 'rope', quantity: 1 }] })) // Three bad, one fine.
     expect(res.status).toBe(409) // Conflict.
-    expect(await res.json()).toEqual({ error: 'stock', lines: [{ honorId: 'knots', stock: 5 }, { honorId: 'secret', stock: null }, { honorId: 'nope', stock: null }] }) // Every short line; the fine one is absent.
+    expect(await res.json()).toEqual({ error: 'stock', lines: [{ itemId: 'knots', stock: 5 }, { itemId: 'secret', stock: null }, { itemId: 'nope', stock: null }] }) // Every short line; the fine one is absent.
     expect(await count('orders')).toBe(0) // No order.
     expect(await count('order_lines')).toBe(0) // No lines.
     expect(await stockOf('knots')).toBe(5) // Unchanged.
@@ -95,15 +95,15 @@ describe('POST /orders', () => {
     // Catches treating "sold out" as buyable.
     mockSiteverify() // Captcha passes.
     await env.DB.exec("UPDATE items SET stock = 0 WHERE id = 'rope'") // Sold out.
-    const { res } = await postOrder(validOrder({ lines: [{ honorId: 'rope', quantity: 1 }] })) // Order it.
+    const { res } = await postOrder(validOrder({ lines: [{ itemId: 'rope', quantity: 1 }] })) // Order it.
     expect(res.status).toBe(409) // Refused.
-    expect(await res.json()).toEqual({ error: 'stock', lines: [{ honorId: 'rope', stock: 0 }] }) // Stock 0, not null.
+    expect(await res.json()).toEqual({ error: 'stock', lines: [{ itemId: 'rope', stock: 0 }] }) // Stock 0, not null.
   })
 
   it('lets two concurrent sends for the last item produce one order and one 409', async () => {
     // Catches an oversell when the pre-check passes for both.
     mockSiteverify() // Captcha passes.
-    const lines = [{ honorId: 'rope', quantity: 1 }] // The last one.
+    const lines = [{ itemId: 'rope', quantity: 1 }] // The last one.
     const [a, b] = await Promise.all([postOrder(validOrder({ lines })), postOrder(validOrder({ lines }))]) // At once.
     expect([a.res.status, b.res.status].sort()).toEqual([201, 409]) // One each.
     expect(await stockOf('rope')).toBe(0) // Not negative.
@@ -114,9 +114,9 @@ describe('POST /orders', () => {
   it('writes nothing when the guarded batch itself meets a short or Hidden line', async () => {
     // Catches a batch that relies on the pre-check: a race can skip the pre-check, so the SQL alone must abort.
     const now = new Date('2026-11-02T00:00:00Z') // A moment.
-    await expect(insertOrderRows(env.DB, request({ lines: [{ honorId: 'knots', quantity: 1 }, { honorId: 'rope', quantity: 2 }] }), 'PF-20261102-AAAA', now, 'MYR')).rejects.toThrow() // Rope is short.
-    await expect(insertOrderRows(env.DB, request({ lines: [{ honorId: 'knots', quantity: 1 }, { honorId: 'secret', quantity: 1 }] }), 'PF-20261102-BBBB', now, 'MYR')).rejects.toThrow() // Secret is Hidden.
-    await expect(insertOrderRows(env.DB, request({ lines: [{ honorId: 'nope', quantity: 1 }] }), 'PF-20261102-CCCC', now, 'MYR')).rejects.toThrow() // Unknown.
+    await expect(insertOrderRows(env.DB, request({ lines: [{ itemId: 'knots', quantity: 1 }, { itemId: 'rope', quantity: 2 }] }), 'PF-20261102-AAAA', now, 'MYR')).rejects.toThrow() // Rope is short.
+    await expect(insertOrderRows(env.DB, request({ lines: [{ itemId: 'knots', quantity: 1 }, { itemId: 'secret', quantity: 1 }] }), 'PF-20261102-BBBB', now, 'MYR')).rejects.toThrow() // Secret is Hidden.
+    await expect(insertOrderRows(env.DB, request({ lines: [{ itemId: 'nope', quantity: 1 }] }), 'PF-20261102-CCCC', now, 'MYR')).rejects.toThrow() // Unknown.
     expect(await count('orders')).toBe(0) // No order.
     expect(await count('order_lines')).toBe(0) // No lines.
     expect(await stockOf('knots')).toBe(5) // The fine line rolled back too.
@@ -150,7 +150,7 @@ describe('POST /orders', () => {
   it('answers a repeated requestId even when the item has since sold out', async () => {
     // Catches the repeat being refused by the stock check, so the buyer never sees the saved number.
     mockSiteverify() // Captcha passes.
-    const body = validOrder({ lines: [{ honorId: 'rope', quantity: 1 }] }) // The last one.
+    const body = validOrder({ lines: [{ itemId: 'rope', quantity: 1 }] }) // The last one.
     await postOrder(body) // Saved; stock now 0.
     const again = await postOrder(body) // The retry.
     expect(again.res.status).toBe(200) // Repeat, not 409.
@@ -259,7 +259,7 @@ describe('POST /orders', () => {
     mockSiteverify() // Captcha passes.
     const ids = Array.from({ length: 500 }, (_, i) => `bulk-${String(i).padStart(3, '0')}`) // 500 distinct items.
     for (const id of ids) await addHonor({ id, name: `Bulk ${id}`, stock: 3, price_cents: 100 }) // Active, stock 3, 1.00 each.
-    const { res } = await postOrder(validOrder({ lines: ids.map((honorId) => ({ honorId, quantity: 2 })) })) // 2 of each.
+    const { res } = await postOrder(validOrder({ lines: ids.map((itemId) => ({ itemId, quantity: 2 })) })) // 2 of each.
     expect(res.status).toBe(201) // Created.
     expect(((await res.json()) as { totalCents: number }).totalCents).toBe(100000) // 500 x 2 x 100.
     expect(await count('order_lines')).toBe(500) // Every line saved.
@@ -267,6 +267,22 @@ describe('POST /orders', () => {
     expect(low?.n).toBe(500) // Every stock lowered.
     const row = await env.DB.prepare('SELECT total_cents FROM orders').first<{ total_cents: number }>() // Stored total.
     expect(row?.total_cents).toBe(100000) // Same as the answer.
+  })
+
+  it('answers 400 invalid for an old tab whose lines say honorId, writing nothing and sending no email', async () => {
+    // Catches a Worker still reading honorId, which would save an order from a tab opened before the rename.
+    mockSiteverify() // Captcha would pass.
+    const email = fakeEmail() // Fake email binding.
+    const { res, ctx } = await postOrder(validOrder({ lines: [{ honorId: 'knots', quantity: 1 }] }), { overrides: { ORDER_EMAIL: email } }) // The old field name.
+    const { waitOnExecutionContext } = await import('cloudflare:test') // Finish background work.
+    await waitOnExecutionContext(ctx) // Any email would be sent by now.
+    expect(res.status).toBe(400) // Invalid.
+    expect(email.send).not.toHaveBeenCalled() // No email.
+    expect(await res.json()).toEqual({ error: 'invalid' }) // Short code, no field named.
+    expect(await count('orders')).toBe(0) // No order row.
+    expect(await count('order_lines')).toBe(0) // No line rows.
+    const stock = await env.DB.prepare("SELECT stock FROM items WHERE id = 'knots'").first<{ stock: number }>() // Stock after.
+    expect(stock?.stock).toBe(5) // Unchanged (seed value).
   })
 
   it('refuses a body whose Content-Length is over 64 KB without reading it', async () => {

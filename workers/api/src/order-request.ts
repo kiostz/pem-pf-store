@@ -7,7 +7,7 @@ const EMAIL_MAX = 254 // Longest email address.
 const TOKEN_MAX = 2048 // Longest Turnstile token.
 const LINES_MAX = 500 // Most order lines.
 const QUANTITY_MAX = 99 // Largest quantity per line.
-const HONOR_ID_MAX = 200 // Longest item id.
+const ITEM_ID_MAX = 200 // Longest item id.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i // A request id.
 
 /**
@@ -65,11 +65,11 @@ export function parseOrderRequest(body: unknown): OrderRequest | null {
   const lines: OrderRequest['lines'] = [] // The clean lines.
   for (const line of b.lines as unknown[]) {
     if (typeof line !== 'object' || line === null) return null // Each line an object.
-    const { honorId, quantity } = line as Record<string, unknown> // The two fields.
-    if (typeof honorId !== 'string' || honorId.length < 1 || honorId.length > HONOR_ID_MAX || seen.has(honorId)) return null // Present and unique.
+    const { itemId, quantity } = line as Record<string, unknown> // The two fields.
+    if (typeof itemId !== 'string' || itemId.length < 1 || itemId.length > ITEM_ID_MAX || seen.has(itemId)) return null // Present and unique.
     if (typeof quantity !== 'number' || !Number.isInteger(quantity) || quantity < 1 || quantity > QUANTITY_MAX) return null // Whole 1-99.
-    seen.add(honorId) // Remember it.
-    lines.push({ honorId, quantity }) // Keep only these two keys.
+    seen.add(itemId) // Remember it.
+    lines.push({ itemId, quantity }) // Keep only these two keys.
   }
   return { requestId: requestId.toLowerCase(), turnstileToken: token, name, email, phone: phoneText, club: { name: clubName, typed }, lines } // Clean request.
 }

@@ -3,7 +3,7 @@
 import type { SentOrder } from './order-email.ts' // the stored shape
 
 export const SENT_ORDER_STORAGE_KEY = 'pem-pf-store:sent-order' // repo name in the key: the site origin is shared by the account's other sites
-const SENT_ORDER_VERSION = 2 // the stored format; version 1 is still read
+const SENT_ORDER_VERSION = 3 // the stored format; versions 1 and 2 are still read
 
 let heldOrder: SentOrder | null = null // the order of this tab when sessionStorage could not take it
 
@@ -46,7 +46,7 @@ function isSentOrder(value: unknown): value is SentOrder {
       if (typeof line !== 'object' || line === null) return false // not an order line
       const orderLine = line as Record<string, unknown> // for reading parts
       return (
-        typeof orderLine.honorId === 'string' && // which honor
+        typeof orderLine.itemId === 'string' && // which item
         typeof orderLine.name === 'string' && // its name
         typeof orderLine.quantity === 'number' && // how many
         Number.isFinite(orderLine.quantity) && // a real number
@@ -66,6 +66,25 @@ function fromVersionOne(value: unknown): unknown {
   if (typeof value !== 'object' || value === null) return value // left for the check to refuse
   const { name, email, phone, ...rest } = value as Record<string, unknown> // the flat contact fields
   return { ...rest, contact: { name, email, phone }, changesNotSent: false } // version 2 shape; a bad part fails the check
+}
+
+/**
+ * Lifts a version 2 order to version 3: each line's honorId becomes itemId.
+ * @param value whatever a version 2 value held under the order
+ * @return the lifted value, or the input when it is not an order with a list of lines; a line holding neither field is left for the check to refuse
+ */
+function fromVersionTwo(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null) return value // left for the check to refuse
+  const order = value as Record<string, unknown> // for reading parts
+  if (!Array.isArray(order.lines)) return value // left for the check to refuse
+  return {
+    ...order,
+    lines: order.lines.map((line: unknown) => {
+      if (typeof line !== 'object' || line === null || !('honorId' in line)) return line // left for the check to refuse
+      const { honorId, ...rest } = line as Record<string, unknown> // the old field name
+      return { ...rest, itemId: honorId } // version 3 shape; a bad id fails the check
+    }), // every line lifted
+  } // version 3 shape
 }
 
 /**
@@ -91,11 +110,16 @@ export function readSentOrder(storage?: Storage): SentOrder | null {
     return null
   }
   const stored = parsed as { version?: unknown; order?: unknown } | null // the wrapper, its parts checked below
-  const order = stored?.version === 1 ? fromVersionOne(stored.order) : stored?.order // a version 1 value is lifted to version 2
+  const order =
+    stored?.version === 1
+      ? fromVersionTwo(fromVersionOne(stored.order)) // version 1 lifts through version 2
+      : stored?.version === 2
+        ? fromVersionTwo(stored.order) // a version 2 value is lifted to version 3
+        : stored?.order // version 3 is read as written
   if (
     typeof parsed !== 'object' || // not an object
     stored === null || // JSON null
-    (stored.version !== SENT_ORDER_VERSION && stored.version !== 1) || // another format
+    (stored.version !== SENT_ORDER_VERSION && stored.version !== 2 && stored.version !== 1) || // another format
     !isSentOrder(order) // not a whole order
   ) {
     console.warn('Stored sent order has an unknown format.') // no content in the warning

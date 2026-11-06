@@ -13,7 +13,7 @@ const order: SentOrder = {
   sentAt: '2026-10-28T10:00:00.000Z',
   currency: 'MYR',
   lines: [
-    { honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 },
+    { itemId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 },
   ],
   totalCents: 900,
   contact: { name: 'J. Cruz', email: 'jc@mail.com', phone: '+60 12-345 6789' },
@@ -21,7 +21,11 @@ const order: SentOrder = {
   changesNotSent: false,
 } // an order as sent
 
-const versionOneOrder = { number: order.number, sentAt: order.sentAt, currency: order.currency, lines: order.lines, totalCents: order.totalCents, club: order.club, name: 'J. Cruz', email: 'jc@mail.com', phone: '+60 12-345 6789' } // an order as the first format stored it
+const oldLines = [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 3, priceCents: 300 }] // the lines as versions 1 and 2 stored them
+
+const versionTwoOrder = { ...order, lines: oldLines } // an order as the second format stored it
+
+const versionOneOrder = { number: order.number, sentAt: order.sentAt, currency: order.currency, lines: oldLines, totalCents: order.totalCents, club: order.club, name: 'J. Cruz', email: 'jc@mail.com', phone: '+60 12-345 6789' } // an order as the first format stored it
 
 const blocked = {
   getItem: () => {
@@ -44,7 +48,7 @@ describe('sent order storage', () => {
     writeSentOrder(order)
     expect(
       JSON.parse(window.sessionStorage.getItem(SENT_ORDER_STORAGE_KEY) ?? ''),
-    ).toEqual({ version: 2, order: order })
+    ).toEqual({ version: 3, order: order })
     expect(readSentOrder()).toEqual(order)
   })
 
@@ -109,7 +113,7 @@ describe('sent order storage', () => {
 
   it.each([
     ['bad JSON', 'not json'],
-    ['version 3', '{"version":3,"order":{"number":"PF-20261028-4K7Q"}}'],
+    ['version 4', '{"version":4,"order":{"number":"PF-20261028-4K7Q"}}'],
     ['JSON null', 'null'],
     ['no order', '{"version":1}'],
   ])('reads null with one warning for %s', (_label, text) => {
@@ -148,10 +152,35 @@ describe('sent order storage', () => {
     expect(readSentOrder()).toBeNull()
   })
 
-  it('reads a version 1 value as version 2, with its contact and no changes flag', () => {
+  it('reads a version 1 value as version 3, with its contact, no changes flag and itemId lines', () => {
     // catches: an order sent before the update losing its confirmation after a reload
     window.sessionStorage.setItem(SENT_ORDER_STORAGE_KEY, JSON.stringify({ version: 1, order: versionOneOrder }))
     expect(readSentOrder()).toEqual(order)
+  })
+
+  it('reads a version 2 order with honorId lines as version 3 with itemId lines', () => {
+    // catches: a buyer who sent just before the update losing the confirmation after a reload
+    window.sessionStorage.setItem(SENT_ORDER_STORAGE_KEY, JSON.stringify({ version: 2, order: versionTwoOrder }))
+    expect(readSentOrder()).toEqual(order)
+  })
+
+  it('reads null with one warning and no content for version 2 lines with neither field', () => {
+    // catches: a half-lifted line reaching the confirmation page, or order content in the warning
+    window.sessionStorage.setItem(
+      SENT_ORDER_STORAGE_KEY,
+      JSON.stringify({ version: 2, order: { ...versionTwoOrder, lines: [{ name: 'Knot Tying', quantity: 3, priceCents: 300 }] } }),
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(readSentOrder()).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('Knot Tying')
+  })
+
+  it('reads null for version 3 lines that still say honorId', () => {
+    // catches: the old field name passing as the new format
+    window.sessionStorage.setItem(SENT_ORDER_STORAGE_KEY, JSON.stringify({ version: 3, order: versionTwoOrder }))
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(readSentOrder()).toBeNull()
   })
 
   it('reads a version 2 order whose contact is null', () => {
@@ -168,7 +197,7 @@ describe('sent order storage', () => {
     ['no changes flag', { ...order, changesNotSent: undefined }],
   ])('reads null for a version 2 value holding %s', (_label, bad) => {
     // catches: a half-filled contact reaching the confirmation page
-    window.sessionStorage.setItem(SENT_ORDER_STORAGE_KEY, JSON.stringify({ version: 2, order: bad }))
+    window.sessionStorage.setItem(SENT_ORDER_STORAGE_KEY, JSON.stringify({ version: 2, order: { ...bad, lines: oldLines } }))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     expect(readSentOrder()).toBeNull()
   })

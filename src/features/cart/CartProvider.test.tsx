@@ -25,8 +25,8 @@ function Probe() {
       <button
         onClick={() =>
           removeOrderLines([
-            { honorId: 'knot-tying', quantity: 2 },
-            { honorId: 'ants', quantity: 1 },
+            { itemId: 'knot-tying', quantity: 2 },
+            { itemId: 'ants', quantity: 1 },
           ])
         }
       >

@@ -103,7 +103,7 @@ describe('a picked club that left the list', () => {
 
   it('looks the order up first when the buyer picks another club, and posts the new club under the same id when nothing was found', async () => {
     // Catches a changed resend that goes out under a new request id, or one that skips the lookup, although the cut-off send may have landed.
-    const body = { number: 'PF-20261102-4K7Q', createdAt: '2026-11-01T17:00:00.000Z', currency: 'MYR', totalCents: 400, club: 'Lions', kept: 'this-send', lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 1, priceCents: 400 }] } // the Worker's saved order
+    const body = { number: 'PF-20261102-4K7Q', createdAt: '2026-11-01T17:00:00.000Z', currency: 'MYR', totalCents: 400, club: 'Lions', kept: 'this-send', lines: [{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 1, priceCents: 400 }] } // the Worker's saved order
     const reloaded = await dropThenReload([club('Phoenix Club'), club('Lions')], 'Phoenix Club', [club('Lions')], undefined, () => Response.json(body, { status: 201 }))
     fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.change(screen.getByRole('combobox', { name: 'Club' }), { target: { value: 'Lions' } })
@@ -120,7 +120,7 @@ describe('a picked club that left the list', () => {
 
   it('shows the first club with the note, and posts nothing, when the lookup finds the order sent with the removed club', async () => {
     // Catches a confirmation naming the club the buyer picked after the drop for an order saved with the first one.
-    const found = { found: true, order: { number: 'PF-20261102-4K7Q', createdAt: '2026-11-01T17:00:00.000Z', currency: 'MYR', totalCents: 400, club: 'Phoenix Club', lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 1, priceCents: 400 }] } } // the first send had landed
+    const found = { found: true, order: { number: 'PF-20261102-4K7Q', createdAt: '2026-11-01T17:00:00.000Z', currency: 'MYR', totalCents: 400, club: 'Phoenix Club', lines: [{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 1, priceCents: 400 }] } } // the first send had landed
     const reloaded = await dropThenReload([club('Phoenix Club'), club('Lions')], 'Phoenix Club', [club('Lions')], () => Response.json(found))
     fireEvent.click(screen.getByRole('button', { name: 'Solve captcha' }))
     fireEvent.change(screen.getByRole('combobox', { name: 'Club' }), { target: { value: 'Lions' } })
@@ -136,7 +136,7 @@ describe('a picked club that left the list', () => {
 
   it('shows the contact rows and no "changes were not sent" note for an unchanged resend of a version 1 pending send with padded fields', async () => {
     // Catches a version 1 contact kept padded, so the unchanged form (trimmed on send) reads as a different contact and the note and rows go wrong.
-    const found = { found: true, order: { number: 'PF-20261102-4K7Q', createdAt: '2026-11-01T17:00:00.000Z', currency: 'MYR', totalCents: 400, club: 'Phoenix Club', lines: [{ honorId: 'knot-tying', name: 'Knot Tying', quantity: 1, priceCents: 400 }] } } // the first send had landed
+    const found = { found: true, order: { number: 'PF-20261102-4K7Q', createdAt: '2026-11-01T17:00:00.000Z', currency: 'MYR', totalCents: 400, club: 'Phoenix Club', lines: [{ itemId: 'knot-tying', name: 'Knot Tying', quantity: 1, priceCents: 400 }] } } // the first send had landed
     const values = { name: '  Jo Tan  ', email: '  jc@mail.com  ', phone: '  0312345678  ', club: 'Phoenix Club', otherClub: '' } // padded, as an older build stored them
     window.sessionStorage.setItem('pem-pf-store:pending-send', JSON.stringify({ version: 1, pending: { requestId: '3f0c1d5e-8a43-4c1e-9d0e-5b7a2f6c9e10', lines: [['knot-tying', 1]], values } }))
     window.localStorage.setItem(CART_STORAGE_KEY, '{"version":1,"quantities":{"knot-tying":1}}') // the same one line
