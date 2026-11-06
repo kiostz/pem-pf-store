@@ -5,6 +5,7 @@ import {
   HOME_HASH,
   CATALOGUE_HASH,
   readShopCategory,
+  readShopSubcategory, // the subcategory reader
   shopHash,
 } from './routes.ts' // code under test
 
@@ -48,5 +49,31 @@ describe('shop addresses', () => {
     expect(readShopCategory('#/shop?category=Arts+and+Crafts')).toBe(
       'Arts and Crafts',
     )
+  })
+
+  it('puts the subcategory after the category', () => { // the pair address
+    // catches: a subcategory placed before the category, or left unencoded
+    expect(shopHash('Honors', 'Nature')).toBe('#/shop?category=Honors&subcategory=Nature') // both in the query
+    expect(shopHash('Honors', 'Arts and Crafts')).toBe('#/shop?category=Honors&subcategory=Arts%20and%20Crafts') // spaces encoded
+  })
+
+  it('drops the subcategory when there is no category', () => { // no category, no subcategory
+    // catches: an address with a subcategory the shop cannot place
+    expect(shopHash(null, 'Nature')).toBe('#/shop') // the plain shop
+  })
+
+  it('leaves shopHash(category) as it was', () => { // the default argument
+    // catches: a stray &subcategory= on a category-only address
+    expect(shopHash('Honors')).toBe('#/shop?category=Honors') // unchanged
+  })
+
+  it.each(['Fish & Chips', 'A+B', 'C#', 'Arts and Crafts', '100%'])('gives back the subcategory "%s" after shopHash then readShopSubcategory', (name) => { // round trip
+    // catches: a reserved character in a subcategory name breaking the address
+    expect(readShopSubcategory(shopHash('Honors', name))).toBe(name) // survives the round trip
+  })
+
+  it.each(['#/shop', '#/shop?category=Honors', '#/shop?subcategory=', '#/shop?subcategory=%20', '#/cart', ''])('reads no subcategory from "%s"', (hash) => { // blank or absent
+    // catches: a blank or missing subcategory becoming a filter
+    expect(readShopSubcategory(hash)).toBeNull() // null
   })
 })

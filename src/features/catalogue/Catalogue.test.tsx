@@ -11,21 +11,39 @@ import { Catalogue } from './Catalogue.tsx' // code under test
 import { useCatalogueData } from './use-catalogue-data.ts' // the load the catalogue now receives
 
 /**
- * Loads the data and renders the catalogue inside a cart, as the app does.
+ * Loads the data and renders the catalogue inside a cart, as the app does, with the address stood in by state.
+ * @param props the address's category and subcategory at the start, and spies for the two picks
  * @return the catalogue under a CartProvider
  */
-function CatalogueWithCart({ initialCategory = null, onSelect }: { initialCategory?: string | null; onSelect?: (next: string | null) => void }) {
+function CatalogueWithCart({ // props below
+  initialCategory = null, // the address's category at the start
+  initialSubcategory = null, // the address's subcategory at the start
+  onSelect, // sees category picks
+  onSelectSubcategory, // sees subcategory picks
+}: { // their types
+  initialCategory?: string | null // the address's category at the start
+  initialSubcategory?: string | null // the address's subcategory at the start
+  onSelect?: (next: string | null) => void // sees category picks
+  onSelectSubcategory?: (next: string | null) => void // sees subcategory picks
+}) { // props done
   const data = useCatalogueData() // the one load
   const [category, setCategory] = useState<string | null>(initialCategory) // stands in for the address, which App owns
+  const [subcategory, setSubcategory] = useState<string | null>(initialSubcategory) // the address's subcategory, likewise
   return (
     // the cart provider gets the loaded items
     <CartProvider items={data.state.status === 'ready' ? data.state.items : null}>
       <Catalogue
         data={data}
         category={category}
+        subcategory={subcategory} // the address's subcategory
         onSelectCategory={(next) => {
           onSelect?.(next) // lets a test see the call
           setCategory(next) // the address follows
+          setSubcategory(null) // App drops the subcategory with the category
+        }}
+        onSelectSubcategory={(next) => { // a chip pick
+          onSelectSubcategory?.(next) // lets a test see the call
+          setSubcategory(next) // the address follows
         }}
       />
     </CartProvider>
@@ -541,6 +559,169 @@ describe('Catalogue', () => {
       expect(onSelect).toHaveBeenLastCalledWith(null)
       expect(screen.getByRole('searchbox', { name: 'Search items' })).toHaveValue('')
     })
+  })
+})
+
+describe('Catalogue Subcategory filter', () => { // the chip row inside the toolbar
+  /**
+   * Builds an item with a category and a subcategory.
+   * @param name display name
+   * @param category its category
+   * @param subcategory its subcategory, or null
+   * @param stock how many are left
+   * @return the item
+   */
+  const sub = (name: string, category: string, subcategory: string | null, stock = 5) => // builds the item
+    makeItem(name.toLowerCase().replace(/\W+/g, '-'), name, { category, subcategory, stock }) // id from the name
+
+  /** Serves honors in three subcategories, an accessory and a shirt. */
+  function serveHonors() { // the shop answers with honors
+    serve([ // the items the shop lists
+      sub('Macrame', 'Honors', 'Arts and Crafts', 2), // stocked
+      sub('Weaving', 'Honors', 'Arts and Crafts', 0), // Sold out
+      sub('Knot Tying', 'Honors', 'Nature', 3), // stocked
+      sub('Ants', 'Honors', 'Nature', 0), // Sold out
+      sub('Archery', 'Honors', 'Recreation', 1), // stocked
+      sub('Scarf', 'Accessories', null), // no subcategory
+      sub('Tee', 'Shirts', null), // no subcategory
+    ])
+  }
+
+  /**
+   * Lists the chips' names.
+   * @return the text of each chip in the row, in order
+   */
+  const chips = () => Array.from(screen.getByRole('group', { name: 'Subcategory' }).querySelectorAll('button')).map((button) => button.textContent) // the row's buttons
+
+  it.each([[null], ['Accessories']])('has no chip row for %j', async (category) => { // All categories and Accessories
+    // catches: a chip row where there is nothing to narrow
+    serveHonors() // the data
+    render(<CatalogueWithCart initialCategory={category} />) // the screen
+    await screen.findByText('Scarf') // wait for the load
+    expect(screen.queryByRole('group', { name: 'Subcategory' })).not.toBeInTheDocument() // none
+  })
+
+  it('shows All plus the subcategories the data holds, A to Z, for Honors', async () => { // the row
+    // catches: a hard-coded list, or a subcategory with no item shown
+    serveHonors() // the data
+    render(<CatalogueWithCart initialCategory="Honors" />) // the screen
+    await screen.findByText('Macrame') // wait for the load
+    expect(chips()).toEqual(['All', 'Arts and Crafts', 'Nature', 'Recreation']) // from the items
+  })
+
+  it('reports a chip pick through onSelectSubcategory', async () => { // the callback
+    // catches: the screen keeping the pick to itself so the address never changes
+    serveHonors() // the data
+    const onSelectSubcategory = vi.fn() // the spy
+    render(<CatalogueWithCart initialCategory="Honors" onSelectSubcategory={onSelectSubcategory} />) // the screen
+    await screen.findByText('Macrame') // wait for the load
+    fireEvent.click(screen.getByRole('button', { name: 'Nature' })) // a pick
+    expect(onSelectSubcategory).toHaveBeenLastCalledWith('Nature') // reported
+  })
+
+  it('shows only the subcategory it is given, stock first, and counts them', async () => { // the narrowing
+    // catches: a pick that does not filter, loses the stock order, or keeps the full count
+    serveHonors() // the data
+    render(<CatalogueWithCart initialCategory="Honors" initialSubcategory="Nature" />) // the screen
+    await screen.findByText('Knot Tying') // wait for the load
+    expect(screen.getAllByRole('listitem').map((li) => li.textContent?.replace(/Honors.*/, ''))).toEqual(['Knot Tying', 'Ants']) // stocked first
+    expect(screen.getByText('2 items match')).toBeInTheDocument() // the count
+    expect(screen.getByRole('button', { name: 'Nature', pressed: true })).toBeInTheDocument() // the chip shows it
+  })
+
+  it.each([ // the categories whose chips cannot apply
+    ['Accessories', 'Nature'], // a category with no subcategories
+    [null, 'Nature'], // no category at all
+  ])('shows every item of the category for %j with subcategory %j', async (category, subcategory) => { // the fallback
+    // catches: an address with a stray subcategory hiding every item
+    serveHonors() // the data
+    render(<CatalogueWithCart initialCategory={category} initialSubcategory={subcategory} />) // the screen
+    await screen.findByText('Scarf') // wait for the load
+    const expected = category === 'Accessories' ? 1 : 7 // Accessories alone, or all
+    expect(screen.getAllByRole('listitem')).toHaveLength(expected) // the subcategory was ignored
+  })
+
+  it('presses All when the subcategory is not one the category holds', async () => { // the fallback chip
+    // catches: no chip pressed, or the stray name pressed
+    serveHonors() // the data
+    render(<CatalogueWithCart initialCategory="Honors" initialSubcategory="Nope" />) // the screen
+    await screen.findByText('Macrame') // wait for the load
+    expect(screen.getAllByRole('listitem')).toHaveLength(5) // every honor
+    expect(screen.getByRole('button', { name: 'All', pressed: true })).toBeInTheDocument() // All pressed
+  })
+
+  it('names the subcategory alone in the no-match line, and Clear filters reports All categories and focuses the search', async () => { // decision 8
+    // catches: "in Honors" or a category plus subcategory in the line, or a Clear filters that leaves the subcategory
+    serveHonors() // the data
+    const onSelect = vi.fn() // the spy
+    render(<CatalogueWithCart initialCategory="Honors" initialSubcategory="Nature" onSelect={onSelect} />) // the screen
+    await screen.findByText('Knot Tying') // wait for the load
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search items' }), { target: { value: 'zzz' } }) // matches nothing
+    expect(screen.getByText('No items match "zzz" in Nature.')).toBeInTheDocument() // the subcategory only
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' })) // back out
+    expect(onSelect).toHaveBeenLastCalledWith(null) // App clears both
+    expect(screen.getByRole('searchbox', { name: 'Search items' })).toHaveFocus() // ready to type
+  })
+
+  it('scrolls the list top clear of the two-row toolbar on a chip pick when it is hidden, and not when it is not', async () => { // mirrors the category pick
+    // catches: a chip pick that leaves the buyer halfway down a shorter list, or one that jumps for no reason
+    serveHonors() // the data
+    render(<CatalogueWithCart initialCategory="Honors" />) // the screen
+    await screen.findByText('Macrame') // wait for the load
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect') // measured by the screen
+    rect.mockReturnValue({ top: 40, height: 100 } as DOMRect) // list top under the toolbar
+    scrollIntoView.mockClear() // the chip row's own mount scroll is not under test
+    fireEvent.click(screen.getByRole('button', { name: 'Nature' })) // a pick
+    expect(scrollIntoView).toHaveBeenCalledTimes(1) // back to the top
+    rect.mockReturnValue({ top: 300, height: 100 } as DOMRect) // list top clear of the toolbar
+    scrollIntoView.mockClear() // count again
+    fireEvent.click(screen.getByRole('button', { name: 'Recreation' })) // another pick
+    expect(scrollIntoView).not.toHaveBeenCalled() // no jump
+  })
+
+  /**
+   * Makes the toolbar 61 px tall, or 113 px while it holds the chip row, and every list start at the same top.
+   * @param listTop where the list's top edge sits, in px from the viewport top
+   */
+  function placeToolbar(listTop: number) { // stands in for layout
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) { // measured by the screen
+      const toolbar = this.querySelector('[role=group][aria-label=Subcategory]') !== null || this.querySelector('input[type=search]') !== null // the toolbar holds the search box
+      const chipRow = document.querySelector('[role=group][aria-label=Subcategory]') !== null // whether the second row exists now
+      return (toolbar ? { top: 0, height: chipRow ? 113 : 61 } : { top: listTop, height: 10 }) as DOMRect // the toolbar, or any other element
+    })
+  }
+
+  it('measures the toolbar after the chip row appears, so a list top under the taller toolbar is scrolled clear', async () => { // All to Honors while scrolled
+    // catches: a category pick measured against the old 61 px toolbar, leaving the first cards under the new 113 px one
+    serveHonors() // the data
+    render(<CatalogueWithCart />) // All categories
+    await screen.findByText('Macrame') // wait for the load
+    placeToolbar(80) // list top clear of 61 px, under 113 px
+    scrollIntoView.mockClear() // count from the pick
+    fireEvent.change(screen.getByRole('combobox', { name: 'Category' }), { target: { value: 'Honors' } }) // the chip row appears
+    expect(scrollIntoView).toHaveBeenCalledTimes(1) // scrolled for the taller toolbar
+    expect(screen.getByRole('group', { name: 'Subcategory' }).closest('.sticky')).not.toBeNull() // the chip row is in the toolbar
+  })
+
+  it('uses the shorter toolbar for the scroll margin once the chip row has gone', async () => { // Honors to Accessories while scrolled
+    // catches: a scroll margin of the old 113 px that leaves a 52 px gap above the list
+    serveHonors() // the data
+    render(<CatalogueWithCart initialCategory="Honors" />) // Honors
+    await screen.findByText('Macrame') // wait for the load
+    placeToolbar(40) // list top under both toolbars
+    fireEvent.change(screen.getByRole('combobox', { name: 'Category' }), { target: { value: 'Accessories' } }) // the chip row goes
+    expect(screen.getByText('Scarf').closest('div[class*="animate-fade-in"]')).toHaveStyle({ scrollMarginTop: '61px' }) // the list's margin matches the toolbar now
+  })
+
+  it('keeps one toolbar row in the skeleton', () => { // decision 9
+    // catches: a guessed chip row in the skeleton that is wrong for Accessories and Shirts
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {}))) // requests that never answer
+    render(<CatalogueWithCart initialCategory="Honors" />) // the screen
+    act(() => { // inside act so React sees the timer
+      vi.advanceTimersByTime(300) // the skeleton shows
+    })
+    expect(screen.getByTestId('catalogue-skeleton-toolbar').children).toHaveLength(1) // the one 44 px row
+    expect(screen.queryByRole('group', { name: 'Subcategory' })).not.toBeInTheDocument() // no chips yet
   })
 })
 

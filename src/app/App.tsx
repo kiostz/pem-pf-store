@@ -13,7 +13,7 @@ import { CART_HASH, CATALOGUE_HASH, shopHash } from '@/shared/routes.ts' // the 
 import { STORE_NAME } from '@/shared/store-name.ts' // the store's name
 import { AppHeader } from './AppHeader.tsx' // the header band
 import { TabPill } from './TabPill.tsx' // the floating Home, Shop and Cart tabs
-import { useHashRoute, useShopCategory } from './use-hash-route.ts' // which screen the address names, and the shop's category
+import { useHashRoute, useShopCategory, useShopSubcategory } from './use-hash-route.ts' // which screen the address names, and the shop's category and subcategory
 
 const TAB_PILL_SELECTOR = 'nav[aria-label="Main"]' // the tab pill, to tell whether focus is on a tab
 const FROM_CART_STATE = { fromCart: true } // marks a details history entry Checkout pushed, so history back leads to the cart
@@ -26,14 +26,15 @@ export function App() {
   const data = useCatalogueData() // one load feeds the catalogue, the bar and the cart screen
   const route = useHashRoute() // the screen the address names
   const category = useShopCategory() // the category the address names
-  const [shop, setShop] = useState<{ category: string | null; key: number }>({ category: null, key: 0 }) // the category the grid shows, and a key that remounts it on a fresh arrival
+  const subcategory = useShopSubcategory() // the subcategory the address names
+  const [shop, setShop] = useState<{ category: string | null; subcategory: string | null; key: number }>({ category: null, subcategory: null, key: 0 }) // the category and subcategory the grid shows, and a key that remounts it on a fresh arrival
   const lastKey = useRef(shop.key) // the key at the last screen change
   const lastRoute = useRef(route) // the screen before this one
   const tabClicked = useRef(false) // set by the Cart tab's click, read when the cart's history entry exists
   const browsed = useRef(false) // set by the empty cart's Browse more, so focus goes to the page and not to the Cart tab
   const catalogueScroll = useRef(0) // where the catalogue was scrolled to
-  // A different category from the one shown, arriving by tile or typed address, remounts the grid (empty search, top of the page); a pick in the dropdown has already set it.
-  if (route === 'catalogue' && category !== shop.category) setShop({ category, key: shop.key + 1 })
+  // A different category or subcategory from the one shown, arriving by tile or typed address, remounts the grid (empty search, top of the page); a pick in the dropdown or the chips has already set it.
+  if (route === 'catalogue' && (category !== shop.category || subcategory !== shop.subcategory)) setShop({ category, subcategory, key: shop.key + 1 }) // fresh arrival: remount
   const cartTabRef = useRef<HTMLAnchorElement>(null) // the Cart tab's link, focused on return
   const mainRef = useRef<HTMLElement>(null) // focused on return when the cart is empty
 
@@ -61,7 +62,7 @@ export function App() {
     lastKey.current = shop.key // for the next change
     if (fresh) catalogueScroll.current = 0 // nothing to come back to
     if (previous === route) {
-      if (fresh && route === 'catalogue') window.scrollTo(0, 0) // a typed address with another category
+      if (fresh && route === 'catalogue') window.scrollTo(0, 0) // a typed address with another category or subcategory
       return // first draw or nothing changed
     }
     if (route === 'cart') {
@@ -139,8 +140,17 @@ export function App() {
    * @param next the category picked, or null for All categories
    */
   const selectCategory = (next: string | null) => {
-    setShop((current) => ({ ...current, category: next })) // the grid already shows it when the address changes
+    setShop((current) => ({ ...current, category: next, subcategory: null })) // the grid already shows it when the address changes; a new category drops the subcategory
     window.location.replace(shopHash(next)) // same entry, so reload keeps the filter
+  }
+
+  /**
+   * Puts a subcategory pick in the address, replacing the entry so Back leaves Shop instead of stepping through picks.
+   * @param next the subcategory picked, or null for All
+   */
+  const selectSubcategory = (next: string | null) => { // the chip row's callback
+    setShop((current) => ({ ...current, subcategory: next })) // the grid already shows it when the address changes
+    window.location.replace(shopHash(shop.category, next)) // same entry, so reload keeps the pick
   }
 
   /** Back from the confirmation: always the catalogue, because the cart it came from is gone. */
@@ -172,7 +182,9 @@ export function App() {
                 key={shop.key} // a fresh arrival with another category remounts it
                 data={data}
                 category={route === 'catalogue' ? category : shop.category} // the last Shop category while hidden, so the grid does not re-filter on every screen change
+                subcategory={route === 'catalogue' ? subcategory : shop.subcategory} // likewise the last subcategory while hidden
                 onSelectCategory={selectCategory} // dropdown and Clear filters
+                onSelectSubcategory={selectSubcategory} // the chips
               />
             </div>
             {/* Only while the address names it, so removed notes end when the buyer leaves. */}
@@ -188,7 +200,7 @@ export function App() {
               current={route} // the tab for this screen
               items={data.state.status === 'ready' ? data.state.items : null} // the Cart tab counts once they have loaded
               currency={data.state.status === 'ready' ? data.state.settings.currency : null} // and prices once they have
-              shopHref={shopHash(shop.category)} // the Shop tab reopens the last Shop address
+              shopHref={shopHash(shop.category, shop.subcategory)} // the Shop tab reopens the last Shop address
               cartLinkRef={cartTabRef} // focused on return from the cart
               onOpenCart={markTabOpen} // marks the cart's history entry
             />

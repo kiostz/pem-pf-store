@@ -1,25 +1,26 @@
-// Search, category filter, the Shop's stock-first order and the Category label text for the catalogue, as plain functions so the screen only renders their result.
+// Search, category filter, Subcategory filter, the Shop's stock-first order and the Category label text for the catalogue, as plain functions so the screen only renders their result.
 
 import type { Item } from '@/shared/data/types.ts' // the shape of one item
 import { byText } from '@/shared/sort/sort-by-name.ts' // A to Z compare
 
-// What the buyer has typed and picked; a null category is All categories.
-export type CatalogueFilter = { query: string; category: string | null }
+// What the buyer has typed and picked; a null category is All categories, a null subcategory is All.
+export type CatalogueFilter = { query: string; category: string | null; subcategory: string | null } // the query and the two picks
 
 /**
  * Keeps the items that match the search words and the category.
  * @param items every item the shop lists
- * @param filter the typed query and the chosen category (null for All categories)
+ * @param filter the typed query, the chosen category and the chosen subcategory (null for All)
  * @return the matching items in their input order
  */
 export function filterItems(
   items: Item[], // every item the shop lists
-  filter: CatalogueFilter, // the typed query and chosen category
+  filter: CatalogueFilter, // the typed query, chosen category and subcategory
 ): Item[] { // the matching items
   const words = filter.query.toLowerCase().split(/\s+/).filter(Boolean) // blank input gives no words
   return items.filter( // keep the matching items
     (item) => // the item under test
       (filter.category === null || item.category === filter.category) && // the category
+      (filter.subcategory === null || item.subcategory === filter.subcategory) && // the subcategory
       words.every((word) => item.name.toLowerCase().includes(word)), // every word somewhere in the name
   )
 }
@@ -34,6 +35,17 @@ export function categoryNames(items: Item[]): string[] { // the items to take ca
     // the option names
     ...new Set(items.map((item) => item.category)),
   ].sort(byText) // dedupe, then A to Z
+}
+
+/**
+ * Lists the chips of the Subcategory filter.
+ * @param items every item the shop lists
+ * @param category the picked category
+ * @return each subcategory of a listed item in that category, once, A to Z; empty when there are none
+ */
+export function subcategoryNames(items: Item[], category: string): string[] { // the items and the picked category
+  const names = items.filter((item) => item.category === category).map((item) => item.subcategory) // that category's subcategories
+  return [...new Set(names.filter((name): name is string => name !== null))].sort(byText) // skip null, dedupe, then A to Z
 }
 
 /**

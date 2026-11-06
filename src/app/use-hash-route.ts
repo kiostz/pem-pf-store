@@ -7,7 +7,8 @@ import {
   DETAILS_HASH,
   ORDER_SENT_HASH,
   readShopCategory,
-} from '@/shared/routes.ts' // the screens' addresses and the category reader
+  readShopSubcategory, // the subcategory reader
+} from '@/shared/routes.ts' // the screens' addresses and the category and subcategory readers
 
 /**
  * Tells React when the hash changes.
@@ -41,4 +42,13 @@ export function useHashRoute():
 export function useShopCategory(): string | null {
   const hash = useSyncExternalStore(subscribe, () => window.location.hash) // the same subscription as the route
   return readShopCategory(hash) // null when absent or blank
+}
+
+/**
+ * Reads the subcategory the address names.
+ * @return the subcategory in the address, or null for none
+ */
+export function useShopSubcategory(): string | null { // the address's subcategory
+  const hash = useSyncExternalStore(subscribe, () => window.location.hash) // the same subscription as the route
+  return readShopSubcategory(hash) // null when absent or blank
 }

@@ -159,6 +159,13 @@ A 44 px outlined circle in the header of Home and Shop: a sun while the page is 
 - Once an item is orderable, Home and Shop shrink to 64 px and the Cart tab grows into an oxblood button reading the Item count over the estimated total (the full words "Estimated total" from 640 px), then ›. Its accessible name is "Cart, 5 items, estimated total RM 20.00", and a hidden status line announces the count and total.
 - The Shop tab reopens the last Shop address.
 
+### The Subcategory filter
+
+- A second row inside the sticky toolbar, 8 px under the search row, shown only when the picked category has subcategories (today Honors): "All", then each name A to Z. It is a labelled group (`Subcategory`) of toggle buttons (`aria-pressed`).
+- Chips are 44 px tall with the pill radius and 8 px gaps, on one line that swipes sideways and never wraps; the row runs out to the screen edges so the next chip shows in part. The picked chip is scrolled into view when the row opens.
+- The pick is filled in the action colour (oxblood, rose in dark) with `on-accent` text; the rest are surface chips with the hairline, so the pick differs by fill and not by hue alone. Press feedback is scale 0.97 over 100 ms, colour changes run over 150 ms, and the focus ring sits outside.
+- The skeleton keeps one toolbar row; the chip row arrives with the data.
+
 ### Cards
 
 - White (dark `#1C1C1E`), 16 px radius, and a 1 px `border-subtle` hairline in both themes. No shadow in either theme: the hairline alone gives the edge, so a card looks the same whichever way the theme is set.
@@ -270,6 +277,7 @@ All spacing is on a 4 px scale (Tailwind steps). The gap inside a group is small
 | Patch picture on a card                 | 112 px                                      | `size-28`                 |
 | Tap target (buttons, steppers, fields)  | 44 px tall at least                         | `h-11`                    |
 | Between neighbouring targets            | 8 px at least                               | `gap-2`                   |
+| Toolbar rows (search row, chip row)     | 8 px: the same gap as between neighbouring targets, so the two rows read as one toolbar, closer than the 12 px to the count line | `gap-2` |
 | Card stepper width                      | 134 px                                      |                           |
 | Cart stepper pill                       | 36 px drawn, 44 px tap area per control     | `h-9`, `h-11 w-11`        |
 | Cart row                                | 80 px                                       | `min-h-20 p-3`            |

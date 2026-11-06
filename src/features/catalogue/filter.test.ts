@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest' // test API
 import type { Item } from '@/shared/data/types.ts' // the item shape
 import { item as makeItem } from '@/test/shop-fetch.ts' // the item builder
-import { categoryLabel, categoryNames, filterItems, shopOrder } from './filter.ts' // code under test
+import { categoryLabel, categoryNames, filterItems, shopOrder, subcategoryNames } from './filter.ts' // code under test
 
 /**
  * Builds an item with defaults.
@@ -15,7 +15,7 @@ function item(name: string, category = 'Nature'): Item { // builds an item with 
   return makeItem(name.toLowerCase().replace(/\W+/g, '-'), name, { category }) // id from the name, fixed values for the rest
 }
 
-const all = { query: '', category: null } // no search, All categories
+const all = { query: '', category: null, subcategory: null } // no search, All categories, All subcategories
 
 describe('filterItems', () => { // the filter tests, by item
   it('lists every loaded item, whatever its stock', () => { // every loaded item is listed, stock 0 included
@@ -61,7 +61,7 @@ describe('filterItems', () => { // the filter tests, by item
   it('filters by category alone', () => {
     const list = [item('A', 'Nature'), item('B', 'Outreach')] // two test items the shop lists
     expect(
-      filterItems(list, { query: '', category: 'Outreach' }).map( // the filter applied to the items
+      filterItems(list, { ...all, category: 'Outreach' }).map( // the filter applied to the items
         (listed) => listed.name, // the name of each listed item
       ),
     ).toEqual(['B']) // catches an ignored category
@@ -74,7 +74,7 @@ describe('filterItems', () => { // the filter tests, by item
       item('Other', 'Outreach'), // one test item the shop lists
     ]
     expect(
-      filterItems(list, { query: 'knot', category: 'Outreach' }).map( // the filter applied to the items
+      filterItems(list, { ...all, query: 'knot', category: 'Outreach' }).map( // the filter applied to the items
         (listed) => listed.name, // the name of each listed item
       ),
     ).toEqual(['Knot B']) // catches OR instead of AND
@@ -83,10 +83,63 @@ describe('filterItems', () => { // the filter tests, by item
   it('returns nothing for a category without a match', () => {
     expect(
       filterItems([item('Knot', 'Nature')], { // one test item the shop lists
+        ...all, // no subcategory
         query: 'knot',
         category: 'Outreach',
       }),
     ).toEqual([]) // catches a query that ignores the category
+  })
+})
+
+/**
+ * Builds an item with a category and a subcategory.
+ * @param name display name
+ * @param category category name
+ * @param subcategory subcategory name, or null
+ * @return a complete item
+ */
+function sub(name: string, category: string, subcategory: string | null): Item { // builds an item with a subcategory
+  return { ...item(name, category), subcategory } // the defaults plus the subcategory
+}
+
+describe('filterItems with a subcategory', () => { // the Subcategory filter's narrowing
+  it('keeps only that subcategory, inside the category, with the search words', () => { // all three together
+    // catches: a subcategory that ignores the category or the search, or matches on the name alone
+    const list = [ // four items
+      sub('Knot Tying', 'Honors', 'Nature'), // matches all three
+      sub('Knot Art', 'Honors', 'Recreation'), // other subcategory
+      sub('Ants', 'Honors', 'Nature'), // search misses
+      sub('Knot Scarf', 'Accessories', 'Nature'), // other category
+    ]
+    expect( // the filter applied
+      filterItems(list, { query: 'knot', category: 'Honors', subcategory: 'Nature' }).map((listed) => listed.name), // the filter applied
+    ).toEqual(['Knot Tying']) // only the one that matches all
+  })
+
+  it('keeps every subcategory, and items with none, when the subcategory is null', () => { // All chip
+    // catches: a null subcategory hiding items that have none
+    const list = [sub('A', 'Honors', 'Nature'), sub('B', 'Honors', null)] // one each
+    expect(filterItems(list, { ...all, category: 'Honors' })).toHaveLength(2) // both stay
+  })
+})
+
+describe('subcategoryNames', () => { // the chip names
+  it('is distinct and A to Z, skips null, and holds only the given category', () => { // the rules in one list
+    // catches: duplicates, file order, a null chip, or another category's names
+    const list = [ // five items
+      sub('A', 'Honors', 'Recreation'), // one
+      sub('B', 'Honors', 'Nature'), // two
+      sub('C', 'Honors', 'Nature'), // duplicate
+      sub('D', 'Honors', null), // no subcategory
+      sub('E', 'Shirts', 'Kids'), // other category
+    ]
+    expect(subcategoryNames(list, 'Honors')).toEqual(['Nature', 'Recreation']) // A to Z, once each
+  })
+
+  it('gives [] for a category with none', () => { // Accessories today
+    // catches: a chip row for a category with no subcategories
+    expect(subcategoryNames([sub('A', 'Accessories', null)], 'Accessories')).toEqual([]) // nothing
+    expect(subcategoryNames([], 'Honors')).toEqual([]) // nothing loaded
   })
 })
 

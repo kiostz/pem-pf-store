@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react' // run the hook
 import { afterEach, describe, expect, it } from 'vitest' // test API
-import { useHashRoute, useShopCategory } from './use-hash-route.ts' // code under test
+import { useHashRoute, useShopCategory, useShopSubcategory } from './use-hash-route.ts' // code under test
 
 afterEach(() => {
   window.location.hash = '' // leave the address as found
@@ -73,5 +73,19 @@ describe('useHashRoute', () => {
       window.dispatchEvent(new HashChangeEvent('hashchange')) // synchronous, as above
     })
     expect(result.current).toBe('catalogue')
+  })
+})
+
+describe('useShopSubcategory', () => { // the subcategory the address names
+  it('updates on hashchange', () => { // follows the address
+    // catches: a subcategory read once and never again
+    window.location.hash = '#/shop?category=Honors' // no subcategory yet
+    const { result } = renderHook(() => useShopSubcategory()) // the hook under test
+    expect(result.current).toBeNull() // none at first
+    act(() => { // inside act so React sees the change
+      window.location.hash = '#/shop?category=Honors&subcategory=Nature' // a chip pick
+      window.dispatchEvent(new HashChangeEvent('hashchange')) // synchronous
+    })
+    expect(result.current).toBe('Nature') // follows the address
   })
 })

@@ -791,3 +791,96 @@ describe('App', () => {
     })
   })
 })
+
+describe('App Subcategory filter', () => { // the chip row's pick and the address
+  beforeEach(() => { // before each chip test
+    Element.prototype.scrollIntoView = vi.fn() // jsdom has no scrollIntoView, which the chip row calls for a picked chip
+  })
+
+  afterEach(() => { // after each chip test
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView // put jsdom's prototype back as it was
+  })
+
+  /** Serves honors in two subcategories, plus an accessory. */
+  function serveHonors() { // the shop answers with honors
+    vi.stubGlobal( // the fetch fake below
+      'fetch', // the global to replace
+      shopFetch([ // the shop's answer
+        item('knot-tying', 'Knot Tying', { category: 'Honors', subcategory: 'Nature' }), // a Nature honor
+        item('ants', 'Ants', { category: 'Honors', subcategory: 'Nature' }), // another Nature honor
+        item('archery', 'Archery', { category: 'Honors', subcategory: 'Recreation' }), // a Recreation honor
+        item('scarf', 'Scarf', { category: 'Accessories' }), // no subcategory
+      ]), // the shop answers with these items
+    ) // four items
+  }
+
+  it('puts a chip pick in the address without a new history entry', async () => { // replace, not push
+    // catches: every chip pick adding a Back step, or the pick missing from the address
+    serveHonors() // the data
+    window.location.hash = '#/shop?category=Honors' // Honors picked
+    render(<App />) // the app
+    await screen.findByText('Knot Tying') // wait for the load
+    const length = window.history.length // entries before the pick
+    fireEvent.click(screen.getByRole('button', { name: 'Nature' })) // a chip
+    expect(window.location.hash).toBe('#/shop?category=Honors&subcategory=Nature') // in the address
+    expect(window.history.length).toBe(length) // no new entry
+  })
+
+  it('shows only that subcategory when the address names it, as after a reload', async () => { // reload
+    // catches: a pick held only in memory
+    serveHonors() // the data
+    window.location.hash = '#/shop?category=Honors&subcategory=Nature' // as reloaded
+    render(<App />) // the app
+    await screen.findByText('Knot Tying') // wait for the load
+    expect(screen.queryByText('Archery')).not.toBeInTheDocument() // the other subcategory is gone
+    expect(screen.getByText('Ants')).toBeInTheDocument() // Nature stays
+    expect(screen.getByRole('button', { name: 'Nature', pressed: true })).toBeInTheDocument() // the chip shows it
+  })
+
+  it('drops the subcategory from the address when the Category filter changes', async () => { // category pick clears it
+    // catches: a stale &subcategory= left behind on Accessories
+    serveHonors() // the data
+    window.location.hash = '#/shop?category=Honors&subcategory=Nature' // as reloaded
+    render(<App />) // the app
+    await screen.findByText('Knot Tying') // wait for the load
+    fireEvent.change(screen.getByRole('combobox', { name: 'Category' }), { target: { value: 'Accessories' } }) // another category
+    expect(window.location.hash).toBe('#/shop?category=Accessories') // no subcategory
+  })
+
+  it('gives the Shop tab the full address after Home', async () => { // the tab reopens the last view
+    // catches: the Shop tab losing the chip pick
+    serveHonors() // the data
+    window.location.hash = '#/shop?category=Honors&subcategory=Nature' // as reloaded
+    render(<App />) // the app
+    await screen.findByText('Knot Tying') // wait for the load
+    const nav = within(screen.getByRole('navigation', { name: 'Main' })) // the tab pill
+    fireEvent.click(nav.getByRole('link', { name: 'Home' })) // leave Shop
+    await screen.findByRole('link', { name: 'Browse the shop' }) // Home shows
+    expect(nav.getByRole('link', { name: 'Shop' })).toHaveAttribute('href', '#/shop?category=Honors&subcategory=Nature') // the last Shop address
+  })
+
+  it('remounts the grid when a typed address names another subcategory, so the search is empty', async () => { // fresh arrival
+    // catches: a typed address keeping an old search
+    serveHonors() // the data
+    window.location.hash = '#/shop?category=Honors&subcategory=Nature' // as reloaded
+    render(<App />) // the app
+    fireEvent.change(await screen.findByRole('searchbox', { name: 'Search items' }), { target: { value: 'ants' } }) // a search
+    act(() => { // inside act so React sees the change
+      window.location.hash = '#/shop?category=Honors&subcategory=Recreation' // typed over the address
+      window.dispatchEvent(new HashChangeEvent('hashchange')) // the browser's own event, which jsdom may delay
+    })
+    await screen.findByText('Archery') // the new subcategory shows
+    expect(screen.getByRole('searchbox', { name: 'Search items' })).toHaveValue('') // the search is gone
+  })
+
+  it('keeps the typed search when a chip is picked', async () => { // no remount
+    // catches: a chip pick remounting the grid and emptying the search
+    serveHonors() // the data
+    window.location.hash = '#/shop?category=Honors' // Honors picked
+    render(<App />) // the app
+    fireEvent.change(await screen.findByRole('searchbox', { name: 'Search items' }), { target: { value: 'ants' } }) // a search
+    fireEvent.click(screen.getByRole('button', { name: 'Nature' })) // a chip
+    expect(screen.getByRole('searchbox', { name: 'Search items' })).toHaveValue('ants') // kept
+    expect(screen.getByText('Ants')).toBeInTheDocument() // still filtered by both
+  })
+})
