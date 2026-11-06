@@ -18,7 +18,7 @@ function lookup(path: string, init: RequestInit = { headers: { Origin: SHOP } },
 }
 
 beforeEach(async () => {
-  await seedShop() // Honors and settings.
+  await seedShop() // Items and settings.
 })
 afterEach(() => {
   vi.restoreAllMocks() // Spies off.

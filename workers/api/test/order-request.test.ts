@@ -83,7 +83,7 @@ describe('parseOrderRequest', () => {
 
 describe('POST /orders input limits', () => {
   beforeEach(async () => {
-    await seedShop() // Honors and settings.
+    await seedShop() // Items and settings.
   })
 
   it('answers 400 invalid for non-JSON without calling Turnstile or writing', async () => {

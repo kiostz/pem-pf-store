@@ -105,7 +105,7 @@ describe('http edges', () => {
   })
 
   it('serves non-ASCII text in the body as valid UTF-8', async () => {
-    // Catches a lost charset or mangled characters for Malay or emoji club and honor names.
+    // Catches a lost charset or mangled characters for Malay or emoji club and item names.
     await env.DB.prepare('INSERT INTO clubs (name, area, language, location, church_name, position) VALUES (?, NULL, NULL, NULL, ?, 1)')
       .bind('Kelab Cahaya \u{1F31F}', 'Gereja Élémènt').run() // Emoji and accents.
     const res = await call('/clubs') // Read back.

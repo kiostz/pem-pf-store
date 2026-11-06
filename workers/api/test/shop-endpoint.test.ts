@@ -2,7 +2,7 @@
 
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { addHonor, addSettings, call, expectJsonNoStore } from './helpers'
+import { addItem, addSettings, call, expectJsonNoStore } from './helpers'
 
 const SHOP = 'https://kiostz.github.io' // The one allowed origin.
 
@@ -13,7 +13,7 @@ describe('GET /shop', () => {
 
   it('returns exactly items, clubs and settings with their public fields', async () => {
     // Catches leaking issued_by, status, skill_level or order_email_on, a wrong club order, or settings beyond currency.
-    await addHonor({ id: 'a', name: 'Alpha', stock: 3, price_cents: 250, image: '/p/a.png' }) // One honor.
+    await addItem({ id: 'a', name: 'Alpha', stock: 3, price_cents: 250, image: '/p/a.png' }) // One item.
     await env.DB.exec(
       "INSERT INTO clubs (name, area, language, location, church_name, position) VALUES ('Zed', NULL, NULL, NULL, NULL, 1), ('Gilead', 'North', 'English', 'KL', 'Gilead Church', 2)",
     ) // Position order differs from name order.
@@ -41,10 +41,10 @@ describe('GET /shop', () => {
     expect(body.clubs.map((club) => club.name)).toEqual(['First', 'Early', 'Late']) // Position, then id.
   })
 
-  it('never lists a hidden honor even with stock', async () => {
+  it('never lists a hidden item even with stock', async () => {
     // Catches a missing status filter in the combined read.
     await addSettings() // Needed for 200.
-    await addHonor({ id: 'h', name: 'Hidden', status: 'hidden', stock: 5 }) // Hidden with stock.
+    await addItem({ id: 'h', name: 'Hidden', status: 'hidden', stock: 5 }) // Hidden with stock.
     const body = (await (await call('/shop')).json()) as { items: unknown[] } // The items list.
     expect(body.items).toEqual([]) // Nothing shown.
   })
@@ -52,13 +52,13 @@ describe('GET /shop', () => {
   it('sorts names case-insensitively, on /shop and /items', async () => {
     // Catches binary order (apple after Banana); names are unique ignoring case, so no tie remains.
     await addSettings() // Needed for 200.
-    await addHonor({ id: 'b1', name: 'Banana' }) // Sorts last.
-    await addHonor({ id: 'a2', name: 'apple' }) // Lower case, sorts first.
-    await addHonor({ id: 'a1', name: 'Apple Pie' }) // Inserted last, sorts second.
+    await addItem({ id: 'b1', name: 'Banana' }) // Sorts last.
+    await addItem({ id: 'a2', name: 'apple' }) // Lower case, sorts first.
+    await addItem({ id: 'a1', name: 'Apple Pie' }) // Inserted last, sorts second.
     const shop = (await (await call('/shop')).json()) as { items: { id: string }[] } // Combined read.
     const items = (await (await call('/items')).json()) as { id: string }[] // Items read.
-    expect(shop.items.map((honor) => honor.id)).toEqual(['a2', 'a1', 'b1']) // Case-insensitive.
-    expect(items.map((honor) => honor.id)).toEqual(['a2', 'a1', 'b1']) // Same order.
+    expect(shop.items.map((item) => item.id)).toEqual(['a2', 'a1', 'b1']) // Case-insensitive.
+    expect(items.map((item) => item.id)).toEqual(['a2', 'a1', 'b1']) // Same order.
   })
 
   it('gives empty lists for an empty database with a settings row', async () => {

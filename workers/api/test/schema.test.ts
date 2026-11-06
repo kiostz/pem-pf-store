@@ -14,7 +14,7 @@ const FOREIGN_KEY = 'FOREIGN KEY constraint failed'
 const TYPE = 'cannot store' // STRICT tables refuse a value of the wrong type.
 
 // A row every table accepts; each test changes one field of it.
-const validHonor = {
+const validItem = {
   id: 'knots',
   name: 'Knots',
   category: 'Nature',
@@ -134,10 +134,10 @@ beforeEach(async () => {
 describe('items', () => {
   it('accepts a valid row and a picture path that is not patches/<id>.webp', async () => {
     // Catches a base row that is itself invalid (every refusal below would pass for the wrong reason) and an image CHECK tied to the id.
-    expect(await tryInsert('items', validHonor)).toBeNull()
+    expect(await tryInsert('items', validItem)).toBeNull()
     expect(
       await tryInsert('items', {
-        ...validHonor,
+        ...validItem,
         id: 'other',
         name: 'Other Knots',
         image: 'honors/other-2.webp',
@@ -162,15 +162,15 @@ describe('items', () => {
     ['empty image path', { image: '' }, CHECK],
   ])('refuses %s', async (_label, change, reason) => {
     // Catches a CHECK or type rule that is missing or mistyped.
-    expect(await tryInsert('items', { ...validHonor, ...change })).toContain(
+    expect(await tryInsert('items', { ...validItem, ...change })).toContain(
       reason,
     )
   })
 
   it('undoes the first update of a batch when the second one underflows stock', async () => {
-    // Catches an order that is half applied: the first honor loses stock while the second fails.
-    await mustInsert('items', { ...validHonor, id: 'first', stock: 5 })
-    await mustInsert('items', { ...validHonor, id: 'second', name: 'Second', stock: 0 })
+    // Catches an order that is half applied: the first item loses stock while the second fails.
+    await mustInsert('items', { ...validItem, id: 'first', stock: 5 })
+    await mustInsert('items', { ...validItem, id: 'second', name: 'Second', stock: 0 })
     await expect(
       db.batch([
         db
@@ -190,7 +190,7 @@ describe('items', () => {
 
   it('refuses to update a stock to text', async () => {
     // Catches a text stock slipping past stock >= 0 (text sorts above every number).
-    await mustInsert('items', validHonor)
+    await mustInsert('items', validItem)
     expect(
       await tryRun(`UPDATE items SET stock = 'abc' WHERE id = 'knots'`),
     ).toContain(TYPE)
@@ -200,7 +200,7 @@ describe('items', () => {
 describe('items times and unique names', () => {
   it('backfills nothing for new rows but the constant default, as an import-style INSERT gets it', async () => {
     // Catches an INSERT that names no time columns (the import, an old Worker) failing or leaving NULL.
-    await mustInsert('items', validHonor) // No time columns named.
+    await mustInsert('items', validItem) // No time columns named.
     expect(await db.prepare('SELECT created_at, modified_at FROM items').first()).toEqual({ created_at: '2026-11-01T00:00:00.000Z', modified_at: '2026-11-01T00:00:00.000Z' })
   })
 
@@ -224,14 +224,14 @@ describe('items times and unique names', () => {
     ['a NULL modified_at', { modified_at: null }],
   ])('refuses %s', async (_label, change) => {
     // Catches a time column without its CHECK, which would break the text sort.
-    expect(await tryInsert('items', { ...validHonor, ...change })).toMatch(/CHECK constraint failed|NOT NULL constraint failed/)
+    expect(await tryInsert('items', { ...validItem, ...change })).toMatch(/CHECK constraint failed|NOT NULL constraint failed/)
   })
 
   it('refuses a second name that differs only in case', async () => {
     // Catches the unique index missing or using binary collation, so "Knots" and "knots" could both exist.
-    await mustInsert('items', validHonor)
-    expect(await tryInsert('items', { ...validHonor, id: 'knots-2', name: 'KNOTS' })).toContain(UNIQUE)
-    expect(await tryInsert('items', { ...validHonor, id: 'knots-3', name: 'Knots 3' })).toBeNull() // Another name is fine.
+    await mustInsert('items', validItem)
+    expect(await tryInsert('items', { ...validItem, id: 'knots-2', name: 'KNOTS' })).toContain(UNIQUE)
+    expect(await tryInsert('items', { ...validItem, id: 'knots-3', name: 'Knots 3' })).toBeNull() // Another name is fine.
   })
 })
 
@@ -393,7 +393,7 @@ describe('order lines', () => {
     ).toContain(reason)
   })
 
-  it('refuses the same honor twice on one order', async () => {
+  it('refuses the same item twice on one order', async () => {
     // Catches a double line that would double-count stock.
     const orderId = await insertOrder()
     const line = {

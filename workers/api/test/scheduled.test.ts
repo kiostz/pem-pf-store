@@ -18,7 +18,7 @@ async function runAt(scheduledTime: Date): Promise<void> {
 }
 
 beforeEach(async () => {
-  await seedShop() // Honors and settings, no orders.
+  await seedShop() // Items and settings, no orders.
 })
 
 afterEach(() => {

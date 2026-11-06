@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { insertOrderRows, saveOrder } from '../src/save-order'
 import { makeOrderNumber } from '../src/order-number'
 import { parseOrderRequest } from '../src/order-request'
-import { addHonor, callWith, count, fakeEmail, mockSiteverify, postOrder, SHOP, seedShop, validOrder } from './helpers'
+import { addItem, callWith, count, fakeEmail, mockSiteverify, postOrder, SHOP, seedShop, validOrder } from './helpers'
 
 /**
- * Reads one honor's stock.
- * @param id The honor id.
+ * Reads one item's stock.
+ * @param id The item id.
  * @return The stock.
  */
 async function stockOf(id: string): Promise<number> {
@@ -26,7 +26,7 @@ function request(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(async () => {
-  await seedShop() // Honors and settings.
+  await seedShop() // Items and settings.
 })
 afterEach(() => {
   vi.restoreAllMocks() // Spies off.
@@ -69,7 +69,7 @@ describe('POST /orders', () => {
     expect(row?.club).toBe('Other: Riverside') // Body text.
   })
 
-  it('lowers stock and leaves the honor\'s created_at and modified_at as they were', async () => {
+  it('lowers stock and leaves the item\'s created_at and modified_at as they were', async () => {
     // Catches an order's stock drop stamping modified_at, which would put every sold item at the top of Recently changed.
     mockSiteverify() // Captcha passes.
     await env.DB.exec("UPDATE items SET created_at = '2026-11-02T03:04:05.678Z', modified_at = '2026-11-02T06:07:08.910Z' WHERE id = 'knots'") // Times an admin edit left.
@@ -258,7 +258,7 @@ describe('POST /orders', () => {
     // Catches a save that drops or half-writes lines when the order is at the line cap (one batch of 1,002 statements).
     mockSiteverify() // Captcha passes.
     const ids = Array.from({ length: 500 }, (_, i) => `bulk-${String(i).padStart(3, '0')}`) // 500 distinct items.
-    for (const id of ids) await addHonor({ id, name: `Bulk ${id}`, stock: 3, price_cents: 100 }) // Active, stock 3, 1.00 each.
+    for (const id of ids) await addItem({ id, name: `Bulk ${id}`, stock: 3, price_cents: 100 }) // Active, stock 3, 1.00 each.
     const { res } = await postOrder(validOrder({ lines: ids.map((itemId) => ({ itemId, quantity: 2 })) })) // 2 of each.
     expect(res.status).toBe(201) // Created.
     expect(((await res.json()) as { totalCents: number }).totalCents).toBe(100000) // 500 x 2 x 100.

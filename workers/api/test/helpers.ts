@@ -128,28 +128,28 @@ export async function count(table: string): Promise<number> {
 }
 
 /**
- * Empties every table and seeds settings plus three honors: knots (stock 5, 300), rope (stock 1, 450), secret (hidden, stock 9).
+ * Empties every table and seeds settings plus three items: knots (stock 5, 300), rope (stock 1, 450), secret (hidden, stock 9).
  * @return Resolves when seeded.
  */
 export async function seedShop(): Promise<void> {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM order_lines'), // Lines first.
     env.DB.prepare('DELETE FROM orders'), // Then orders.
-    env.DB.prepare('DELETE FROM items'), // Then honors.
+    env.DB.prepare('DELETE FROM items'), // Then items.
     env.DB.prepare('DELETE FROM settings'), // Then settings.
   ])
   await addSettings() // MYR, email on.
-  await addHonor({ id: 'knots', name: 'Knot Tying', stock: 5, price_cents: 300 }) // Plenty.
-  await addHonor({ id: 'rope', name: 'Rope Work', stock: 1, price_cents: 450 }) // The last one.
-  await addHonor({ id: 'secret', name: 'Secret Patch', status: 'hidden', stock: 9, price_cents: 500 }) // Not for sale.
+  await addItem({ id: 'knots', name: 'Knot Tying', stock: 5, price_cents: 300 }) // Plenty.
+  await addItem({ id: 'rope', name: 'Rope Work', stock: 1, price_cents: 450 }) // The last one.
+  await addItem({ id: 'secret', name: 'Secret Patch', status: 'hidden', stock: 9, price_cents: 500 }) // Not for sale.
 }
 
 /**
- * Inserts one honor row with defaults a test can override.
+ * Inserts one item row with defaults a test can override.
  * @param row Columns to override.
  * @return Resolves when the row is stored.
  */
-export async function addHonor(row: Record<string, unknown>): Promise<void> {
+export async function addItem(row: Record<string, unknown>): Promise<void> {
   const h = { id: 'x', name: 'X', category: 'Nature', issued_by: 'General Conference', status: 'active', stock: 0, price_cents: 400, image: null, ...row } // Defaults plus overrides.
   await env.DB.prepare(
     'INSERT INTO items (id, name, category, issued_by, skill_level, status, stock, price_cents, image) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)',

@@ -17,7 +17,7 @@ async function numbers(): Promise<string[]> {
 }
 
 beforeEach(async () => {
-  await seedShop() // Honors, settings, no orders.
+  await seedShop() // Items, settings, no orders.
 })
 
 afterEach(() => {

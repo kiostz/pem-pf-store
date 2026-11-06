@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { call, fakeEmail, count, mockSiteverify, postOrder, SHOP, seedShop, validOrder } from './helpers'
 
 /**
- * Reads one honor's stock.
- * @param id The honor id.
+ * Reads one item's stock.
+ * @param id The item id.
  * @return The stock.
  */
 async function stockOf(id: string): Promise<number> {

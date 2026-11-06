@@ -86,7 +86,7 @@ describe('orderEmail money formatting', () => {
 
 describe('order email on POST /orders', () => {
   beforeEach(async () => {
-    await seedShop() // Honors and settings.
+    await seedShop() // Items and settings.
     mockSiteverify() // Captcha passes.
   })
   afterEach(() => vi.restoreAllMocks()) // Spies off.

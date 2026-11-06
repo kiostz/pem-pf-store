@@ -2,17 +2,17 @@
 
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addHonor, addSettings, call, expectJsonNoStore } from './helpers'
+import { addItem, addSettings, call, expectJsonNoStore } from './helpers'
 
 describe('read endpoints', () => {
   beforeEach(async () => {
     await env.DB.exec('DELETE FROM items; DELETE FROM clubs; DELETE FROM settings;') // Each test starts empty.
   })
 
-  it('lists active honors by name with exactly six fields', async () => {
+  it('lists active items by name with exactly six fields', async () => {
     // Catches leaking issued_by, status or skill_level, or a wrong order.
-    await addHonor({ id: 'b', name: 'Beta', stock: 3, image: '/p/b.png' }) // Sorts second.
-    await addHonor({ id: 'a', name: 'Alpha', price_cents: 250 }) // Sorts first.
+    await addItem({ id: 'b', name: 'Beta', stock: 3, image: '/p/b.png' }) // Sorts second.
+    await addItem({ id: 'a', name: 'Alpha', price_cents: 250 }) // Sorts first.
     const res = await call('/items') // The public path.
     expect(res.status).toBe(200) // Success.
     expectJsonNoStore(res) // Success answers must not be cacheable.
@@ -24,16 +24,16 @@ describe('read endpoints', () => {
 
   it('sorts /items names ignoring case', async () => {
     // Catches binary order (apple after Banana); names are unique ignoring case, so no tie remains.
-    await addHonor({ id: 'b1', name: 'Banana' }) // Sorts last.
-    await addHonor({ id: 'a2', name: 'apple' }) // Lower case, sorts first.
-    await addHonor({ id: 'a1', name: 'Apple Pie' }) // Inserted last, sorts second.
+    await addItem({ id: 'b1', name: 'Banana' }) // Sorts last.
+    await addItem({ id: 'a2', name: 'apple' }) // Lower case, sorts first.
+    await addItem({ id: 'a1', name: 'Apple Pie' }) // Inserted last, sorts second.
     const items = (await (await call('/items')).json()) as { id: string }[] // The items.
-    expect(items.map((honor) => honor.id)).toEqual(['a2', 'a1', 'b1']) // Case-insensitive.
+    expect(items.map((item) => item.id)).toEqual(['a2', 'a1', 'b1']) // Case-insensitive.
   })
 
-  it('never lists a hidden honor even with stock', async () => {
+  it('never lists a hidden item even with stock', async () => {
     // Catches a missing status filter.
-    await addHonor({ id: 'h', name: 'Hidden', status: 'hidden', stock: 5 }) // Hidden with stock.
+    await addItem({ id: 'h', name: 'Hidden', status: 'hidden', stock: 5 }) // Hidden with stock.
     expect(await (await call('/items')).json()).toEqual([]) // Nothing shown.
   })
 
@@ -62,7 +62,7 @@ describe('read endpoints', () => {
 
   it('gives empty lists for an empty database', async () => {
     // Catches an error or null where an empty list belongs.
-    expect(await (await call('/items')).json()).toEqual([]) // No honors.
+    expect(await (await call('/items')).json()).toEqual([]) // No items.
     expect(await (await call('/clubs')).json()).toEqual([]) // No clubs.
   })
 })
