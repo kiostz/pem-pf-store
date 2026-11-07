@@ -72,6 +72,10 @@ export function useAdminItems() {
   const [metaAttempt, setMetaAttempt] = useState(0) // bumped by Try again to load the meta again
   const [changesView, setChangesView] = useState(false) // the list shows only the pending rows
   const count = countChanges(pending) // the edited fields
+  // While a save is in flight, a restock reload and a picture save's row update wait here and run once the save's answer has been applied, so a reload started after the save never reads D1 before the save's write. The other direction: a reload already running when a save starts could still answer after the save's answer with rows read before the write, so a save that starts while the list is loading queues one more reload behind itself, whose start aborts the running one. Together: no list answer that read before a save's write lands after that save's answer. Do not let reloads land mid-save.
+  const savingRef = useRef(false) // a save is in flight
+  const [flushTick, setFlushTick] = useState(0) // bumped when a save ends, so the queue is looked at after the render that follows
+  const queued = useRef<{ reload: boolean; updates: (() => void)[] }>({ reload: false, updates: [] }) // what waits for the save: one reload, and the picture updates in arrival order
 
   /**
    * Replaces the pending edits.
@@ -115,6 +119,22 @@ export function useAdminItems() {
       ),
     ) // a fetched row shows its latest values, so its stale flag is done
   })
+
+  /** Loads the first page again with the applied filters, or after the running save when one is in flight (any number of calls make one reload). */
+  const reloadList = () => { // the reload, now or queued
+    if (savingRef.current) queued.current.reload = true // waits for the save
+    else pages.retry() // no save: at once
+  }
+
+  // Runs what waited for a save, after the render that shows the save's answer: the picture updates in order, then one reload that reads D1 after the save's write.
+  useEffect(() => { // looks at the queue
+    if (savingRef.current) return // a save is still running (the ref is always cleared when it ends, even by a throw)
+    const { reload, updates } = queued.current // what waited
+    if (!reload && updates.length === 0) return // nothing waited
+    queued.current = { reload: false, updates: [] } // taken
+    updates.forEach((update) => update()) // each picture update, in order
+    if (reload) pages.retry() // the one reload
+  }, [saveState, flushTick, pages]) // runs after each render; it does nothing unless a save has ended with something waiting
 
   // Loads the meta once, and again after Try again while it is missing.
   useEffect(() => {
@@ -237,19 +257,25 @@ export function useAdminItems() {
     setSnapshot(null) // a save closes Undo
     setNotice(null) // an old note goes
     setSaveState('saving') // the pill shows Saving…
+    savingRef.current = true // restock reloads and picture updates now wait their turn
+    if (pages.pageState === 'loading') queued.current.reload = true // a list request already running may have read before this save's write: a reload behind the save will abort it
+    try { // so the flag below is cleared even when the save throws
+      await runSave() // the request and its outcome
+    } finally { // runs after a success, a conflict, a failure and a throw alike
+      savingRef.current = false // the save is over, whatever it answered
+      setFlushTick((tick) => tick + 1) // so the queue is looked at after the render that shows the answer
+    }
+  }
+
+  /** Sends every pending change and applies the answer: the part of a save that runs while the queue holds other updates back. */
+  const runSave = async () => { // sends the changes and applies the answer
     const sentPending = pendingRef.current // what is being sent
     const sent = countChanges(sentPending) // for the note
     const result = await sendItemChanges(toItemChanges(sentPending)) // the one request
     if (result.kind === 'saved') {
-      const sentNow = Object.fromEntries( // the sent entries rebuilt on the newest snapshots
-        Object.entries(sentPending).flatMap(([id, entry]) => { // each row that was sent
-          const current = pendingRef.current[id] // the row's entry now: a reload that landed during the save moved its snapshot
-          return current === undefined ? [] : [[id, { ...entry, seen: current.seen }]] // the sent edits on the newest snapshot; a row no edit remains on takes the answer as it is
-        }),
-      ) // so the save's old values never overwrite a newer reloaded row
-      const seen = mergeSaved(sentNow, result.items) // the saved fields and times only
+      const seen = mergeSaved(sentPending, result.items) // the saved fields and times only
       commitPending(applySaved(pendingRef.current, seen)) // what was written is no longer pending; edits made during the save stay
-      pages.applyRows(seen, true) // the saved rows stay in place until the next fetch, unless a reload already holds a row at least as recent
+      pages.applyRows(seen) // the saved rows stay in place until the next fetch
       setConflicts({}) // conflict flags have been dealt with
       const savedIds = result.items.map((row) => row.id) // the rows this save answered for
       setStaleFlags((current) => ({
@@ -367,8 +393,23 @@ export function useAdminItems() {
    */
   const uploadItemPicture = async (row: AdminItem, picture: Blob): Promise<PictureOutcome> => {
     const result = await uploadPicture(row.id, row.image, picture) // the one request
+    if (savingRef.current) { // a save is in flight
+      queued.current.updates.push(() => applyPictureResult(row, result)) // a save is in flight: the row update waits for it, then lands on the saved row
+      if (result.kind === 'conflict') queued.current.reload = true // a conflict's rows may predate the save's write: a reload after the save corrects them
+    }
+    else applyPictureResult(row, result) // no save: at once
+    return result.kind // the sheet says what happened
+  }
+
+  /**
+   * Folds a picture save's answer into the list and the pending state.
+   * @param row the row as the sheet showed it
+   * @param result the picture call's answer
+   */
+  const applyPictureResult = (row: AdminItem, result: Awaited<ReturnType<typeof uploadPicture>>) => { // applies a picture answer to the list and the pending state
     if (result.kind === 'saved') {
-      const shown = { ...row, image: result.item.image, modifiedAt: result.item.modifiedAt } // only the picture and the change time move, so other shown fields stay as the admin saw them
+      const listed = pages.listedRow(row.id) ?? row // the row as listed now
+      const shown = { ...listed, image: result.item.image, modifiedAt: result.item.modifiedAt > listed.modifiedAt ? result.item.modifiedAt : listed.modifiedAt } // only the picture and the later change time move, so other shown fields stay as the admin sees them and a save written after the picture keeps its time
       pages.applyRows([shown]) // the row stays in place
       const entry = pendingRef.current[row.id] // the row's unsaved edits, if any
       if (entry !== undefined)
@@ -390,12 +431,12 @@ export function useAdminItems() {
       setConflicts((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !result.deletedIds.includes(id)))) // deleted rows lose their flag
       setStaleFlags((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !result.deletedIds.includes(id)))) // and their stale flag
     } else if (result.kind === 'signed-out') setSaveState('signed-out') // the existing signed-out note
-    return result.kind // the sheet says what happened
   }
 
   return {
     pages, // the list's pages and controls
     retry, // Try again
+    reloadList, // reload the first page now, or right after a running save
     meta, // the currency, default price and categories
     metaFailed, // the meta did not load
     retryMeta, // Try again for the meta

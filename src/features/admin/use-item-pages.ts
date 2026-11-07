@@ -37,6 +37,8 @@ export function useItemPages(
   onFetched: (items: AdminItem[]) => void = () => undefined,
 ) {
   const [rows, setRows] = useState<AdminItem[]>([]) // every row loaded so far
+  const rowsRef = useRef(rows) // the same rows, read between renders
+  useEffect(() => { rowsRef.current = rows }, [rows]) // follows the state after each render
   const [nextCursor, setNextCursor] = useState<string | null>(null) // where the next page starts
   const [pageState, setPageState] = useState<PageState>('loading') // the fetch
   const [filters, setFilters] = useState<Filters>({
@@ -199,17 +201,10 @@ export function useItemPages(
   /**
    * Puts newer rows in place of the listed ones, keeping their positions.
    * @param items the newer rows
-   * @param onlyNewer true to keep a listed row whose change time is not older than the given row's
    */
-  const applyRows = (items: AdminItem[], onlyNewer = false) => { // replaces listed rows, optionally only with more recent ones
+  const applyRows = (items: AdminItem[]) => { // replaces listed rows with the given ones
     const byId = new Map(items.map((row) => [row.id, row])) // the new rows
-    setRows((current) => // the listed rows
-      current.map((row) => { // each listed row
-        const next = byId.get(row.id) // the row's new values, if given
-        if (next === undefined) return row // not given: stays
-        return onlyNewer && next.modifiedAt <= row.modifiedAt ? row : next // a listed row at least as recent as the answer is kept
-      }),
-    ) // replaced where given
+    setRows((current) => current.map((row) => byId.get(row.id) ?? row)) // replaced where given
   }
 
   /**
@@ -235,6 +230,7 @@ export function useItemPages(
     retry, // Try again
     loadMore, // Load more
     applyRows, // replace rows in place
+    listedRow: (id: string) => rowsRef.current.find((row) => row.id === id), // a row as listed now
     removeRows, // drop rows
   }
 }

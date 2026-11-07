@@ -131,4 +131,12 @@ describe('AdminItemRow', () => { // the row on its own
     expect(screen.getByText('Latest: Knot Tying · Honors · Nature · RM 4.00 · Active · 9 in stock')).toBeInTheDocument() // the current values
     expect(screen.getByText('Changed')).toBeInTheDocument() // the pending label
   })
+
+  it('lets a flagged row wrap at every width, with no md:flex-nowrap class on it', () => { // the row's wrapping classes
+    // catches: the md:flex-nowrap class coming back, which forced the flag onto the row's one line at 768 px and squeezed the name column (the browser check measures the layout; jsdom cannot)
+    const { container } = renderRow({ conflict: { ...knot, stock: 9 } }) // a flagged row
+    const row = container.querySelector('li') as HTMLElement // the row
+    expect(row).toHaveClass('flex-wrap') // the row may wrap
+    expect(row).not.toHaveClass('md:flex-nowrap') // and still may from 768 px
+  })
 })

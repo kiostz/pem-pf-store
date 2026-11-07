@@ -260,66 +260,71 @@ describe('AdminApp', () => {
       expect(screen.getByRole('button', { name: /Save \(1 change/ })).toBeInTheDocument() // the edit is still pending
     })
 
-    it('shows the newer stock with no flag when the reload lands during a save, keeps an edit made meanwhile, and guards the next stock save with the newer number', async () => { // reload during a save
-      // catches: a save's older stock written over the reloaded row, a false updated flag, a lost edit, or a later save sent with the old stock as `from`
-      let release: (response: Response) => void = () => undefined // finishes the first save
-      let first = true // the first save waits, later ones answer at once
-      const calls = stubStock({ // the recorded requests
-        changes: () => { // answers each save
-          if (!first) return Response.json({ items: [] }) // a later save
-          first = false // taken
-          return new Promise<Response>((resolve) => (release = resolve)) // the first save waits for release
-        },
-      }) // the stub is set
+    /**
+     * Starts a save of a Knot Tying edit that waits for its answer, then cancels the order during it.
+     * @param edit makes the pending edit
+     * @param calls the recorded requests
+     */
+    async function saveThenCancel(edit: () => void, calls: [string, string, unknown][]) { // a restocking cancel while a save runs
+      edit() // the pending edit
+      fireEvent.click(screen.getByRole('button', { name: /Save \(\d+ change/ })) // starts the save
+      await waitFor(() => expect(calls.some(([url]) => url === '/api/items/changes')).toBe(true)) // the save request went out
+      await cancelFirstOrder() // the restock happens while the save waits
+    }
+
+    /** @return a promise and the function that answers it, for a request a test releases itself */
+    const deferred = () => { // one held answer
+      let release: (response: Response) => void = () => undefined // answers the request
+      const promise = new Promise<Response>((resolve) => (release = resolve)) // the held request
+      return { promise, release: (response: Response) => act(async () => release(response)) } // the promise and its release
+    }
+
+    it('shows the saved value at once and the restocked stock after the reload that waited for the save, keeps an edit made meanwhile, and shows no flag', async () => { // a restock during a save
+      // catches: a reload that lands mid-save, a saved value that never shows, a lost edit, or a false updated flag
+      const save = deferred() // the save waits
+      const reload = deferred() // the reload waits too, so the saved value can be seen first
+      const wrote = '2026-11-07T01:00:00.000Z' // when the save wrote
+      const calls = stubStock({ changes: () => save.promise, pages: (_url, listed) => (listed === 1 ? Response.json({ items: rows, nextCursor: null }) : reload.promise) }) // the stub is set
       render(<AdminApp />) // the shell
       await screen.findByText('Knot Tying') // the rows have loaded
-      fireEvent.click(screen.getByRole('switch', { name: 'Active: Knot Tying' })) // pending: Hidden
-      fireEvent.click(screen.getByRole('button', { name: /Save \(1 change/ })) // starts the save
-      await waitFor(() => expect(calls.some(([url]) => url === '/api/items/changes')).toBe(true)) // the save request went out
-      fireEvent.click(screen.getByRole('switch', { name: 'Active: Nature Walk' })) // an edit made while the save runs
-      await cancelFirstOrder() // the reload lands while the save waits
-      await waitFor(() => expect(listUrls(calls).length).toBeGreaterThan(1)) // the reload went out
-      await act(async () => undefined) // the page is folded in
-      release(Response.json({ items: [{ ...rows[2], status: 'hidden', stock: 13, modifiedAt: '2026-11-07T01:00:00.000Z' }] })) // the save's answer, with the newer stock and the write's change time
+      await saveThenCancel(() => fireEvent.click(screen.getByRole('switch', { name: 'Active: Knot Tying' })), calls) // pending: Hidden, then the cancel
+      fireEvent.click(screen.getByRole('switch', { name: 'Active: Nature Walk', hidden: true })) // an edit made while the save runs, on the hidden Items tab
+      expect(listUrls(calls)).toHaveLength(1) // the reload waits for the save
+      await save.release(Response.json({ items: [{ ...rows[2], status: 'hidden', modifiedAt: wrote }] })) // the save's answer
       await goTo('#/items') // back to the Items tab
-      expect(await screen.findByText('Saved 1 change.')).toBeInTheDocument() // the save finished
+      await waitFor(() => expect(listUrls(calls)).toHaveLength(2)) // the queued reload runs once the save has ended
       const knotRow = screen.getByText('Knot Tying').closest('li') as HTMLElement // Knot Tying's row
-      expect(within(knotRow).getByText('13 in stock')).toBeInTheDocument() // the row's own stock is the newer one
+      expect(within(knotRow).getByText('12 in stock')).toBeInTheDocument() // the saved row shows while the reload is out
       expect(within(knotRow).getByRole('switch', { name: 'Active: Knot Tying' })).toHaveAttribute('aria-checked', 'false') // the saved status shows
+      await reload.release(Response.json({ items: rows.map((row) => (row.id === 'knot-tying' ? { ...row, status: 'hidden', stock: 13, modifiedAt: wrote } : row)), nextCursor: null })) // the reload reads D1 after the write and the restock
+      expect(await within(knotRow).findByText('13 in stock')).toBeInTheDocument() // the restocked stock
       expect(screen.queryByText('This item has been updated.')).not.toBeInTheDocument() // no false flag
       expect(screen.getByRole('switch', { name: 'Active: Nature Walk' })).toHaveAttribute('aria-checked', 'false') // the edit made during the save is still pending
-      expect(screen.getByRole('button', { name: /Save \(1 change/ })).toBeInTheDocument() // one change is left: the sent edit is gone
-      editKnotStock() // a stock edit to 20 after the fold
-      fireEvent.click(screen.getByRole('button', { name: /Save \(2 changes/ })) // the second save
-      await waitFor(() => expect(calls.filter(([url]) => url === '/api/items/changes')).toHaveLength(2)) // it went out
-      const body = JSON.parse(calls.filter(([url]) => url === '/api/items/changes')[1][2] as string) // its request body
-      expect(body.changes.find((change: { id: string }) => change.id === 'knot-tying').stock).toEqual({ from: 13, to: 20 }) // guarded by the newer stock
+      expect(screen.getByRole('button', { name: /Save \(1 change/ })).toBeInTheDocument() // only that edit is left
     })
 
-    it('keeps the reloaded row when the reload read D1 after the save wrote and the save answers last with the older stock', async () => { // reload newer than the save answer
-      // catches: a save's older answer written over a reload that already holds the save and a newer stock
-      let release: (response: Response) => void = () => undefined // finishes the save
-      const wrote = '2026-11-07T01:00:00.000Z' // when the save wrote
+    it('shows the restocked stock 21 not the saved 20, with nothing pending and no flag, and sends 21 as `from` in the next save', async () => { // the sent field moved by the restock
+      // catches: a saved stock written over the restocked stock, or a pending entry or flag left behind
+      const save = deferred() // the save waits
+      const wrote = '2026-11-07T01:00:00.000Z' // the write's change time, which a restock leaves unchanged
       const calls = stubStock({ // the recorded requests
-        changes: () => new Promise<Response>((resolve) => (release = resolve)), // the save waits for release
-        after: () => Response.json({ items: rows.map((row) => (row.id === 'knot-tying' ? { ...row, status: 'hidden', stock: 13, modifiedAt: wrote } : row)), nextCursor: null }), // the reload read D1 after the write and the restock
+        changes: () => save.promise, // the save waits for release
+        after: () => Response.json({ items: rows.map((row) => (row.id === 'knot-tying' ? { ...row, stock: 21, modifiedAt: wrote } : row)), nextCursor: null }), // D1 after 20 and a restock
       }) // the stub is set
       render(<AdminApp />) // the shell
       await screen.findByText('Knot Tying') // the rows have loaded
-      fireEvent.click(screen.getByRole('switch', { name: 'Active: Knot Tying' })) // pending: Hidden
-      fireEvent.click(screen.getByRole('button', { name: /Save \(1 change/ })) // starts the save
-      await waitFor(() => expect(calls.some(([url]) => url === '/api/items/changes')).toBe(true)) // the save request went out
-      await cancelFirstOrder() // the restock and the reload land while the save waits
-      await waitFor(() => expect(listUrls(calls).length).toBeGreaterThan(1)) // the reload went out
-      await act(async () => undefined) // the page is folded in
-      release(Response.json({ items: [{ ...rows[2], status: 'hidden', stock: 12, modifiedAt: wrote }] })) // the save's answer: its own write, before the restock
+      await saveThenCancel(editKnotStock, calls) // stock 20 pending, saved, then a restock
+      await save.release(Response.json({ items: [{ ...rows[2], stock: 20, modifiedAt: wrote }] })) // the save wrote 20
       await goTo('#/items') // back to the Items tab
-      expect(await screen.findByText('Saved 1 change.')).toBeInTheDocument() // the save finished
       const knotRow = screen.getByText('Knot Tying').closest('li') as HTMLElement // Knot Tying's row
-      expect(within(knotRow).getByText('13 in stock')).toBeInTheDocument() // the row keeps the reloaded stock
-      expect(within(knotRow).getByRole('switch', { name: 'Active: Knot Tying' })).toHaveAttribute('aria-checked', 'false') // the saved status shows
+      expect(await within(knotRow).findByText('21 in stock')).toBeInTheDocument() // the reload after the save shows D1's stock
       expect(screen.queryByText('This item has been updated.')).not.toBeInTheDocument() // no flag
       expect(screen.queryByRole('button', { name: /Save \(/ })).not.toBeInTheDocument() // nothing pending
+      editKnotStock() // a new stock edit to 20 after the reload
+      fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // the next save
+      await waitFor(() => expect(calls.filter(([url]) => url === '/api/items/changes')).toHaveLength(2)) // it went out
+      const body = JSON.parse(calls.filter(([url]) => url === '/api/items/changes')[1][2] as string) // its request body
+      expect(body.changes[0].stock).toEqual({ from: 21, to: 20 }) // guarded by the reloaded stock
     })
 
     it('goes back to page one with the same search after Load more, and drops the extra rows', async () => { // a reload after Load more
@@ -407,28 +412,25 @@ describe('AdminApp', () => {
       expect(body.changes).toEqual([{ id: 'knot-tying', category: { from: 'Honors', to: 'Shirts' }, subcategoryId: { from: 8, to: null } }]) // the pairs, with no stock pair
     })
 
-    it('shows the saved category and no subcategory, unflagged, when the reload lands during a category save', async () => { // the subcategory merge with the reload fold
-      // catches: a fold that keeps the reloaded Recreation name beside the saved Shirts category, or flags the row as updated
-      let release: (response: Response) => void = () => undefined // finishes the save
+    it('shows the saved category and no subcategory, unflagged, after a category save and the reload that waited for it', async () => { // the subcategory merge with a queued reload
+      // catches: a merge that keeps the old Recreation name beside the saved Shirts category, or flags the row as updated
+      const save = deferred() // the save waits
       const wrote = '2026-11-07T01:00:00.000Z' // when the save wrote
-      const calls = stubStock({ changes: () => new Promise<Response>((resolve) => (release = resolve)) }) // the save waits
+      const shirts = { ...rows[2], category: 'Shirts', subcategoryId: null, subcategory: null, modifiedAt: wrote } // Knot Tying as D1 holds it after the save
+      const calls = stubStock({ changes: () => save.promise, after: () => Response.json({ items: rows.map((row) => (row.id === 'knot-tying' ? { ...shirts, stock: 13 } : row)), nextCursor: null }) }) // the stub is set
       render(<AdminApp />) // the shell
       await screen.findByText('Knot Tying') // the rows have loaded
-      fireEvent.click(screen.getByRole('button', { name: 'Edit Knot Tying' })) // opens the sheet
-      fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Category'), { target: { value: 'Shirts' } }) // Honors to Shirts in the sheet's own select
-      fireEvent.click(screen.getByRole('button', { name: 'Done' })) // pending
-      fireEvent.click(screen.getByRole('button', { name: /Save \(2 changes/ })) // starts the save
-      await waitFor(() => expect(calls.some(([url]) => url === '/api/items/changes')).toBe(true)) // sent
-      await cancelFirstOrder() // the reload lands during the save
-      await waitFor(() => expect(listUrls(calls).length).toBeGreaterThan(1)) // the reload went out
-      await act(async () => undefined) // folded in
-      release(Response.json({ items: [{ ...rows[2], category: 'Shirts', subcategoryId: null, subcategory: null, stock: 13, modifiedAt: wrote }] })) // the save's answer
+      await saveThenCancel(() => { // a category edit
+        fireEvent.click(screen.getByRole('button', { name: 'Edit Knot Tying' })) // opens the sheet
+        fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Category'), { target: { value: 'Shirts' } }) // Honors to Shirts in the sheet's own select
+        fireEvent.click(screen.getByRole('button', { name: 'Done' })) // pending
+      }, calls) // then the cancel
+      await save.release(Response.json({ items: [shirts] })) // the save's answer
       await goTo('#/items') // back to Items
-      expect(await screen.findByText('Saved 2 changes.')).toBeInTheDocument() // the save finished
       const knotRow = screen.getByText('Knot Tying').closest('li') as HTMLElement // Knot Tying's row
+      expect(await within(knotRow).findByText('13 in stock')).toBeInTheDocument() // the queued reload has landed
       expect(within(knotRow).getByText(/^Shirts · /)).toBeInTheDocument() // the saved category, no subcategory part
       expect(within(knotRow).queryByText(/Recreation/)).not.toBeInTheDocument() // the old subcategory is gone
-      expect(within(knotRow).getByText('13 in stock')).toBeInTheDocument() // the newer stock
       expect(screen.queryByText('This item has been updated.')).not.toBeInTheDocument() // no false flag
     })
   })
