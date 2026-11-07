@@ -243,6 +243,28 @@ describe('rows, search, category and sort', () => {
 })
 
 describe('Load more', () => {
+  it('locks Load more while a save runs, so no page read lands mid-save, and works again after', async () => { // the button is as locked as the list above it
+    // catches: a Load more click during a save that starts a page read the save's answer could race
+    let release: (response: Response) => void = () => undefined // answers the save
+    const spy = stubApi({ // the stub with a next page and a held save
+      changes: () => new Promise<Response>((resolve) => (release = resolve)), // the save waits
+      pages: (url) => (url.includes('cursor=c1') ? pageOf(rows.slice(3)) : pageOf(rows.slice(0, 3), 'c1')), // page one has a next page
+    })
+    await openScreen() // the first page
+    hideKnot() // pending: Hidden
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // starts the save
+    await waitFor(() => expect(postBodies(spy)).toHaveLength(1)) // it went out
+    const more = screen.getByRole('button', { name: 'Load more' }) // the button
+    expect(more).toHaveAttribute('aria-disabled', 'true') // shown as locked
+    fireEvent.click(more) // a click during the save
+    await act(async () => undefined) // settle
+    expect(pageUrls(spy).some((url) => url.includes('cursor=c1'))).toBe(false) // no page read started
+    await act(async () => release(Response.json({ items: [{ ...rows[2], status: 'hidden', modifiedAt: '2026-11-07T01:00:00.000Z' }] }))) // the save ends
+    await screen.findByText('Saved 1 change.') // answered
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' })) // a click after the save
+    await waitFor(() => expect(pageUrls(spy).some((url) => url.includes('cursor=c1'))).toBe(true)) // the next page is read
+  })
+
   it('appends the next page with "Loading…" between, then says "End of the list."', async () => {
     // Catches a Load more with no feedback, or a list with no end.
     let release: (response: Response) => void = () => undefined
@@ -1453,10 +1475,59 @@ describe('read-only rows and the Edit button', () => { // the rows and the sheet
   })
 })
 
-describe('a picture saved while an item save runs', () => { // two writes to one row in flight
-  // Not reachable from the screen today (the list is inert during a save and the sheet is modal), so it runs through the hook.
-  it.fails('shows the saved status when the picture answer arrives before an older-stamped save answer', async () => { // the save was written first, the picture second
-    // catches: a save answer older than the picture's change time that is dropped by the "not older" rule, leaving the row at the old status while no edit is pending
+describe('restock reloads and picture saves that arrive while an item save runs', () => { // they wait for the save to end
+  /** Starts a Knot Tying status save whose answer a test releases. */
+  async function startHeldSave(changes: () => Response | Promise<Response>) { // a save in flight
+    const spy = stubApi({ changes }) // the stub with the held save
+    const view = render(<ItemsScreen restocks={0} />) // the screen at count 0
+    await screen.findByText('Knot Tying') // the rows have loaded
+    await act(async () => undefined) // the meta answer too
+    hideKnot() // pending: Hidden
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // starts the save
+    await waitFor(() => expect(postBodies(spy)).toHaveLength(1)) // the save request went out
+    return { spy, view } // the spy and the render
+  }
+
+  it('runs one reload after the save, however many restocks arrived during it', async () => { // a queued reload runs once
+    // catches: a reload that runs mid-save, or one reload per restock
+    let release: (response: Response) => void = () => undefined // answers the save
+    const { spy, view } = await startHeldSave(() => new Promise<Response>((resolve) => (release = resolve))) // a held save
+    view.rerender(<ItemsScreen restocks={1} />) // a first restock
+    view.rerender(<ItemsScreen restocks={2} />) // a second restock
+    await act(async () => undefined) // settle
+    expect(pageUrls(spy)).toHaveLength(1) // no reload while the save runs
+    await act(async () => release(Response.json({ items: [{ ...rows[2], status: 'hidden', modifiedAt: '2026-11-07T01:00:00.000Z' }] }))) // the save's answer
+    await waitFor(() => expect(pageUrls(spy)).toHaveLength(2)) // one reload after it
+    await act(async () => undefined) // settle
+    expect(pageUrls(spy)).toHaveLength(2) // and only one
+  })
+
+  it.each([ // the two save outcomes that are not a success
+    ['fails', () => Response.json({}, { status: 500 })], // a server error
+    ['gets a 409', () => Response.json({ error: 'conflict', items: [{ ...rows[2], status: 'hidden' }], deletedIds: [] }, { status: 409 })], // a conflict
+  ])('still runs the queued reload when the save %s', async (_name, answer) => { // every save outcome flushes the queue
+    // catches: a queue that only flushes after a successful save
+    let release: (response: Response) => void = () => undefined // answers the save
+    const { spy, view } = await startHeldSave(() => new Promise<Response>((resolve) => (release = resolve))) // a held save
+    view.rerender(<ItemsScreen restocks={1} />) // a restock during the save
+    await act(async () => undefined) // settle
+    expect(pageUrls(spy)).toHaveLength(1) // it waits
+    await act(async () => release(answer())) // the save's answer
+    await waitFor(() => expect(pageUrls(spy)).toHaveLength(2)) // the queued reload runs
+  })
+
+  it('reloads at once when no save is running', async () => { // outside a save nothing waits
+    // catches: a queue that holds a reload back with no save to wait for
+    const spy = stubApi() // the default four items
+    const view = render(<ItemsScreen restocks={0} />) // the screen
+    await screen.findByText('Knot Tying') // the rows have loaded
+    await act(async () => undefined) // the meta answer too
+    view.rerender(<ItemsScreen restocks={1} />) // a restock
+    await waitFor(() => expect(pageUrls(spy)).toHaveLength(2)) // reloaded without waiting
+  })
+
+  it('applies a picture saved during a save only after the save, onto the saved row, with the new picture key and time', async () => { // the picture update waits
+    // catches: a picture copy applied mid-save that reverts the saved status, or a save answer that rolls back the picture key and time
     let release: (response: Response) => void = () => undefined // finishes the save
     stubApi({
       changes: () => new Promise<Response>((resolve) => (release = resolve)), // the save waits
@@ -1469,7 +1540,85 @@ describe('a picture saved while an item save runs', () => { // two writes to one
     let saving: Promise<void> = Promise.resolve() // the running save
     act(() => { saving = result.current.save() }) // starts the save
     await act(async () => void (await result.current.uploadItemPicture(knot, new Blob(['x'])))) // the picture answers first
-    await act(async () => { release(Response.json({ items: [{ ...rows[2], status: 'hidden', modifiedAt: '2026-11-07T01:00:00.000Z' }] })); await saving }) // then the save's older-stamped answer
-    expect(result.current.pages.rows[2].status).toBe('hidden') // D1 holds Hidden, so the row must show it
+    expect(result.current.pages.rows[2].image).toBe(knot.image) // the picture update waits for the save
+    await act(async () => { release(Response.json({ items: [{ ...rows[2], status: 'hidden', modifiedAt: '2026-11-07T01:00:00.000Z' }] })); await saving }) // then the save's answer
+    await waitFor(() => expect(result.current.pages.rows[2].image).toBe('items/knot-tying-1a2b3c4d.webp')) // the picture shows once the save has ended
+    expect(result.current.pages.rows[2].status).toBe('hidden') // the saved edit is kept
+    expect(result.current.pages.rows[2].modifiedAt).toBe('2026-11-07T02:00:00.000Z') // with the picture's newer change time
+  })
+
+  it('drops a reload that is still running when Save is clicked again, so the saved row stays', async () => { // a pre-write read must not land after the save's answer
+    // catches: a reload that read D1 before the second save's write and lands after its answer, showing the old value unflagged with nothing pending
+    const wrote = '2026-11-07T01:00:00.000Z' // when the second save writes
+    let saves = 0 // how many saves were sent
+    let lists = 0 // how many list requests were made
+    let releaseFirst: (response: Response) => void = () => undefined // answers the first save
+    let releaseOldReload: (response: Response) => void = () => undefined // answers the reload that read before the write
+    const spy = stubApi({ // the stub with held answers
+      changes: () => { // answers each save
+        saves += 1 // counted
+        if (saves === 1) return new Promise<Response>((resolve) => (releaseFirst = resolve)) // the first save waits
+        return Response.json({ items: [{ ...rows[2], status: 'hidden', modifiedAt: wrote }] }) // the second save writes Hidden
+      },
+      pages: () => { // answers each list request
+        lists += 1 // counted
+        if (lists === 1) return pageOf(rows) // the first load
+        if (lists === 2) return new Promise<Response>((resolve) => (releaseOldReload = resolve)) // the queued reload, held: it read before the second write
+        return pageOf(rows.map((row) => (row.id === 'knot-tying' ? { ...row, status: 'hidden', modifiedAt: wrote } : row))) // a reload after the write
+      },
+    }) // the stub is set
+    const view = render(<ItemsScreen restocks={0} />) // the screen
+    await screen.findByText('Knot Tying') // the rows have loaded
+    await act(async () => undefined) // the meta answer too
+    hideKnot() // pending: Hidden
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // the first save
+    await waitFor(() => expect(postBodies(spy)).toHaveLength(1)) // it went out
+    view.rerender(<ItemsScreen restocks={1} />) // a restock during it, queued
+    await act(async () => releaseFirst(Response.json({}, { status: 500 }))) // the first save fails
+    await waitFor(() => expect(lists).toBe(2)) // the queued reload started and is held
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // Save again while the reload is out
+    await waitFor(() => expect(postBodies(spy)).toHaveLength(2)) // the second save went out
+    await screen.findByText('Saved 1 change.') // and was answered
+    await act(async () => releaseOldReload(pageOf(rows))) // the reload that read before the write answers late, with the old row
+    await waitFor(() => expect(lists).toBe(3)) // a reload after the write ran instead
+    expect(screen.getByRole('switch', { name: 'Active: Knot Tying' })).toHaveAttribute('aria-checked', 'false') // the saved status shows
+  })
+
+  it('keeps the later change time when a queued picture update is older than the save that ended', async () => { // the save was written after the picture
+    // catches: a queued picture update that sets the row's change time back to the picture's older time
+    let release: (response: Response) => void = () => undefined // finishes the save
+    stubApi({ // the stub with a held save
+      changes: () => new Promise<Response>((resolve) => (release = resolve)), // the save waits
+      picture: () => Response.json({ item: { ...rows[2], image: 'items/knot-tying-1a2b3c4d.webp', modifiedAt: '2026-11-07T01:00:00.000Z' } }), // the picture was written first
+    }) // the stub is set
+    const { result } = renderHook(() => useAdminItems()) // the hook
+    await waitFor(() => expect(result.current.pages.rows).toHaveLength(4)) // the rows have loaded
+    const knot = result.current.pages.rows[2] // Knot Tying as listed
+    act(() => result.current.setStatus(knot, 'hidden')) // pending: Hidden
+    let saving: Promise<void> = Promise.resolve() // the running save
+    act(() => { saving = result.current.save() }) // starts the save
+    await act(async () => void (await result.current.uploadItemPicture(knot, new Blob(['x'])))) // the picture answers first
+    await act(async () => { release(Response.json({ items: [{ ...rows[2], status: 'hidden', modifiedAt: '2026-11-07T02:00:00.000Z' }] })); await saving }) // then the save, written later
+    await waitFor(() => expect(result.current.pages.rows[2].image).toBe('items/knot-tying-1a2b3c4d.webp')) // the picture shows
+    expect(result.current.pages.rows[2].modifiedAt).toBe('2026-11-07T02:00:00.000Z') // the later change time stays
+  })
+
+  it('reloads after the save when a picture conflict arrived during it', async () => { // a queued picture 409 also queues a reload
+    // catches: a queued picture conflict that puts rows read before the save's write over the saved row, with no reload to correct them
+    let release: (response: Response) => void = () => undefined // finishes the save
+    const spy = stubApi({ // the stub with held answers
+      changes: () => new Promise<Response>((resolve) => (release = resolve)), // the save waits
+      picture: () => Response.json({ error: 'conflict', items: [rows[2]], deletedIds: [] }, { status: 409 }), // another admin changed the row
+    }) // the stub is set
+    const { result } = renderHook(() => useAdminItems()) // the hook
+    await waitFor(() => expect(result.current.pages.rows).toHaveLength(4)) // the rows have loaded
+    const knot = result.current.pages.rows[2] // Knot Tying as listed
+    act(() => result.current.setStatus(knot, 'hidden')) // pending: Hidden
+    let saving: Promise<void> = Promise.resolve() // the running save
+    act(() => { saving = result.current.save() }) // starts the save
+    await act(async () => void (await result.current.uploadItemPicture(knot, new Blob(['x'])))) // the picture conflicts during the save
+    expect(pageUrls(spy)).toHaveLength(1) // nothing reloads mid-save
+    await act(async () => { release(Response.json({ items: [{ ...rows[2], status: 'hidden', modifiedAt: '2026-11-07T01:00:00.000Z' }] })); await saving }) // the save's answer
+    await waitFor(() => expect(pageUrls(spy)).toHaveLength(2)) // one reload after it
   })
 })

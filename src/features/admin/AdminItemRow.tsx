@@ -47,7 +47,7 @@ export function AdminItemRow({
   return (
     // A white card; a pending row also gets an oxblood edge on its start side, so the state is never colour alone (the Changed label says it too).
     <li
-      className={`bg-bg-surface border-border-subtle rounded-card flex flex-wrap items-center gap-x-3 gap-y-1 border p-3 md:flex-nowrap md:gap-x-4 ${changed ? 'shadow-[inset_4px_0_0_var(--color-accent)]' : ''}`} // one line from 768 px
+      className={`bg-bg-surface border-border-subtle rounded-card flex flex-wrap items-center gap-x-3 gap-y-1 border p-3 md:gap-x-4 ${changed ? 'shadow-[inset_4px_0_0_var(--color-accent)]' : ''}`} // one line from 768 px, wrapping only for the flag's own full-width line
     >
       {/* After a refused save: the note, and what the item holds now, above the row's own values. */}
       {conflict !== undefined && (

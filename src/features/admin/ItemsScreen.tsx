@@ -67,7 +67,7 @@ export function ItemsScreen({
   const saving = saveState === 'saving' // a save is running
   useEffect(() => onPendingCount?.(count), [count, onPendingCount]) // the tab bar learns each change
   const seenRestocks = useRef(restocks) // the count the list was last loaded for
-  const { retry: reloadList } = pages // loads the first page again with the applied filters
+  const { reloadList } = items // loads the first page again with the applied filters, after a running save if there is one
   // Loads the first page again when a cancel has put stock back; the first render and an unchanged count do nothing.
   useEffect(() => { // runs after each render where the restock count may have changed
     if (restocks === seenRestocks.current) return // nothing new
@@ -268,7 +268,12 @@ export function ItemsScreen({
       )}
       {/* The end of the list. */}
       {hasRows && !changesView && pageState !== 'error' && pageState !== 'signed-out' && (
-        <LoadMore state={pageState} hasMore={pages.hasMore} onLoad={() => void pages.loadMore()} />
+        <LoadMore
+          state={pageState} // where the page fetch stands
+          hasMore={pages.hasMore} // whether a next page exists
+          onLoad={() => void pages.loadMore()} // loads the next page
+          locked={saving} // dead while a save runs, like the list above
+        />
       )}
       {/* The dock: the note stacked 12 px over the pill; the note's region stays mounted so screen readers hear it appear. */}
       <div className={PILL_DOCK}>
