@@ -6,10 +6,10 @@ import { CategoryIcon } from './CategoryIcon.tsx' // draws the icon
 /**
  * Draws the mark of one category.
  * @param category exact category name; an unknown one gets the default mark
- * @param size 'row' for a 56 px square with a 28 px icon (the default), 'card' for 112 px and 48 px
+ * @param size 'row' for a 56 px square with a 28 px icon (the default), 'card' for 112 px and 48 px, 'small' for 44 px and 24 px
  * @return a square with a hairline border and an icon
  */
-export function CategoryMark({ category, size = 'row' }: { category: string; size?: 'row' | 'card' }) {
+export function CategoryMark({ category, size = 'row' }: { category: string; size?: 'row' | 'card' | 'small' }) { // the mark's category and size
   const { icon, background, foreground } = categoryMark(category) // hex colours from the one map
   return (
     // Inline style because the colours are data, the same in light and dark mode; the border token changes with the mode.
@@ -18,10 +18,10 @@ export function CategoryMark({ category, size = 'row' }: { category: string; siz
       aria-hidden="true"
       style={{ backgroundColor: background, color: foreground }}
       // Square size and icon size follow the card or row size.
-      className={`border-category-mark-border flex ${size === 'card' ? 'size-28' : 'size-14'} shrink-0 items-center justify-center rounded-md border`}
+      className={`border-category-mark-border flex ${size === 'card' ? 'size-28' : size === 'small' ? 'size-11' : 'size-14'} shrink-0 items-center justify-center rounded-md border`}
     >
-      {/* The category's icon, 48 px on a card, 28 px in a row. */}
-      <CategoryIcon name={icon} className={size === 'card' ? 'size-12' : 'size-7'} />
+      {/* The category's icon, 48 px on a card, 24 px small, 28 px in a row. */}
+      <CategoryIcon name={icon} className={size === 'card' ? 'size-12' : size === 'small' ? 'size-6' : 'size-7'} />
     </div>
   )
 }

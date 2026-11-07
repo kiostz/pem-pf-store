@@ -45,6 +45,27 @@ describe('StockStepper', () => {
     expect(onChange.mock.calls).toEqual([[12], [20]])
   })
 
+  it('commits a typed number on Enter and never submits a wrapping form', () => {
+    // Enter in the stock field
+    // catches: Enter submitting the Item sheet's form before the typed stock is committed.
+    const onChange = vi.fn() // records the committed stock
+    const onSubmit = vi.fn((event: React.SyntheticEvent) => event.preventDefault()) // runs only if the form submits
+    // Draw the stepper inside a form with a submit button, as the Item sheet does.
+    render(
+      // A form around the stepper and a submit button, like the Item sheet.
+      <form onSubmit={onSubmit}>
+        {/* The stepper, then a submit button. */}
+        <StockStepper itemName="Knot Tying" stock={12} onChange={onChange} />
+        <button type="submit">Done</button>
+      </form>,
+    ) // the stepper inside a form
+    const input = screen.getByRole('textbox', { name: 'Stock of Knot Tying' }) // the stock number field
+    fireEvent.change(input, { target: { value: '7' } }) // type 7 without committing it yet
+    if (fireEvent.keyDown(input, { key: 'Enter' })) (input as HTMLInputElement).form?.requestSubmit() // jsdom has no implicit submit, so do what a browser does when keydown was not prevented
+    expect(onSubmit).not.toHaveBeenCalled() // the form never submitted
+    expect(onChange).toHaveBeenCalledWith(7) // Enter committed the typed number
+  })
+
   it('clamps 12000 to 9,999 and ignores letters', () => {
     // Catches stock above the Worker's limit being sent, or letters reaching the number.
     const onChange = vi.fn()

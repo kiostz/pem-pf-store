@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react' // the dialog element, focus
 import { PatchPicture } from '@/shared/ui/PatchPicture.tsx' // the current picture or its Category mark
 import type { AdminItem, NewItem } from '../../../workers/admin/src/admin-types.ts' // the row and the new item
 import { ACTION_BOX } from '@/shared/ui/button-box.ts' // the shared 44 px pill action
+import { StockStepper } from './StockStepper.tsx' // the Stock field
 import { SIGNED_OUT_NOTE } from './admin-api.ts' // the 403 line
 import { formatAdminTime } from './admin-dates.ts' // the times in Malaysia
 import { FIELD_BOX, SHEET_BOX, SOFT_BUTTON } from './admin-boxes.ts' // shared shapes
@@ -75,7 +76,7 @@ export function ItemSheet({
   currency: string // the ISO code
   defaultPriceCents: number // the starting price of an added item
   isNameTaken?: (name: string) => boolean // another item has it
-  onDone: (values: { name: string; category: string; priceCents: number }) => void // an edit confirmed
+  onDone: (values: { name: string; category: string; priceCents: number; stock: number }) => void // an edit confirmed
   onAdd: (item: NewItem) => Promise<AddOutcome> // an add
   onDelete: (item: AdminItem) => Promise<DeleteOutcome> // a delete
   onPicture: (item: AdminItem, picture: Blob) => Promise<PictureOutcome> // a picture save
@@ -89,6 +90,7 @@ export function ItemSheet({
   const [priceText, setPriceText] = useState(
     formatPriceInput(mode === 'edit' ? (pending?.priceCents ?? item!.priceCents) : defaultPriceCents),
   ) // the price draft
+  const [stock, setStock] = useState(mode === 'edit' ? (pending?.stock ?? item!.stock) : 0) // the stock draft, used in Edit only
   const [errors, setErrors] = useState<{ name?: string; category?: string; price?: string; form?: string }>({}) // the lines to show
   const [adding, setAdding] = useState(false) // an Add is running
   const [confirming, setConfirming] = useState(false) // the Delete dialog is open
@@ -147,7 +149,7 @@ export function ItemSheet({
     } // every line
     setErrors(next) // shown
     if (next.name || next.category || next.price || checked.name === null || !price.ok) return null // something to fix
-    return { name: checked.name, category, priceCents: price.cents } // clean
+    return { name: checked.name, category, priceCents: price.cents, stock } // clean
   }
 
   /**
@@ -160,13 +162,13 @@ export function ItemSheet({
     const values = validate() // the clean values
     if (values === null) return // a line is showing
     if (mode === 'edit') {
-      onDone(values) // the pending list takes it
+      onDone(values) // the pending list takes it, stock included
       onClose() // the sheet goes
       return // nothing to send: an edit waits for Save
     }
     busy.current = true // a second click is ignored
     setAdding(true) // the button says so
-    const outcome = await onAdd(values) // the one request
+    const outcome = await onAdd({ name: values.name, category: values.category, priceCents: values.priceCents }) // the one request; a new item has no stock to send
     busy.current = false // free again
     setAdding(false) // the button is back
     if (outcome === 'added') return onClose() // the sheet goes
@@ -444,6 +446,14 @@ export function ItemSheet({
                 </p>
               )}
             </div>
+            {/* The Stock stepper, Edit only; Enter inside it commits and does not submit. */}
+            {/* Shown for an existing item only. */}
+            {mode === 'edit' && item !== undefined && (
+              <div>
+                <p className="mb-1 text-sm font-medium">Stock</p> {/* the section's label */}
+                <StockStepper itemName={name || item.name} stock={stock} onChange={setStock} /> {/* the number */}
+              </div>
+            )}
           </div>
           {/* The times of an existing item, or what an Add starts with. */}
           {mode === 'edit' && item !== undefined ? (

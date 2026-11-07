@@ -60,7 +60,11 @@ export function StockStepper({
         onFocus={(event) => event.target.select()} // typing replaces the number
         onChange={(event) => setDraft(event.target.value.replace(/\D/g, '')) /* digits only */}
         onBlur={commit} // leaving commits
-        onKeyDown={(event) => event.key === 'Enter' && commit()} // Enter commits
+        onKeyDown={(event) => { // Enter commits and never submits a wrapping form
+          if (event.key !== 'Enter') return // only Enter
+          event.preventDefault() // a wrapping form must not submit
+          commit() // Enter commits
+        }}
         className={`${CONTROL_BOX} w-14`} // room for four digits
       />
       {/* Plus: aria-disabled at the limit, and the label says why. */}

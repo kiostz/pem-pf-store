@@ -65,8 +65,79 @@ describe('Edit sheet', () => {
     fireEvent.change(screen.getByLabelText('Price (RM)'), { target: { value: '5.5' } })
     fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Nature' } })
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-    expect(spies.onDone).toHaveBeenCalledWith({ name: 'Knots', category: 'Nature', priceCents: 550 })
+    expect(spies.onDone).toHaveBeenCalledWith({ name: 'Knots', category: 'Nature', priceCents: 550, stock: 12 }) // Done hands back the edits and the unchanged stock
     expect(spies.onClose).toHaveBeenCalled()
+  })
+
+  it('shows a Stock stepper at the item stock, or at the pending stock', () => { // stock in the Item sheet
+    // catches: a stepper that starts from the stored number when an edit is pending.
+    openSheet() // Knot Tying with nothing pending, stock 12
+    expect(screen.getByRole('group', { name: 'Stock of Knot Tying' })).toBeInTheDocument() // the stepper is in the sheet
+    expect(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })).toHaveValue('12') // starts at the stored stock
+    cleanup() // a fresh sheet
+    openSheet({ pending: { stock: 5 } }) // an unsaved stock of 5
+    expect(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })).toHaveValue('5') // starts at the pending stock
+  })
+
+  it('hands one more to Done after +, keeps 0 at minus, and clamps a typed number to 9,999', () => { // stock in the Item sheet
+    // catches: a stepper that does not reach Done, goes negative, or passes a number the Worker refuses.
+    const plus = openSheet() // stock 12
+    fireEvent.click(screen.getByRole('button', { name: 'One more' })) // + once
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // hand the draft back
+    expect(plus.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 13 })) // 12 + 1
+    cleanup() // a fresh sheet
+    const minus = openSheet({ item: { ...knot, stock: 0 } }) // stock 0
+    fireEvent.click(screen.getByRole('button', { name: "Stock can't go below 0" })) // minus at the floor
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // hand the draft back
+    expect(minus.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 0 })) // still 0
+    cleanup() // a fresh sheet
+    const big = openSheet() // stock 12
+    const field = screen.getByRole('textbox', { name: 'Stock of Knot Tying' }) // the number field
+    fireEvent.change(field, { target: { value: '123456' } }) // far above the limit
+    fireEvent.blur(field) // commit by leaving the field
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // hand the draft back
+    expect(big.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 9999 })) // clamped to the Worker's limit
+  })
+
+  it('passes a typed 7 to Done without Enter, because the click blurs the field first', () => { // stock in the Item sheet
+    // catches: a typed but uncommitted stock being dropped by Done.
+    const spies = openSheet() // stock 12
+    const field = screen.getByRole('textbox', { name: 'Stock of Knot Tying' }) // the number field
+    fireEvent.change(field, { target: { value: '7' } }) // type 7, no Enter
+    fireEvent.blur(field) // what a real click on Done does first
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // hand the draft back
+    expect(spies.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 7 })) // the typed 7 arrived
+  })
+
+  it('commits a typed 7 on Enter without closing the sheet, and Done then passes 7', () => { // stock in the Item sheet
+    // catches: Enter in the Stock field submitting the form with the old stock.
+    const spies = openSheet() // stock 12
+    const field = screen.getByRole('textbox', { name: 'Stock of Knot Tying' }) // the number field
+    fireEvent.change(field, { target: { value: '7' } }) // type 7
+    if (fireEvent.keyDown(field, { key: 'Enter' })) (field as HTMLInputElement).form?.requestSubmit() // jsdom has no implicit submit, so do what a browser does when keydown was not prevented
+    expect(spies.onDone).not.toHaveBeenCalled() // Enter did not submit the form
+    expect(spies.onClose).not.toHaveBeenCalled() // the sheet is still open
+    expect(field).toHaveValue('7') // the field shows the committed number
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // now hand the draft back
+    expect(spies.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 7 })) // Done passes the 7
+  })
+
+  it('restores the earlier stock when the field is cleared, and Done passes it unchanged', () => { // stock in the Item sheet
+    // catches: an emptied field zeroing the stock.
+    const spies = openSheet() // stock 12
+    const field = screen.getByRole('textbox', { name: 'Stock of Knot Tying' }) // the number field
+    fireEvent.change(field, { target: { value: '' } }) // clear it
+    fireEvent.blur(field) // commit by leaving the field
+    expect(field).toHaveValue('12') // the earlier stock came back
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // hand the draft back
+    expect(spies.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 12 })) // unchanged
+  })
+
+  it('has no Stock stepper in Add, and keeps the start line', () => { // stock in the Item sheet
+    // catches: a stepper on a new item, which always starts at 0.
+    openSheet({ mode: 'add', item: undefined }) // the Add sheet
+    expect(screen.queryByRole('group', { name: /Stock of/ })).toBeNull() // no stepper
+    expect(screen.getByText('New items start Hidden with 0 in stock.')).toBeInTheDocument() // the fixed start line
   })
 
   it('changes nothing when closed with Escape or the Close button', () => {

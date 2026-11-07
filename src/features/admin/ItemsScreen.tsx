@@ -169,8 +169,8 @@ export function ItemsScreen({
             <div
               key={index}
               data-testid="admin-skeleton-row"
-              className="bg-border-subtle animate-skeleton rounded-card h-36 motion-reduce:animate-none md:h-22.5"
-            /> // a row's height at 375 px (144) and from 768 px (90)
+              className="bg-border-subtle animate-skeleton rounded-card h-34.5 motion-reduce:animate-none md:h-17.5" // 138 px at 375 px, 70 px from 768 px
+            /> // a row's height at 375 px (138) and from 768 px (70)
           ))}
         </div>
       )}
@@ -232,9 +232,8 @@ export function ItemsScreen({
               conflict={conflicts[row.id]} // its flag
               currency={currency} // for the price
               now={now} // for the date
-              onOpen={() => setSheet({ mode: 'edit', id: row.id })} // the Item sheet
+              onEdit={() => setSheet({ mode: 'edit', id: row.id })} // the Item sheet
               onStatus={(next) => items.setStatus(row, next)} // a status edit
-              onStock={(next) => items.setStock(row, next)} // a stock edit
             />
           ))}
         </ul>

@@ -76,4 +76,30 @@ describe('PatchPicture', () => {
     expect(container.querySelector('img')).toBeNull()
     expect(screen.getByTestId('category-mark')).toBeInTheDocument()
   })
+
+  it('draws a 44 px picture box at the small size', () => { // the admin row's size
+    // catches: the admin row keeping the 56 px box and growing taller
+    const { container } = render(<PatchPicture item={item('items/knot-tying.webp')} size="small" pictureBase="/pictures" />) // a small picture
+    const img = container.querySelector('img')! // the picture
+    expect(img).toHaveAttribute('width', '44') // reserved width
+    expect(img).toHaveAttribute('height', '44') // reserved height
+    expect(img).toHaveClass('size-11') // drawn at 44 px
+  })
+
+  it('draws a 44 px mark with a 24 px icon at the small size, and keeps 56 px as the default', () => { // both marks
+    // catches: a small mark that stays 56 px, or a default that changed
+    const small = render(<PatchPicture item={item(null)} size="small" />) // the small mark
+    expect(screen.getByTestId('category-mark')).toHaveClass('size-11') // 44 px square
+    expect(screen.getByTestId('category-mark').querySelector('svg')).toHaveClass('size-6') // 24 px icon
+    small.unmount() // fresh render
+    render(<PatchPicture item={item(null)} />) // the default mark
+    expect(screen.getByTestId('category-mark')).toHaveClass('size-14') // the default is 56 px
+  })
+
+  it('falls back to the small mark when a small picture fails', () => { // failure path at the small size
+    // catches: a broken image or a 56 px mark in the row after a 404
+    const { container } = render(<PatchPicture item={item('items/knot-tying.webp')} size="small" />) // a small picture that fails
+    fireEvent.error(container.querySelector('img')!) // the browser could not load it
+    expect(screen.getByTestId('category-mark')).toHaveClass('size-11') // the fallback keeps the small size
+  })
 })
