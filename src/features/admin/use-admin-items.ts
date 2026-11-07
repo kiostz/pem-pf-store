@@ -241,9 +241,15 @@ export function useAdminItems() {
     const sent = countChanges(sentPending) // for the note
     const result = await sendItemChanges(toItemChanges(sentPending)) // the one request
     if (result.kind === 'saved') {
-      const seen = mergeSaved(sentPending, result.items) // the saved fields and times only
+      const sentNow = Object.fromEntries( // the sent entries rebuilt on the newest snapshots
+        Object.entries(sentPending).flatMap(([id, entry]) => { // each row that was sent
+          const current = pendingRef.current[id] // the row's entry now: a reload that landed during the save moved its snapshot
+          return current === undefined ? [] : [[id, { ...entry, seen: current.seen }]] // the sent edits on the newest snapshot; a row no edit remains on takes the answer as it is
+        }),
+      ) // so the save's old values never overwrite a newer reloaded row
+      const seen = mergeSaved(sentNow, result.items) // the saved fields and times only
       commitPending(applySaved(pendingRef.current, seen)) // what was written is no longer pending; edits made during the save stay
-      pages.applyRows(seen) // the saved rows stay in place until the next fetch
+      pages.applyRows(seen, true) // the saved rows stay in place until the next fetch, unless a reload already holds a row at least as recent
       setConflicts({}) // conflict flags have been dealt with
       const savedIds = result.items.map((row) => row.id) // the rows this save answered for
       setStaleFlags((current) => ({

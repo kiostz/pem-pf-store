@@ -62,16 +62,19 @@ type Message = { text: string; failed?: boolean }
  * Draws the order.
  * @param order the order as listed
  * @param onChanged called with the order the Worker returns after a change or a conflict
+ * @param onRestocked called once after a cancel whose answer put items back in stock
  * @param defaultOpen true to start open (the order a link or a lookup found)
  * @return a list item
  */
 export function OrderRow({
   order,
   onChanged,
+  onRestocked, // the restock callback
   defaultOpen = false,
 }: {
   order: AdminOrder // the order
   onChanged: (order: AdminOrder) => void // the newer order
+  onRestocked?: () => void // stock went back
   defaultOpen?: boolean // starts open
 }) {
   const panel = useId() // the disclosure's target
@@ -147,6 +150,7 @@ export function OrderRow({
             ? `Order cancelled. ${result.restocked} ${result.restocked === 1 ? 'item' : 'items'} put back in stock.`
             : 'Order cancelled.',
       }) // what went back
+      if (result.restocked > 0) onRestocked?.() // the Items list learns its stock moved
     } else if (result.kind === 'conflict') {
       refocus.current = true // focus lands on the row header
       setCancelling(false) // the dialog closes: the order changed

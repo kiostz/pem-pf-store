@@ -1,6 +1,6 @@
 // Tests for the Orders screen with fetch stubbed at the boundary: the filter, the lookup, every list state and its copy, and the email-Off note.
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react' // rendering and events
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react' // rendering and events
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
 import type { AdminOrder } from '../../../workers/admin/src/admin-types.ts' // the order shape
 import { OrdersScreen } from './OrdersScreen.tsx' // the code under test
@@ -205,5 +205,37 @@ describe('OrdersScreen', () => {
     expect(screen.getByRole('link', { name: 'All orders' })).toHaveAttribute('href', '#/orders')
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
     expect(urls.some((url) => url.startsWith('/api/orders'))).toBe(false)
+  })
+
+  /**
+   * Cancels the one open order with restock through its dialog.
+   * @param number the order number on the row
+   */
+  async function cancelOpenOrder(number: string) { // cancels the opened order with restock
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(number) })) // open the row
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel order' })) // the dialog
+    const dialog = screen.getByRole('dialog', { hidden: true }) // its box
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel order' })) // confirm
+    await screen.findByText(/^Order cancelled/) // answered
+  }
+
+  it('reports onRestocked after a restocking cancel in the list', async () => { // a cancel in the list reaches the shell
+    // catches: a list that drops the restock news before it reaches the shell
+    const onRestocked = vi.fn() // the spy
+    stubApi((url) => (url.startsWith('/api/orders/step') ? Response.json({ order: orderAt('PF-20261105-AAAA', 'cancelled'), restocked: 2 }) : pageOf(orders))) // answers set for this case
+    render(<OrdersScreen number={null} onRestocked={onRestocked} />) // the screen
+    await cancelOpenOrder('PF-20261105-AAAA') // the cancel
+    expect(onRestocked).toHaveBeenCalledTimes(1) // called once
+  })
+
+  it('reports onRestocked after a restocking cancel in a lookup', async () => { // a cancel in a number lookup reaches the shell
+    // catches: a lookup screen that does not pass the callback down
+    const onRestocked = vi.fn() // the spy
+    stubApi((url) => (url.startsWith('/api/orders/step') ? Response.json({ order: orderAt('PF-20261105-ABCD', 'cancelled'), restocked: 1 }) : pageOf([orderAt('PF-20261105-ABCD', 'new')]))) // answers set for this case
+    render(<OrdersScreen number="PF-20261105-ABCD" onRestocked={onRestocked} />) // the screen
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel order' })) // the lookup row is already open
+    fireEvent.click(within(screen.getByRole('dialog', { hidden: true })).getByRole('button', { name: 'Cancel order' })) // confirm
+    await screen.findByText(/^Order cancelled/) // answered
+    expect(onRestocked).toHaveBeenCalledTimes(1) // called once
   })
 })

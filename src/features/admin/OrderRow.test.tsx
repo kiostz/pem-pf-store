@@ -25,12 +25,14 @@ function stubStep(handler: (body: Record<string, unknown>) => Response | Promise
  * Renders the row inside a list.
  * @param value the order
  * @param onChanged the callback
+ * @param onRestocked called after a cancel that put stock back
  * @return the render result
  */
-const renderRow = (value = order, onChanged = vi.fn()) =>
+const renderRow = (value = order, onChanged = vi.fn(), onRestocked = vi.fn()) => // renders the row in a list
   render(
     <ul>
-      <OrderRow order={value} onChanged={onChanged} />
+      {/* the row, with the spy for a restocking cancel */}
+      <OrderRow order={value} onChanged={onChanged} onRestocked={onRestocked} />
     </ul>,
   )
 
@@ -217,6 +219,65 @@ describe('OrderRow', () => {
     await act(async () => undefined) // the request has reached the stub
     release(Response.json({ order: orderAt('PF-20261105-AAAA', 'cancelled'), restocked: 3 }))
     expect(await screen.findByText('Order cancelled. 3 items put back in stock.')).toBeInTheDocument()
+  })
+
+  it('calls onRestocked once for a cancel answered with restocked 2', async () => { // a restocking cancel is reported once
+    // catches: a cancel that put stock back without telling the Items list
+    const onRestocked = vi.fn() // the spy
+    stubStep(() => Response.json({ order: orderAt('PF-20261105-AAAA', 'cancelled'), restocked: 2 })) // two went back
+    renderRow(order, vi.fn(), onRestocked) // the row
+    fireEvent.click(within(openDialog()).getByRole('button', { name: 'Cancel order' })) // confirms the cancel in the dialog
+    expect(await screen.findByText('Order cancelled. 2 items put back in stock.')).toBeInTheDocument() // the cancel finished
+    expect(onRestocked).toHaveBeenCalledTimes(1) // called once
+  })
+
+  it('does not call onRestocked for a cancel with restocked 0', async () => { // a cancel with nothing put back is not reported
+    // catches: a reload after a cancel that changed no stock
+    const onRestocked = vi.fn() // the spy
+    stubStep(() => Response.json({ order: orderAt('PF-20261105-AAAA', 'cancelled'), restocked: 0 })) // nothing went back
+    renderRow(order, vi.fn(), onRestocked) // the row
+    fireEvent.click(within(openDialog()).getByRole('button', { name: 'Cancel order' })) // confirms the cancel in the dialog
+    expect(await screen.findByText('Order cancelled.')).toBeInTheDocument() // the cancel finished
+    expect(onRestocked).not.toHaveBeenCalled() // not called
+  })
+
+  it('does not call onRestocked for a step change', async () => { // a plain step change is not reported
+    // catches: the callback firing on any changed answer, not only a restocking cancel
+    const onRestocked = vi.fn() // the spy
+    stubStep(() => Response.json({ order: orderAt('PF-20261105-AAAA', 'paid'), restocked: 0 })) // a plain step
+    renderRow(order, vi.fn(), onRestocked) // the row
+    fireEvent.click(screen.getByRole('button', { name: /PF-20261105-AAAA/ })) // opens the row
+    fireEvent.change(screen.getByLabelText('Step'), { target: { value: 'paid' } }) // picks Paid
+    expect(await screen.findByText('Step saved.')).toBeInTheDocument() // the step finished
+    expect(onRestocked).not.toHaveBeenCalled() // not called
+  })
+
+  it.each([ // the three failing answers
+    ['a conflict', () => Response.json({ error: 'conflict', order: orderAt('PF-20261105-AAAA', 'cancelled') }, { status: 409 })], // a failing answer
+    ['a 500', () => Response.json({}, { status: 500 })], // a failing answer
+    ['a 403', () => Response.json({}, { status: 403 })], // a failing answer
+  ])('does not call onRestocked after %s', async (_name, answer) => { // runs once per failing answer
+    // catches: a reload after a cancel that never restocked
+    const onRestocked = vi.fn() // the spy
+    const spy = stubStep(answer) // the failing answer
+    renderRow(order, vi.fn(), onRestocked) // the row
+    fireEvent.click(within(openDialog()).getByRole('button', { name: 'Cancel order' })) // confirms the cancel in the dialog
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1)) // called once
+    await act(async () => undefined) // the answer is handled
+    expect(onRestocked).not.toHaveBeenCalled() // not called
+  })
+
+  it('calls onRestocked once for a double click on Cancel order', async () => { // two clicks send and report one cancel
+    // catches: two reloads from one double click
+    const onRestocked = vi.fn() // the spy
+    const spy = stubStep(() => Response.json({ order: orderAt('PF-20261105-AAAA', 'cancelled'), restocked: 3 })) // three went back
+    renderRow(order, vi.fn(), onRestocked) // the row
+    const confirm = within(openDialog()).getByRole('button', { name: 'Cancel order' }) // confirms the cancel
+    fireEvent.click(confirm) // the first click sends the cancel
+    fireEvent.click(confirm) // the second click lands while it is in flight and sends nothing
+    expect(await screen.findByText('Order cancelled. 3 items put back in stock.')).toBeInTheDocument() // the cancel finished
+    expect(spy).toHaveBeenCalledTimes(1) // called once
+    expect(onRestocked).toHaveBeenCalledTimes(1) // called once
   })
 
   it('keeps the dialog open with a failure line when the cancel fails', async () => {

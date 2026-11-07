@@ -1,6 +1,6 @@
 // The admin Items screen: Add item, search, category and sort over D1 in pages, one row each with its status and stock, Load more, the Item sheet, and the Save pill and notes at the bottom, with its loading, error, empty and signed-out states.
 
-import { useEffect, useState } from 'react' // which sheet is open, and the pending count report
+import { useEffect, useRef, useState } from 'react' // which sheet is open, the pending count report, and the restock count last seen
 import type { AdminItem, AdminMeta, PriceSettings } from '../../../workers/admin/src/admin-types.ts' // the saved currency and price
 import { PILL_ACTION, PILL_DOCK, PILL_NOTE } from '@/shared/ui/floating-pill-box.ts' // the floating pill's dock and note shapes
 import { AdminItemRow } from './AdminItemRow.tsx' // one row
@@ -45,16 +45,19 @@ function subcategoryName(row: AdminItem, edits: ItemEdits | undefined, subcatego
  * @param pictureDeps the decoder and canvas factory a picture resize uses; the browser's own when omitted
  * @param onPendingCount told how many edited fields wait, each time that changes (the tab bar's dot)
  * @param prices the currency and default price just saved on Settings, laid over what /api/meta gave
+ * @param restocks how many cancels have put stock back; each rise loads the first page again
  * @return the toolbar, the rows with Load more, the sheet, and the Save pill with its notes
  */
 export function ItemsScreen({
   pictureDeps,
   onPendingCount,
   prices,
+  restocks = 0, // the restock count
 }: {
   pictureDeps?: ResizeDeps
   onPendingCount?: (count: number) => void
   prices?: PriceSettings | null
+  restocks?: number // the restock count
 }) {
   const items = useAdminItems() // the screen's state
   const meta = items.meta === null || !prices ? items.meta : { ...items.meta, ...prices } // a Settings save wins over the first read
@@ -63,6 +66,14 @@ export function ItemsScreen({
   const { pageState, rows, applied } = pages // the list
   const saving = saveState === 'saving' // a save is running
   useEffect(() => onPendingCount?.(count), [count, onPendingCount]) // the tab bar learns each change
+  const seenRestocks = useRef(restocks) // the count the list was last loaded for
+  const { retry: reloadList } = pages // loads the first page again with the applied filters
+  // Loads the first page again when a cancel has put stock back; the first render and an unchanged count do nothing.
+  useEffect(() => { // runs after each render where the restock count may have changed
+    if (restocks === seenRestocks.current) return // nothing new
+    seenRestocks.current = restocks // taken
+    reloadList() // the Worker's new stock; pending edits rebase onto it
+  }, [restocks, reloadList]) // runs when the count changes
   const hasRows = rows.length > 0 // something is listed
   const failedFirst = (pageState === 'error' || pageState === 'signed-out') && !hasRows // the first page never came
   const reloadToSignIn = pageState === 'signed-out' && count === 0 // a reload loses nothing when no edits are pending, rows or not

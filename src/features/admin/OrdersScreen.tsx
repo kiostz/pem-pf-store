@@ -15,9 +15,10 @@ const NUMBER_HINT = 'Enter an order number like PF-20261105-ABCD.' // a bad look
 /**
  * The Orders screen.
  * @param number the order number a link carried, or null for the list
+ * @param onRestocked called after a cancel that put items back in stock
  * @return the filter bar and orders, or a not-found line when the link's number is malformed
  */
-export function OrdersScreen({ number }: { number: string | null }) {
+export function OrdersScreen({ number, onRestocked }: { number: string | null; onRestocked?: () => void }) { // takes the restock callback
   if (number !== null && !isOrderNumber(number))
     return (
       <p>
@@ -27,15 +28,16 @@ export function OrdersScreen({ number }: { number: string | null }) {
         </a>
       </p>
     ) // no request for a number the Worker would refuse
-  return <OrdersList number={number} />
+  return <OrdersList number={number} onRestocked={onRestocked} /> // passes it on
 }
 
 /**
  * The filter bar, the orders with Load more, and the state lines.
  * @param number the valid order number a link carried, or null for the list
+ * @param onRestocked called after a cancel that put items back in stock
  * @return the list screen
  */
-function OrdersList({ number }: { number: string | null }) {
+function OrdersList({ number, onRestocked }: { number: string | null; onRestocked?: () => void }) { // takes the restock callback
   const pages = useOrderPages(number) // the screen's state
   const { rows, pageState } = pages // read often
   const [typed, setTyped] = useState(number ?? '') // the lookup box
@@ -175,6 +177,7 @@ function OrdersList({ number }: { number: string | null }) {
               key={order.number} // stable
               order={order}
               onChanged={pages.replaceOrder} // the newer order
+              onRestocked={onRestocked} // passed up to the shell
               defaultOpen={looking && rows.length === 1} // the one order a lookup found
             />
           ))}

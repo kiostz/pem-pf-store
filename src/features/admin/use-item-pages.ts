@@ -199,10 +199,17 @@ export function useItemPages(
   /**
    * Puts newer rows in place of the listed ones, keeping their positions.
    * @param items the newer rows
+   * @param onlyNewer true to keep a listed row whose change time is not older than the given row's
    */
-  const applyRows = (items: AdminItem[]) => {
+  const applyRows = (items: AdminItem[], onlyNewer = false) => { // replaces listed rows, optionally only with more recent ones
     const byId = new Map(items.map((row) => [row.id, row])) // the new rows
-    setRows((current) => current.map((row) => byId.get(row.id) ?? row)) // replaced where given
+    setRows((current) => // the listed rows
+      current.map((row) => { // each listed row
+        const next = byId.get(row.id) // the row's new values, if given
+        if (next === undefined) return row // not given: stays
+        return onlyNewer && next.modifiedAt <= row.modifiedAt ? row : next // a listed row at least as recent as the answer is kept
+      }),
+    ) // replaced where given
   }
 
   /**

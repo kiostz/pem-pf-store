@@ -1435,4 +1435,19 @@ describe('read-only rows and the Edit button', () => { // the rows and the sheet
     await act(async () => void vi.advanceTimersByTime(300)) // past the 300 ms delay, so the skeleton shows
     expect(screen.getAllByTestId('admin-skeleton-row')[0]).toHaveClass('h-34.5', 'md:h-17.5') // the size classes
   })
+
+  it('loads the first page again with the same filters when the restock count rises, and not on mount', async () => { // the restock reload
+    // catches: a screen that ignores the shell's restock count, or reloads on its first render
+    const spy = stubApi() // the default four items
+    const view = render(<ItemsScreen restocks={0} />) // the screen at count 0
+    await screen.findByText('Knot Tying') // the rows have loaded
+    await act(async () => undefined) // the meta answer too
+    expect(pageUrls(spy)).toHaveLength(1) // only the first load
+    view.rerender(<ItemsScreen restocks={0} />) // the same count again
+    await act(async () => undefined) // settle
+    expect(pageUrls(spy)).toHaveLength(1) // an unchanged count loads nothing
+    view.rerender(<ItemsScreen restocks={1} />) // a cancel restocked
+    await waitFor(() => expect(pageUrls(spy)).toHaveLength(2)) // one more request
+    expect(pageUrls(spy)[1]).toBe(pageUrls(spy)[0]) // the same search, category and sort
+  })
 })

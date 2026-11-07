@@ -20,6 +20,7 @@ const TITLES = { items: 'Items', orders: 'Orders', clubs: 'Clubs', settings: 'Se
 export function AdminApp() {
   const { tab, number } = useAdminRoute() // where the admin is
   const [itemsPending, setItemsPending] = useState(0) // edited fields waiting on Items
+  const [restocks, setRestocks] = useState(0) // cancels that put stock back, counted so Items loads again
   const [prices, setPrices] = useState<PriceSettings | null>(null) // the currency and default price last saved on Settings
   return (
     <>
@@ -41,9 +42,10 @@ export function AdminApp() {
       <main className={`mx-auto max-w-3xl px-4 pt-6 ${tab === 'items' ? 'pb-52' : 'pb-16'}`}>
         {/* Items stays mounted and hidden elsewhere: its edits, leave warning and scroll position stay. */}
         <div hidden={tab !== 'items'}>
-          <ItemsScreen onPendingCount={setItemsPending} prices={prices} />
+          {/* the restock count makes Items load again after a restocking cancel */}
+          <ItemsScreen onPendingCount={setItemsPending} prices={prices} restocks={restocks} />
         </div>
-        {tab === 'orders' && <OrdersScreen key={number ?? ''} number={number} />} {/* mounts fresh on each visit */}
+        {tab === 'orders' && <OrdersScreen key={number ?? ''} number={number} onRestocked={() => setRestocks((count) => count + 1)} />} {/* mounts fresh on each visit */}
         {tab === 'clubs' && <ClubsScreen />} {/* mounts fresh on each visit */}
         {tab === 'settings' && <SettingsScreen onPricesSaved={setPrices} />}
       </main>
