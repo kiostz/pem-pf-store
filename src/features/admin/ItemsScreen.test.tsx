@@ -1,10 +1,11 @@
 // Tests for the admin Items screen with fetch stubbed at the boundary: paging, search, sort, editing in rows and the sheet, saving, conflicts, Add, Delete, failures, leaving, Discard and Undo.
 
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react' // rendering and events
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react' // rendering and events
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
 import type { AdminItem } from '../../../workers/admin/src/admin-types.ts' // the row shape
 import { AdminApp } from './AdminApp.tsx' // the whole page, for the wording check
 import { ItemsScreen } from './ItemsScreen.tsx' // the code under test
+import { useAdminItems } from './use-admin-items.ts' // the hook, for a race the screen cannot start
 import { makeItem, meta, rows } from '@/test/item-fixtures.ts' // shared data
 import type { ResizeDeps } from './resize-picture.ts' // the passed-in browser pieces
 
@@ -1449,5 +1450,26 @@ describe('read-only rows and the Edit button', () => { // the rows and the sheet
     view.rerender(<ItemsScreen restocks={1} />) // a cancel restocked
     await waitFor(() => expect(pageUrls(spy)).toHaveLength(2)) // one more request
     expect(pageUrls(spy)[1]).toBe(pageUrls(spy)[0]) // the same search, category and sort
+  })
+})
+
+describe('a picture saved while an item save runs', () => { // two writes to one row in flight
+  // Not reachable from the screen today (the list is inert during a save and the sheet is modal), so it runs through the hook.
+  it.fails('shows the saved status when the picture answer arrives before an older-stamped save answer', async () => { // the save was written first, the picture second
+    // catches: a save answer older than the picture's change time that is dropped by the "not older" rule, leaving the row at the old status while no edit is pending
+    let release: (response: Response) => void = () => undefined // finishes the save
+    stubApi({
+      changes: () => new Promise<Response>((resolve) => (release = resolve)), // the save waits
+      picture: () => Response.json({ item: { ...rows[2], image: 'items/knot-tying-1a2b3c4d.webp', modifiedAt: '2026-11-07T02:00:00.000Z' } }), // the picture was written after the save
+    }) // the stub is set
+    const { result } = renderHook(() => useAdminItems()) // the hook
+    await waitFor(() => expect(result.current.pages.rows).toHaveLength(4)) // the rows have loaded
+    const knot = result.current.pages.rows[2] // Knot Tying as listed
+    act(() => result.current.setStatus(knot, 'hidden')) // pending: Hidden
+    let saving: Promise<void> = Promise.resolve() // the running save
+    act(() => { saving = result.current.save() }) // starts the save
+    await act(async () => void (await result.current.uploadItemPicture(knot, new Blob(['x'])))) // the picture answers first
+    await act(async () => { release(Response.json({ items: [{ ...rows[2], status: 'hidden', modifiedAt: '2026-11-07T01:00:00.000Z' }] })); await saving }) // then the save's older-stamped answer
+    expect(result.current.pages.rows[2].status).toBe('hidden') // D1 holds Hidden, so the row must show it
   })
 })

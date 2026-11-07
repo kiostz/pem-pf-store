@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test API
 import { AdminApp } from './AdminApp.tsx' // the code under test
 import { clubs } from '@/test/club-fixtures.ts' // shared clubs
-import { meta, rows } from '@/test/item-fixtures.ts' // shared items
+import { makeItem, meta, rows } from '@/test/item-fixtures.ts' // shared items
 import { orderAt, orders } from '@/test/order-fixtures.ts' // shared orders
 
 beforeEach(() => {
@@ -132,10 +132,10 @@ describe('AdminApp', () => {
   describe('after a cancel that restocks', () => { // a group for the restocking reload
     /**
      * Stubs fetch with an Items list that changes after the cancel.
-     * @param options the answers that differ: the list after the cancel, the cancel's restocked count, and the save's answer
+     * @param options the answers that differ: the list after the cancel, the cancel's restocked count, the save's answer, and a handler for every item-list request (url and how many lists were asked, this one included)
      * @return the recorded requests, each as [url, method, body]
      */
-    function stubStock(options: { after?: () => Response; restocked?: number; changes?: () => Response | Promise<Response> } = {}) { // stubs the API with a list that changes after the cancel
+    function stubStock(options: { after?: () => Response; restocked?: number; changes?: () => Response | Promise<Response>; pages?: (url: string, listed: number) => Response | Promise<Response> } = {}) { // stubs the API with a list that changes after the cancel
       const calls: [string, string, unknown][] = [] // every request made: url, method, body
       let listed = 0 // how many item lists were answered
       vi.stubGlobal('fetch', (url: unknown, init?: RequestInit) => { // the page's fetch, recording each call
@@ -149,6 +149,7 @@ describe('AdminApp', () => {
           if (path === '/api/orders/step') return Response.json({ order: orderAt('PF-20261105-AAAA', 'cancelled'), restocked: options.restocked ?? 1 }) // the step route answers a cancel with its restocked count
           if (path === '/api/items/changes') return (options.changes ?? (() => Response.json({ items: [] })))() // the save route
           listed += 1 // another list
+          if (options.pages !== undefined) return options.pages(text, listed) // a test that answers every list itself
           if (listed === 1) return Response.json({ items: rows, nextCursor: null }) // the first page
           return (options.after ?? (() => Response.json({ items: rows.map((row) => (row.id === 'knot-tying' ? { ...row, stock: 13 } : row)), nextCursor: null })))() // the reload
         })
@@ -319,6 +320,116 @@ describe('AdminApp', () => {
       expect(within(knotRow).getByRole('switch', { name: 'Active: Knot Tying' })).toHaveAttribute('aria-checked', 'false') // the saved status shows
       expect(screen.queryByText('This item has been updated.')).not.toBeInTheDocument() // no flag
       expect(screen.queryByRole('button', { name: /Save \(/ })).not.toBeInTheDocument() // nothing pending
+    })
+
+    it('goes back to page one with the same search after Load more, and drops the extra rows', async () => { // a reload after Load more
+      // catches: a reload that keeps the Load-more rows on top of page one, appends page one twice, or loses the cursor so Load more disappears
+      const calls = stubStock({ // every list is answered here
+        pages: (url, listed) => { // page one, the next page, then the reload
+          if (url.includes('cursor=')) return Response.json({ items: [makeItem({ id: 'zebra', name: 'Zebra Lore' })], nextCursor: null }) // the next page
+          const stock = listed >= 3 ? 13 : 12 // the reload (third list) reads the restock
+          return Response.json({ items: rows.map((row) => (row.id === 'knot-tying' ? { ...row, stock } : row)), nextCursor: 'c1' }) // page one, with a next page
+        },
+      }) // the stub is set
+      render(<AdminApp />) // the shell
+      await screen.findByText('Knot Tying') // page one has loaded
+      fireEvent.click(screen.getByRole('button', { name: 'Load more' })) // the next page
+      await screen.findByText('Zebra Lore') // it is listed
+      await cancelFirstOrder() // the restocking cancel
+      await goTo('#/items') // back to Items
+      await waitFor(() => expect(screen.getByText('13 in stock')).toBeInTheDocument()) // the reload landed
+      expect(screen.queryByText('Zebra Lore')).not.toBeInTheDocument() // the Load-more row is gone
+      expect(screen.getAllByText('Knot Tying')).toHaveLength(1) // page one is listed once
+      expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument() // there is a next page again
+      expect(listUrls(calls)[2]).toBe(listUrls(calls)[0]) // the reload asks for page one, no cursor
+    })
+
+    it('replaces a first load that is still running with the reload, so the rows come from the newer read', async () => { // a cancel while the first load runs
+      // catches: a late first-load answer that lands after the reload and shows the old stock
+      let releaseFirst: (response: Response) => void = () => undefined // finishes the first load
+      stubStock({ // every list is answered here
+        pages: (_url, listed) => { // the first list waits, the reload answers at once
+          if (listed === 1) return new Promise<Response>((resolve) => (releaseFirst = resolve)) // the first load waits
+          return Response.json({ items: rows.map((row) => (row.id === 'knot-tying' ? { ...row, stock: 13 } : row)), nextCursor: null }) // the reload reads the restock
+        },
+      }) // the stub is set
+      render(<AdminApp />) // the shell, first load running
+      await cancelFirstOrder() // the restocking cancel while Items is still loading
+      await goTo('#/items') // back to Items
+      await screen.findByText('13 in stock') // the reload's rows
+      await act(async () => releaseFirst(Response.json({ items: rows, nextCursor: null }))) // the first load answers late, with the old stock
+      expect(screen.getByText('13 in stock')).toBeInTheDocument() // the late answer was ignored
+      expect(screen.queryByText('12 in stock')).not.toBeInTheDocument() // no old stock
+    })
+
+    it('keeps the rows and the pending edit when the network drops during the reload, and Try again loads the new stock', async () => { // a dropped reload
+      // catches: a thrown fetch that empties the list or loses the pending edit
+      let drop = true // the reload fails once
+      stubStock({ // every list is answered here
+        pages: (_url, listed) => { // the first list answers, the reload drops, then it recovers
+          if (listed === 2 && drop) { drop = false; throw new TypeError('Failed to fetch') } // the network drops
+          return Response.json({ items: rows.map((row) => (row.id === 'knot-tying' && listed > 1 ? { ...row, stock: 13 } : row)), nextCursor: null }) // the lists
+        },
+      }) // the stub is set
+      render(<AdminApp />) // the shell
+      await screen.findByText('Knot Tying') // the rows have loaded
+      fireEvent.click(screen.getByRole('switch', { name: 'Active: Nature Walk' })) // a pending edit
+      await cancelFirstOrder() // the restocking cancel
+      await goTo('#/items') // back to Items
+      expect(await screen.findByText("We couldn't load the items.")).toBeInTheDocument() // the failure line
+      expect(screen.getByText('Knot Tying')).toBeInTheDocument() // the rows stay
+      expect(screen.getByText('12 in stock')).toBeInTheDocument() // the old stock stays until a read succeeds
+      expect(screen.getByRole('button', { name: /Save \(1 change/ })).toBeInTheDocument() // the edit stays
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' })) // retry
+      expect(await screen.findByText('13 in stock')).toBeInTheDocument() // the new stock shows
+      expect(screen.getByRole('button', { name: /Save \(1 change/ })).toBeInTheDocument() // still pending
+    })
+
+    it('keeps a pending category change across the reload, unflagged, and sends its pair and the cleared subcategory with the old values as `from`', async () => { // a category edit during a restock reload
+      // catches: a reload rebase that drops a category or subcategory edit, flags it falsely, or sends the new stock as the guard for a field the admin did not edit
+      const calls = stubStock() // the recorded requests
+      render(<AdminApp />) // the shell
+      await screen.findByText('Knot Tying') // the rows have loaded
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Knot Tying' })) // opens the sheet
+      fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Category'), { target: { value: 'Shirts' } }) // Honors to Shirts in the sheet's own select
+      fireEvent.click(screen.getByRole('button', { name: 'Done' })) // pending: category and the cleared subcategory
+      expect(screen.getByRole('button', { name: /Save \(2 changes/ })).toBeInTheDocument() // two changes
+      await cancelFirstOrder() // the restock reload lands
+      await goTo('#/items') // back to Items
+      await screen.findByText('13 in stock') // the reload's stock
+      const knotRow = screen.getByText('Knot Tying').closest('li') as HTMLElement // Knot Tying's row
+      expect(within(knotRow).getByText(/^Shirts · /)).toBeInTheDocument() // the pending category shows, with no subcategory part
+      expect(screen.queryByText('This item has been updated.')).not.toBeInTheDocument() // no false flag
+      expect(screen.getByRole('button', { name: /Save \(2 changes/ })).toBeInTheDocument() // both edits stay
+      fireEvent.click(screen.getByRole('button', { name: /Save \(2 changes/ })) // saves
+      await waitFor(() => expect(calls.some(([url]) => url === '/api/items/changes')).toBe(true)) // the request went out
+      const body = JSON.parse(calls.find(([url]) => url === '/api/items/changes')![2] as string) // its body
+      expect(body.changes).toEqual([{ id: 'knot-tying', category: { from: 'Honors', to: 'Shirts' }, subcategoryId: { from: 8, to: null } }]) // the pairs, with no stock pair
+    })
+
+    it('shows the saved category and no subcategory, unflagged, when the reload lands during a category save', async () => { // the subcategory merge with the reload fold
+      // catches: a fold that keeps the reloaded Recreation name beside the saved Shirts category, or flags the row as updated
+      let release: (response: Response) => void = () => undefined // finishes the save
+      const wrote = '2026-11-07T01:00:00.000Z' // when the save wrote
+      const calls = stubStock({ changes: () => new Promise<Response>((resolve) => (release = resolve)) }) // the save waits
+      render(<AdminApp />) // the shell
+      await screen.findByText('Knot Tying') // the rows have loaded
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Knot Tying' })) // opens the sheet
+      fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Category'), { target: { value: 'Shirts' } }) // Honors to Shirts in the sheet's own select
+      fireEvent.click(screen.getByRole('button', { name: 'Done' })) // pending
+      fireEvent.click(screen.getByRole('button', { name: /Save \(2 changes/ })) // starts the save
+      await waitFor(() => expect(calls.some(([url]) => url === '/api/items/changes')).toBe(true)) // sent
+      await cancelFirstOrder() // the reload lands during the save
+      await waitFor(() => expect(listUrls(calls).length).toBeGreaterThan(1)) // the reload went out
+      await act(async () => undefined) // folded in
+      release(Response.json({ items: [{ ...rows[2], category: 'Shirts', subcategoryId: null, subcategory: null, stock: 13, modifiedAt: wrote }] })) // the save's answer
+      await goTo('#/items') // back to Items
+      expect(await screen.findByText('Saved 2 changes.')).toBeInTheDocument() // the save finished
+      const knotRow = screen.getByText('Knot Tying').closest('li') as HTMLElement // Knot Tying's row
+      expect(within(knotRow).getByText(/^Shirts · /)).toBeInTheDocument() // the saved category, no subcategory part
+      expect(within(knotRow).queryByText(/Recreation/)).not.toBeInTheDocument() // the old subcategory is gone
+      expect(within(knotRow).getByText('13 in stock')).toBeInTheDocument() // the newer stock
+      expect(screen.queryByText('This item has been updated.')).not.toBeInTheDocument() // no false flag
     })
   })
 })

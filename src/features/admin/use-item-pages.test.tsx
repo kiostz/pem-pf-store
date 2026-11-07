@@ -170,4 +170,43 @@ describe('useItemPages', () => {
     await act(async () => undefined)
     expect(urls[1]).toBe('/api/items?sort=changed&q=a+b+c+d+e')
   })
+  describe('applyRows with onlyNewer', () => { // which listed rows a save's answer may replace
+    /**
+     * Lists one row with a change time and a stock, then gives the answer row to applyRows.
+     * @param listedAt the listed row's change time
+     * @param answerAt the answer row's change time
+     * @return the stock the list shows afterwards
+     */
+    async function stockAfter(listedAt: string, answerAt: string) { // lists a row at 12, applies an answer at 10
+      vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ items: [makeItem({ id: 'a', stock: 12, modifiedAt: listedAt })], nextCursor: null }))) // the first page holds the listed row
+      const { result } = renderHook(() => useItemPages()) // the hook
+      await act(async () => undefined) // the page has loaded
+      act(() => result.current.applyRows([makeItem({ id: 'a', stock: 10, modifiedAt: answerAt })], true)) // the save's answer, only if newer
+      return result.current.rows[0].stock // what the list shows
+    }
+
+    it('replaces a listed row that is older than the answer', async () => { // the save's own write wins over an older listing
+      // catches: a flipped comparison that keeps the old row after a save, so the saved values never show
+      expect(await stockAfter('2026-11-07T01:00:00.000Z', '2026-11-07T01:00:01.000Z')).toBe(10) // the answer is newer
+    })
+
+    it('keeps a listed row with the same change time as the answer, because a restock leaves the time unchanged', async () => { // equal times keep the reload
+      // catches: a strict comparison that lets the save's older stock overwrite a reload that already holds the restock
+      expect(await stockAfter('2026-11-07T01:00:00.000Z', '2026-11-07T01:00:00.000Z')).toBe(12) // equal: the listed row stays
+    })
+
+    it('keeps a listed row that is newer than the answer', async () => { // a later write by another admin stays
+      // catches: an answer from an older write that overwrites another admin's newer save
+      expect(await stockAfter('2026-11-07T01:00:05.000Z', '2026-11-07T01:00:00.000Z')).toBe(12) // the listed row is newer
+    })
+
+    it('replaces every listed row when onlyNewer is not set', async () => { // the conflict path always shows the Worker's latest
+      // catches: a default onlyNewer that keeps rows a 409 answer must replace
+      vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ items: [makeItem({ id: 'a', stock: 12, modifiedAt: '2026-11-07T01:00:05.000Z' })], nextCursor: null }))) // the listed row is newer
+      const { result } = renderHook(() => useItemPages()) // the hook
+      await act(async () => undefined) // the page has loaded
+      act(() => result.current.applyRows([makeItem({ id: 'a', stock: 10, modifiedAt: '2026-11-07T01:00:00.000Z' })])) // a conflict's latest row, older time
+      expect(result.current.rows[0].stock).toBe(10) // replaced anyway
+    })
+  })
 })
