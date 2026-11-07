@@ -1,8 +1,8 @@
-// The Item sheet: a modal dialog to edit an item's name, category and price (kept pending until Save) or to add a new one (saved at once), with the item's picture (chosen, previewed and saved at once), the Created and Last changed times and, for Club-added items, Delete item.
+// The Item sheet: a modal dialog to edit an item's name, category, subcategory, stock and price (kept pending until Save) or to add a new one (saved at once), with the item's picture (chosen, previewed and saved at once), the Created and Last changed times and, for Club-added items, Delete item.
 
 import { useEffect, useRef, useState } from 'react' // the dialog element, focus and the drafts
 import { PatchPicture } from '@/shared/ui/PatchPicture.tsx' // the current picture or its Category mark
-import type { AdminItem, NewItem } from '../../../workers/admin/src/admin-types.ts' // the row and the new item
+import type { AdminItem, AdminMeta, NewItem } from '../../../workers/admin/src/admin-types.ts' // the row and the new item
 import { ACTION_BOX } from '@/shared/ui/button-box.ts' // the shared 44 px pill action
 import { StockStepper } from './StockStepper.tsx' // the Stock field
 import { SIGNED_OUT_NOTE } from './admin-api.ts' // the 403 line
@@ -43,10 +43,11 @@ function checkName(
  * @param item the row being edited (edit only)
  * @param pending the row's unsaved edits, shown instead of the stored values (edit only)
  * @param categories the fixed category list
+ * @param subcategories each category's subcategories, in the order to list them
  * @param currency the ISO currency code
  * @param defaultPriceCents the price an added item starts with
  * @param isNameTaken tells whether another item has a name (edit only; Add leaves it to the Worker)
- * @param onDone called with the three values when an edit is confirmed
+ * @param onDone called with the edited values when an edit is confirmed
  * @param onAdd called with the new item; answers what happened
  * @param onDelete called with the row after the Delete dialog; answers what happened
  * @param onPicture called with the row and the resized picture; answers what happened (edit only)
@@ -59,6 +60,7 @@ export function ItemSheet({
   item,
   pending,
   categories,
+  subcategories, // the subcategory lists, per category
   currency,
   defaultPriceCents,
   isNameTaken = () => false,
@@ -73,10 +75,11 @@ export function ItemSheet({
   item?: AdminItem // the row, in edit
   pending?: ItemEdits // its unsaved edits
   categories: string[] // the fixed list
+  subcategories: AdminMeta['subcategories'] // the subcategories of each category
   currency: string // the ISO code
   defaultPriceCents: number // the starting price of an added item
   isNameTaken?: (name: string) => boolean // another item has it
-  onDone: (values: { name: string; category: string; priceCents: number; stock: number }) => void // an edit confirmed
+  onDone: (values: { name: string; category: string; subcategoryId: number | null; priceCents: number; stock: number }) => void // an edit confirmed
   onAdd: (item: NewItem) => Promise<AddOutcome> // an add
   onDelete: (item: AdminItem) => Promise<DeleteOutcome> // a delete
   onPicture: (item: AdminItem, picture: Blob) => Promise<PictureOutcome> // a picture save
@@ -87,6 +90,9 @@ export function ItemSheet({
   const busy = useRef(false) // a request is running; read between renders so a double click sends once
   const [name, setName] = useState(mode === 'edit' ? (pending?.name ?? item!.name) : '') // the name draft
   const [category, setCategory] = useState(mode === 'edit' ? (pending?.category ?? item!.category) : '') // the category draft
+  const [subcategoryId, setSubcategoryId] = useState<number | null>( // the subcategory draft; null is None
+    mode === 'edit' ? (pending?.subcategoryId !== undefined ? pending.subcategoryId : item!.subcategoryId) : null, // the pending pick, else the item's own; an Add starts at None
+  ) // the subcategory draft; null is None
   const [priceText, setPriceText] = useState(
     formatPriceInput(mode === 'edit' ? (pending?.priceCents ?? item!.priceCents) : defaultPriceCents),
   ) // the price draft
@@ -149,7 +155,8 @@ export function ItemSheet({
     } // every line
     setErrors(next) // shown
     if (next.name || next.category || next.price || checked.name === null || !price.ok) return null // something to fix
-    return { name: checked.name, category, priceCents: price.cents, stock } // clean
+    const fits = (subcategories[category] ?? []).some((entry) => entry.id === subcategoryId) // the pick belongs to the category
+    return { name: checked.name, category, subcategoryId: fits ? subcategoryId : null, priceCents: price.cents, stock } // clean; a pick that does not fit is None
   }
 
   /**
@@ -168,7 +175,7 @@ export function ItemSheet({
     }
     busy.current = true // a second click is ignored
     setAdding(true) // the button says so
-    const outcome = await onAdd({ name: values.name, category: values.category, priceCents: values.priceCents }) // the one request; a new item has no stock to send
+    const outcome = await onAdd({ name: values.name, category: values.category, subcategoryId: values.subcategoryId, priceCents: values.priceCents }) // the one request; a new item has no stock to send
     busy.current = false // free again
     setAdding(false) // the button is back
     if (outcome === 'added') return onClose() // the sheet goes
@@ -407,7 +414,10 @@ export function ItemSheet({
               <select
                 id="item-category" // the label points here
                 value={category} // controlled
-                onChange={(event) => setCategory(event.target.value)} // the pick
+                onChange={(event) => { // a category change starts the subcategory at None
+                  setCategory(event.target.value) // the pick
+                  setSubcategoryId(null) // the old subcategory belongs to the old category
+                }} // a category change starts the subcategory at None
                 aria-invalid={errors.category !== undefined} // the line below says why
                 aria-describedby={errors.category ? 'item-category-error' : undefined} // read with the field
                 className={`category-filter ${FIELD_BOX} w-full`} // the site's select styling
@@ -425,6 +435,27 @@ export function ItemSheet({
                 </p>
               )}
             </div>
+            {/* The subcategory field: only for a category that has some; None is first and allowed. */}
+            {(subcategories[category] ?? []).length > 0 && ( // the chosen category has subcategories
+              <div>
+                <label htmlFor="item-subcategory" className="mb-1 block text-sm font-medium">{/* the select's name, read by screen readers */}
+                  Subcategory
+                </label>
+                <select
+                  id="item-subcategory" // the label points here
+                  value={subcategoryId === null ? '' : String(subcategoryId)} // controlled; '' is None
+                  onChange={(event) => setSubcategoryId(event.target.value === '' ? null : Number(event.target.value))} // the pick
+                  className={`category-filter ${FIELD_BOX} w-full`} // the site's select styling
+                >
+                  <option value="">None</option> {/* first, so a subcategory is never forced */}
+                  {(subcategories[category] ?? []).map((entry) => ( // one option per subcategory
+                    <option key={entry.id} value={String(entry.id)}>{/* valued by the id the Worker stores */}
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {/* The price field and its line. */}
             <div>
               <label htmlFor="item-price" className="mb-1 block text-sm font-medium">

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // test
 import type { AdminItem } from '../../../workers/admin/src/admin-types.ts' // the row shape
 import { AdminApp } from './AdminApp.tsx' // the whole page, for the wording check
 import { ItemsScreen } from './ItemsScreen.tsx' // the code under test
-import { meta, rows } from '@/test/item-fixtures.ts' // shared data
+import { makeItem, meta, rows } from '@/test/item-fixtures.ts' // shared data
 import type { ResizeDeps } from './resize-picture.ts' // the passed-in browser pieces
 
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response> // answers one request
@@ -157,8 +157,8 @@ describe('rows, search, category and sort', () => {
     // Catches a count that comes back, a row without its date, or Hidden items missing.
     stubApi()
     await openScreen()
-    expect(screen.getByText('Recreation · RM 4.00 · changed 3 Nov')).toBeInTheDocument()
-    expect(screen.getByText('Shirt · RM 25.00 · changed 3 Nov')).toBeInTheDocument()
+    expect(screen.getByText('Honors · Recreation · RM 4.00 · changed 3 Nov')).toBeInTheDocument() // the row line with its subcategory
+    expect(screen.getByText('Shirts · RM 25.00 · changed 3 Nov')).toBeInTheDocument() // a Shirts row has no subcategory part
     expect(document.body.textContent).not.toMatch(/\d+ items?( match|es)?\b/)
     expect(
       within(screen.getByText('Africa Lore').closest('li')!).getByRole('switch', { name: 'Active: Africa Lore' }),
@@ -192,9 +192,9 @@ describe('rows, search, category and sort', () => {
         .getAllByRole('option')
         .map((option) => option.textContent),
     ).toEqual(['All categories', ...meta.categories])
-    fireEvent.change(category, { target: { value: 'Shirt' } })
+    fireEvent.change(category, { target: { value: 'Shirts' } }) // pick Shirts
     await act(async () => undefined)
-    expect(pageUrls(spy).at(-1)).toBe('/api/items?sort=changed&category=Shirt')
+    expect(pageUrls(spy).at(-1)).toBe('/api/items?sort=changed&category=Shirts') // the filter reaches D1
   })
 
   it('searches once after the typing pause', async () => {
@@ -234,10 +234,10 @@ describe('rows, search, category and sort', () => {
     await openScreen()
     await search('zzz')
     expect(await screen.findByText('No items match "zzz".')).toBeInTheDocument()
-    fireEvent.change(screen.getByRole('combobox', { name: 'Category' }), { target: { value: 'Shirt' } })
-    expect(await screen.findByText('No items match "zzz" in Shirt.')).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Category' }), { target: { value: 'Shirts' } }) // pick Shirts
+    expect(await screen.findByText('No items match "zzz" in Shirts.')).toBeInTheDocument() // the empty line names the category
     await search('')
-    expect(await screen.findByText('No items in Shirt yet.')).toBeInTheDocument()
+    expect(await screen.findByText('No items in Shirts yet.')).toBeInTheDocument() // the empty line names the category
   })
 })
 
@@ -302,7 +302,7 @@ describe('failed and signed-out fetches after the first page', () => {
     stubApi({ pages: () => (failing ? Response.json({}, { status: 500 }) : pageOf(rows)) })
     await openScreen()
     failing = true
-    fireEvent.change(screen.getByRole('combobox', { name: 'Category' }), { target: { value: 'Shirt' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Category' }), { target: { value: 'Shirts' } }) // pick Shirts
     expect(await screen.findByText("We couldn't load the items.")).toBeInTheDocument()
     fireEvent.change(screen.getByRole('combobox', { name: 'Category' }), { target: { value: '' } })
     fireEvent.change(screen.getByRole('combobox', { name: 'Sort' }), { target: { value: 'name' } })
@@ -363,7 +363,7 @@ describe('editing in the sheet and saving', () => {
     fireEvent.change(screen.getByLabelText('Price (RM)'), { target: { value: '5.50' } })
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(screen.getByRole('button', { name: 'Save (3 changes)' })).toBeInTheDocument()
-    expect(screen.getByText('Recreation · RM 5.50 · changed 3 Nov')).toBeInTheDocument()
+    expect(screen.getByText('Honors · Recreation · RM 5.50 · changed 3 Nov')).toBeInTheDocument() // the row line with its subcategory
     expect(within(screen.getByText('Knots').closest('li')!).getByText('Changed')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Save (3 changes)' }))
     expect(await screen.findByText('Saved 3 changes.')).toBeInTheDocument()
@@ -404,9 +404,9 @@ describe('editing in the sheet and saving', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' }))
     expect(await screen.findByText('Saved 1 change.')).toBeInTheDocument()
     expect(screen.getByText('Knot Tying')).toBeInTheDocument() // still the name the admin saw
-    expect(screen.getByText('Recreation · RM 5.50 · changed 3 Nov')).toBeInTheDocument() // the saved price, the new change time
+    expect(screen.getByText('Honors · Recreation · RM 5.50 · changed 3 Nov')).toBeInTheDocument() // the saved price, the new change time
     expect(screen.getByText('This item has been updated.')).toBeInTheDocument() // the shown name is out of date, so the row says so
-    expect(screen.getByText('Latest: Knot Alpha · Recreation · RM 5.50 · Active · 12 in stock')).toBeInTheDocument()
+    expect(screen.getByText('Latest: Knot Alpha · Honors · Recreation · RM 5.50 · Active · 12 in stock')).toBeInTheDocument() // the Latest line names the subcategory
     openSheet('Nature Walk') // the latest name counts when checking duplicates
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'knot alpha' } })
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
@@ -620,7 +620,7 @@ describe('conflicts', () => {
       ),
     ).toBeInTheDocument()
     const row = screen.getByText('This item has been updated.').closest('li')!
-    expect(within(row).getByText('Latest: Knot Tying · Recreation · RM 4.00 · Active · 5 in stock')).toBeInTheDocument()
+    expect(within(row).getByText('Latest: Knot Tying · Honors · Recreation · RM 4.00 · Active · 5 in stock')).toBeInTheDocument() // the Latest line names the subcategory
     expect(within(row).getByText('Changed')).toBeInTheDocument()
     expect(screen.getByText('7 in stock')).toBeInTheDocument() // the row's stock text reads 7
     expect(postBodies(spy)).toHaveLength(1)
@@ -661,6 +661,110 @@ describe('conflicts', () => {
   })
 })
 
+describe('subcategories on rows and in the sheet', () => { // the picker, the row line, the save pair
+  /**
+   * Opens Knot Tying's sheet, changes the fields given and presses Done.
+   * @param fields the Category and Subcategory values to pick, when set
+   */
+  function editKnot(fields: { category?: string; subcategory?: string }) { // opens the sheet, sets the pick, presses Done
+    openSheet('Knot Tying') // the sheet
+    const sheet = within(screen.getByRole('dialog')) // the toolbar has a Category too
+    if (fields.category !== undefined) fireEvent.change(sheet.getByLabelText('Category'), { target: { value: fields.category } }) // the category
+    if (fields.subcategory !== undefined) fireEvent.change(sheet.getByLabelText('Subcategory'), { target: { value: fields.subcategory } }) // the subcategory id
+    fireEvent.click(sheet.getByRole('button', { name: 'Done' })) // into the pending list
+  }
+
+  it('gives Accessories and Shirts rows no subcategory part, and Honors rows theirs', async () => { // the row line
+    // catches: a stray separator on rows without a subcategory, or a missing subcategory on Honors rows.
+    stubApi({ pages: () => pageOf([rows[1], rows[3], makeItem({ id: 'test-scarf', name: 'Test Scarf', category: 'Accessories', subcategoryId: null, subcategory: null })]) }) // Shirts, Honors · Nature and Accessories
+    render(<ItemsScreen />) // the screen
+    await screen.findByText('Test Scarf') // the rows have loaded
+    expect(screen.getByText('Shirts · RM 25.00 · changed 3 Nov')).toBeInTheDocument() // Shirts
+    expect(screen.getByText('Accessories · RM 4.00 · changed 3 Nov')).toBeInTheDocument() // Accessories
+    expect(screen.getByText('Honors · Nature · RM 4.00 · changed 3 Nov')).toBeInTheDocument() // Honors with its subcategory
+  })
+
+  it('shows a pending subcategory on the row before Save, and Save sends the pair and then shows the saved name with no stale flag', async () => { // the pick through Save
+    // catches: a row that keeps the old subcategory name, a request without the pair, or a stale flag after a clean save.
+    const spy = stubApi({ // the answers of the Worker
+      changes: () => Response.json({ items: [{ ...rows[2], subcategoryId: 5, subcategory: 'Nature', modifiedAt: '2026-11-03T05:00:00.000Z' }] }), // the Worker saves the change
+    }) // the Worker saves Nature
+    await openScreen() // the rows have loaded
+    editKnot({ subcategory: '5' }) // Recreation to Nature
+    const knotRow = () => within(screen.getByText('Knot Tying').closest('li')!) // Nature Walk reads the same line, so look inside Knot Tying's row
+    expect(knotRow().getByText('Honors · Nature · RM 4.00 · changed 3 Nov')).toBeInTheDocument() // before Save
+    expect(knotRow().getByText('Changed')).toBeInTheDocument() // marked
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // save
+    expect(await screen.findByText('Saved 1 change.')).toBeInTheDocument() // done
+    expect(postBodies(spy)).toEqual([{ changes: [{ id: 'knot-tying', subcategoryId: { from: 8, to: 5 } }] }]) // the pair
+    expect(knotRow().getByText('Honors · Nature · RM 4.00 · changed 3 Nov')).toBeInTheDocument() // the saved name
+    expect(screen.queryByText('This item has been updated.')).not.toBeInTheDocument() // no stale flag
+  })
+
+  it('counts a category change to Shirts as 2 changes, shows Shirts with no subcategory, and sends both pairs', async () => { // the explicit clear
+    // catches: a category change that leaves the clear to the Worker, or one that shows the old subcategory.
+    const spy = stubApi({ // the answers of the Worker
+      changes: () => Response.json({ items: [{ ...rows[2], category: 'Shirts', subcategoryId: null, subcategory: null }] }), // the Worker saves the change
+    }) // the Worker saves both
+    await openScreen() // the rows have loaded
+    editKnot({ category: 'Shirts' }) // Honors to Shirts
+    expect(screen.getByRole('button', { name: 'Save (2 changes)' })).toBeInTheDocument() // category and subcategory
+    expect(screen.getByText('Shirts · RM 4.00 · changed 3 Nov')).toBeInTheDocument() // no subcategory part
+    fireEvent.click(screen.getByRole('button', { name: 'Save (2 changes)' })) // save
+    expect(await screen.findByText('Saved 2 changes.')).toBeInTheDocument() // done
+    expect(postBodies(spy)).toEqual([ // one request with both pairs
+      { changes: [{ id: 'knot-tying', category: { from: 'Honors', to: 'Shirts' }, subcategoryId: { from: 8, to: null } }] }, // the category and subcategory pairs
+    ]) // both pairs, the clear explicit
+  })
+
+  it('flags a 409 on the subcategory pair with the latest subcategory in the Latest line', async () => { // the guard on the subcategory
+    // catches: a conflict flag that hides the subcategory another admin set.
+    stubApi({ // the answers of the Worker
+      changes: () => Response.json({ error: 'conflict', items: [{ ...rows[2], subcategoryId: 5, subcategory: 'Nature' }], deletedIds: [] }, { status: 409 }), // the Worker answers a conflict
+    }) // another admin moved it to Nature
+    await openScreen() // the rows have loaded
+    editKnot({ subcategory: '2' }) // Recreation to Arts and Crafts
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // save
+    const row = (await screen.findByText('This item has been updated.')).closest('li')! // flagged
+    expect(within(row).getByText('Latest: Knot Tying · Honors · Nature · RM 4.00 · Active · 12 in stock')).toBeInTheDocument() // the latest subcategory
+    expect(within(row).getByText('Changed')).toBeInTheDocument() // the edit stays pending
+  })
+
+  it('shows no subcategory under a pending category it does not belong to, even when a refetch brings one', async () => { // never "Shirts · Nature"
+    // catches: a row that reads "Shirts · Nature" after another admin's pick arrives under an unsaved category change.
+    const bare = { ...rows[2], subcategoryId: null, subcategory: null } // Knot Tying with no subcategory
+    stubApi({ pages: (url) => pageOf(url.includes('q=knot') ? [{ ...rows[2], subcategoryId: 5, subcategory: 'Nature' }] : [bare]) }) // a refetch brings Nature
+    await openScreen() // the rows have loaded
+    editKnot({ category: 'Shirts' }) // Honors to Shirts, no subcategory edit
+    await search('knot') // the refetch
+    const row = within((await screen.findByText('Knot Tying')).closest('li')!) // the row
+    expect(row.getByText('Shirts · RM 4.00 · changed 3 Nov')).toBeInTheDocument() // no Nature part
+  })
+
+  it('adds an Honors item with its subcategory at once, and shows the Add failure for a refused misfit', async () => { // Add under the picker
+    // catches: an Add that drops the subcategory, or a 400 that closes the sheet.
+    const patch = { ...rows[3], id: 'test-patch-21', name: 'Test Patch 21', subcategoryId: 9, subcategory: 'Vocational', status: 'hidden' as const, stock: 0 } // the added row
+    let refuse = true // the first Add is refused
+    const spy = stubApi({ // the answers of the Worker
+      add: () => (refuse ? Response.json({ error: 'invalid' }, { status: 400 }) : Response.json({ item: patch }, { status: 201 })), // the first Add is refused, the next works
+      pages: (url) => (url.includes('q=Test+Patch+21') ? pageOf([patch]) : pageOf(rows)), // the search finds the new item
+    })
+    await openScreen() // the rows have loaded
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' })) // the Add sheet
+    const sheet = within(screen.getByRole('dialog')) // the toolbar has a Category too
+    fireEvent.change(sheet.getByLabelText('Name'), { target: { value: 'Test Patch 21' } }) // a name
+    fireEvent.change(sheet.getByLabelText('Category'), { target: { value: 'Honors' } }) // Honors
+    fireEvent.change(sheet.getByLabelText('Subcategory'), { target: { value: '9' } }) // Vocational
+    await act(async () => void fireEvent.click(sheet.getByRole('button', { name: 'Add item' }))) // refused
+    expect(await screen.findByText("We couldn't add the item. Try again.")).toBeInTheDocument() // the line
+    expect(screen.getByRole('dialog')).toBeInTheDocument() // the sheet stays
+    refuse = false // the next Add works
+    await act(async () => void fireEvent.click(sheet.getByRole('button', { name: 'Add item' }))) // again
+    expect(postBodies(spy, '/api/items').at(-1)).toEqual({ name: 'Test Patch 21', category: 'Honors', subcategoryId: 9, priceCents: 450 }) // the pick went out
+    expect(await screen.findByText('Honors · Vocational · RM 4.00 · changed 3 Nov')).toBeInTheDocument() // the new row's line
+  })
+})
+
 describe('Add item', () => {
   it('adds at once, moves the search to the new name, and says it starts Hidden', async () => {
     // Catches an added item the admin cannot find in the list, or one that waits for Save.
@@ -674,9 +778,9 @@ describe('Add item', () => {
     const sheet = within(screen.getByRole('dialog')) // the toolbar has a Category too
     expect(sheet.getByLabelText('Price (RM)')).toHaveValue('4.50')
     fireEvent.change(sheet.getByLabelText('Name'), { target: { value: 'Camp Hat' } })
-    fireEvent.change(sheet.getByLabelText('Category'), { target: { value: 'Shirt' } })
+    fireEvent.change(sheet.getByLabelText('Category'), { target: { value: 'Shirts' } }) // pick Shirts
     await act(async () => void fireEvent.click(screen.getAllByRole('button', { name: 'Add item' }).at(-1)!)) // the sheet's button comes after the toolbar's
-    expect(postBodies(spy, '/api/items')).toEqual([{ name: 'Camp Hat', category: 'Shirt', priceCents: 450 }])
+    expect(postBodies(spy, '/api/items')).toEqual([{ name: 'Camp Hat', category: 'Shirts', subcategoryId: null, priceCents: 450 }]) // the Club-added shirt's category
     expect(await screen.findByText("Added Camp Hat. It's Hidden until you switch it on.")).toBeInTheDocument()
     expect(screen.getByRole('searchbox', { name: 'Search items' })).toHaveValue('Camp Hat')
     expect(pageUrls(spy).at(-1)).toBe('/api/items?sort=changed&q=Camp+Hat')
@@ -698,7 +802,7 @@ describe('Delete item', () => {
         id: 'camp-shirt',
         seen: {
           name: 'Camp Shirt',
-          category: 'Shirt',
+          category: 'Shirts', // the Club-added shirt's category
           priceCents: 2500,
           status: 'active',
           stock: 4,
@@ -725,15 +829,15 @@ describe('Delete item', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete item' }))
     await act(async () => void fireEvent.click(screen.getAllByRole('button', { name: 'Delete item' }).at(-1)!))
     expect(
-      screen.getByText('This item has been updated. Latest: Camp Shirt · Shirt · RM 25.00 · Active · 9 in stock.'),
+      screen.getByText('This item has been updated. Latest: Camp Shirt · Shirts · RM 25.00 · Active · 9 in stock.'), // the Latest line of the shirt
     ).toBeInTheDocument() // the dialog says what changed, so the admin need not close two layers to see it
     expect(screen.getByRole('heading', { name: 'Delete Camp Shirt?' })).toBeInTheDocument()
-    expect(screen.getByText('Latest: Camp Shirt · Shirt · RM 25.00 · Active · 9 in stock')).toBeInTheDocument()
+    expect(screen.getByText('Latest: Camp Shirt · Shirts · RM 25.00 · Active · 9 in stock')).toBeInTheDocument() // the Latest line of the shirt
     expect(postBodies(spy, '/api/items/delete')).toHaveLength(1)
     await act(async () => void fireEvent.click(screen.getAllByRole('button', { name: 'Delete item' }).at(-1)!))
     expect(postBodies(spy, '/api/items/delete')[1].seen).toEqual({
       name: 'Camp Shirt',
-      category: 'Shirt',
+      category: 'Shirts', // the Club-added shirt's category
       priceCents: 2500,
       status: 'active',
       stock: 9,
@@ -768,8 +872,8 @@ describe('leaving and wording', () => {
     expect(leave()).toBe(false)
   })
 
-  it('never writes the word honor on screen, in text or in labels, with a sheet open', async () => {
-    // Catches the internal word leaking into screen text, which the UI-copy rule forbids.
+  it('never writes the singular word honor on screen, in text or in labels, with a sheet open', async () => { // the word check allows the category Honors
+    // Catches the avoided word "honor" (the glossary's Item means anything sold) leaking into screen text; the category name Honors is allowed.
     stubApi()
     render(<AdminApp />)
     await screen.findByText('Knot Tying')
@@ -777,7 +881,7 @@ describe('leaving and wording', () => {
     typeKnotStock('5')
     openSheet('Knot Tying')
     const labels = [...document.querySelectorAll('[aria-label]')].map((element) => element.getAttribute('aria-label'))
-    expect(`${document.body.textContent} ${labels.join(' ')}`).not.toMatch(/honor/i)
+    expect(`${document.body.textContent} ${labels.join(' ')}`).not.toMatch(/honor(?!s)/i) // "Honors" passes, "honor" does not
   })
 })
 
@@ -1070,7 +1174,7 @@ describe('picture upload', () => {
     await uploadForKnot()
     expect(await screen.findByText('Picture saved.')).toBeInTheDocument()
     expect(screen.getAllByText('This item has been updated.').length).toBeGreaterThan(0) // the stale note shows
-    expect(screen.getAllByText('Latest: Knot Alpha · Recreation · RM 4.00 · Active · 12 in stock').length).toBeGreaterThan(0) // with the other admin's values
+    expect(screen.getAllByText('Latest: Knot Alpha · Honors · Recreation · RM 4.00 · Active · 12 in stock').length).toBeGreaterThan(0) // with the other admin's values
   })
 
   /**
@@ -1089,7 +1193,7 @@ describe('picture upload', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' }))
     await screen.findByText('Saved 1 change.')
-    expect(screen.getByText('Latest: Knot Alpha · Recreation · RM 5.50 · Active · 12 in stock')).toBeInTheDocument() // the note is up
+    expect(screen.getByText('Latest: Knot Alpha · Honors · Recreation · RM 5.50 · Active · 12 in stock')).toBeInTheDocument() // the note is up
     await uploadForKnot()
   }
 

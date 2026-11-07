@@ -17,7 +17,8 @@ function renderRow(props: Partial<React.ComponentProps<typeof AdminItemRow>> = {
   const spies = { onEdit: vi.fn(), onStatus: vi.fn() } // the callbacks
   const view = render( // draw it
     <ul>
-      <AdminItemRow item={knot} currency="MYR" now={now} {...spies} {...props} />
+      {/* no subcategory unless a test passes one */}
+      <AdminItemRow item={knot} currency="MYR" now={now} subcategory={null} {...spies} {...props} />
     </ul>,
   ) // the row in a list, like the screen draws it
   return { ...spies, container: view.container } // the spies and the container
@@ -64,6 +65,16 @@ describe('AdminItemRow', () => { // the row on its own
     // catches: a changed order or a missing part of the line
     renderRow() // the row
     expect(screen.getByText('Honors · RM 4.00 · changed 3 Nov')).toBeInTheDocument() // the exact line
+  })
+
+  it('adds the subcategory after the category when there is one, and nothing when there is none', () => { // the subcategory part of the details line
+    // the subcategory in the facts line
+    // catches: a missing subcategory part, or a stray separator when the item has none
+    renderRow({ subcategory: 'Recreation' }) // Honors · Recreation
+    expect(screen.getByText('Honors · Recreation · RM 4.00 · changed 3 Nov')).toBeInTheDocument() // the subcategory sits between category and price
+    cleanup() // next render
+    renderRow({ item: { ...knot, category: 'Shirts' }, subcategory: null }) // a Shirts item
+    expect(screen.getByText('Shirts · RM 4.00 · changed 3 Nov')).toBeInTheDocument() // no subcategory part, no doubled dot
   })
 
   it('shows the stock as text, "0 in stock" at zero, and the pending stock when edited', () => {
@@ -117,7 +128,7 @@ describe('AdminItemRow', () => { // the row on its own
     // catches: a conflict or pending state lost in the new layout
     renderRow({ pending: { stock: 5 }, conflict: { ...knot, stock: 9 } }) // a flagged, edited row
     expect(screen.getByText('This item has been updated.')).toBeInTheDocument() // the note
-    expect(screen.getByText('Latest: Knot Tying · Honors · RM 4.00 · Active · 9 in stock')).toBeInTheDocument() // the current values
+    expect(screen.getByText('Latest: Knot Tying · Honors · Nature · RM 4.00 · Active · 9 in stock')).toBeInTheDocument() // the current values
     expect(screen.getByText('Changed')).toBeInTheDocument() // the pending label
   })
 })

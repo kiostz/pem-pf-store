@@ -10,6 +10,7 @@ import type {
 export type ItemEdits = {
   name?: string // the new name
   category?: string // the new category
+  subcategoryId?: number | null // the new subcategory, null to clear it
   priceCents?: number // the new price in whole cents
   status?: ItemStatus // the new status
   stock?: number // the new stock
@@ -20,7 +21,7 @@ export type PendingChanges = Record<
   { seen: AdminItem; edits: ItemEdits }
 >
 
-const FIELDS = ['name', 'category', 'priceCents', 'status', 'stock'] as const // every editable field, in the request's order
+const FIELDS = ['name', 'category', 'subcategoryId', 'priceCents', 'status', 'stock'] as const // every editable field, in the request's order
 
 /**
  * Sets or clears one field of one row, dropping the row when it has no edit left.
@@ -126,6 +127,10 @@ export function mergeSaved(
     } // the old view with the new change time
     for (const field of FIELDS)
       if (entry.edits[field] !== undefined) merged[field] = row[field] // the saved fields
+    if (entry.edits.subcategoryId !== undefined || entry.edits.category !== undefined) { // a subcategory or category edit
+      merged.subcategoryId = row.subcategoryId // a category move can make the Worker clear the subcategory, so the answer decides
+      merged.subcategory = row.subcategory // the name follows its id
+    } // the subcategory pair comes from the answer
     return merged as unknown as AdminItem // a row again
   })
 }

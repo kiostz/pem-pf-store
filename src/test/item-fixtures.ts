@@ -14,9 +14,9 @@ export const makeItem = (
   fields: Partial<AdminItem> & { id: string },
 ): AdminItem => ({
   name: fields.id, // the id doubles as a name unless given
-  category: 'Nature', // a category of the fixed list
-  subcategoryId: null, // no subcategory
-  subcategory: null, // no subcategory name
+  category: 'Honors', // a category of the fixed list
+  subcategoryId: 5, // the Nature subcategory
+  subcategory: 'Nature', // its name
   status: 'active', // shown to buyers
   stock: 3, // a little stock
   priceCents: 400, // RM 4.00
@@ -32,14 +32,17 @@ export const rows: AdminItem[] = [
   makeItem({
     id: 'africa-lore',
     name: 'Africa Lore',
-    category: 'Outreach',
+    subcategoryId: 7, // Outreach
+    subcategory: 'Outreach', // its name
     status: 'hidden',
     stock: 0,
   }),
   makeItem({
     id: 'camp-shirt',
     name: 'Camp Shirt',
-    category: 'Shirt',
+    category: 'Shirts', // the Club-added shirt is in Shirts
+    subcategoryId: null, // Shirts has no subcategories
+    subcategory: null, // no name
     stock: 4,
     priceCents: 2500,
     clubAdded: true,
@@ -47,13 +50,13 @@ export const rows: AdminItem[] = [
   makeItem({
     id: 'knot-tying',
     name: 'Knot Tying',
-    category: 'Recreation',
+    subcategoryId: 8, // Recreation
+    subcategory: 'Recreation', // its name
     stock: 12,
   }),
   makeItem({
     id: 'nature-walk',
     name: 'Nature Walk',
-    category: 'Nature',
     stock: 3,
   }),
 ] // the list
@@ -62,6 +65,20 @@ export const rows: AdminItem[] = [
 export const meta: AdminMeta = {
   currency: 'MYR', // Malaysian ringgit
   defaultPriceCents: 450, // RM 4.50
-  categories: ['Accessories', 'Nature', 'Outreach', 'Recreation', 'Shirt'], // a short list
-  subcategories: { Accessories: [], Nature: [], Outreach: [], Recreation: [], Shirt: [] }, // a key per category, none filled yet
+  categories: ['Accessories', 'Honors', 'Shirts'], // the three categories
+  subcategories: { // each category's subcategories
+    Accessories: [], // none
+    Honors: [ // the nine Honors subcategories, A to Z
+      { id: 1, name: 'ADRA' }, // subcategory 1
+      { id: 2, name: 'Arts and Crafts' }, // subcategory 2
+      { id: 3, name: 'Health and Science' }, // subcategory 3
+      { id: 4, name: 'Household Arts' }, // subcategory 4
+      { id: 5, name: 'Nature' }, // subcategory 5
+      { id: 6, name: 'Outdoor Industries' }, // subcategory 6
+      { id: 7, name: 'Outreach' }, // subcategory 7
+      { id: 8, name: 'Recreation' }, // subcategory 8
+      { id: 9, name: 'Vocational' }, // subcategory 9
+    ], // the nine Honors subcategories, A to Z
+    Shirts: [], // none
+  }, // a key per category
 }

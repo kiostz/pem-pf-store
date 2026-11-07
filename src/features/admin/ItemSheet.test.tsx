@@ -1,6 +1,6 @@
 // Tests for the Item sheet (Edit and Add): the shown times, what Done hands back, the field errors, one request per Add, and who sees Delete.
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react' // rendering and events
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react' // rendering and events
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest' // test API
 import type { AdminItem } from '../../../workers/admin/src/admin-types.ts' // the row shape
 import { ItemSheet } from './ItemSheet.tsx' // the code under test
@@ -28,6 +28,7 @@ function openSheet(props: Partial<React.ComponentProps<typeof ItemSheet>> = {}) 
       mode="edit"
       item={knot}
       categories={meta.categories}
+      subcategories={meta.subcategories} // the lists the picker reads
       currency={meta.currency}
       defaultPriceCents={meta.defaultPriceCents}
       isNameTaken={() => false}
@@ -46,7 +47,7 @@ describe('Edit sheet', () => {
     })
     expect(screen.getByRole('heading', { name: 'Edit item' })).toBeInTheDocument()
     expect(screen.getByLabelText('Name')).toHaveValue('Knot Tying')
-    expect(screen.getByLabelText('Category')).toHaveValue('Recreation')
+    expect(screen.getByLabelText('Category')).toHaveValue('Honors') // the fixture's category
     expect(screen.getByLabelText('Price (RM)')).toHaveValue('4.00')
     expect(screen.getByText('Created 1 Nov 2026, 8:00 am')).toBeInTheDocument()
     expect(screen.getByText('Last changed 3 Nov 2026, 5:05 pm')).toBeInTheDocument()
@@ -63,9 +64,9 @@ describe('Edit sheet', () => {
     const spies = openSheet({ pending: { name: 'Knots' } })
     expect(screen.getByLabelText('Name')).toHaveValue('Knots')
     fireEvent.change(screen.getByLabelText('Price (RM)'), { target: { value: '5.5' } })
-    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Nature' } })
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Accessories' } }) // a category with no subcategories
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-    expect(spies.onDone).toHaveBeenCalledWith({ name: 'Knots', category: 'Nature', priceCents: 550, stock: 12 }) // Done hands back the edits and the unchanged stock
+    expect(spies.onDone).toHaveBeenCalledWith({ name: 'Knots', category: 'Accessories', subcategoryId: null, priceCents: 550, stock: 12 }) // Done hands back the edits and the unchanged stock
     expect(spies.onClose).toHaveBeenCalled()
   })
 
@@ -208,12 +209,12 @@ describe('Add sheet', () => {
     const onAdd = vi.fn(() => new Promise<'added'>((resolve) => (finish = resolve)))
     const spies = openSheet({ mode: 'add', item: undefined, onAdd })
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: ' Camp Hat ' } })
-    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Shirt' } })
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Shirts' } }) // a category with no subcategories
     const add = screen.getByRole('button', { name: 'Add item' })
     fireEvent.click(add)
     fireEvent.click(add)
     expect(onAdd).toHaveBeenCalledTimes(1)
-    expect(onAdd).toHaveBeenCalledWith({ name: 'Camp Hat', category: 'Shirt', priceCents: 450 })
+    expect(onAdd).toHaveBeenCalledWith({ name: 'Camp Hat', category: 'Shirts', subcategoryId: null, priceCents: 450 }) // an Add in Shirts sends null
     await act(async () => finish('added'))
     expect(spies.onClose).toHaveBeenCalled()
   })
@@ -238,12 +239,87 @@ describe('Add sheet', () => {
       const onAdd = vi.fn(() => Promise.resolve(outcome))
       const spies = openSheet({ mode: 'add', item: undefined, onAdd })
       fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Camp Hat' } })
-      fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Shirt' } })
+      fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Shirts' } }) // a category with no subcategories
       await act(async () => void fireEvent.click(screen.getByRole('button', { name: 'Add item' })))
       expect(screen.getByText(line)).toBeInTheDocument()
       expect(spies.onClose).not.toHaveBeenCalled()
       cleanup() // the next round renders afresh
     }
+  })
+})
+
+describe('Subcategory picker', () => { // shown when the chosen category has subcategories
+  /**
+   * Reads the option labels of the Subcategory picker.
+   * @return the labels in order
+   */
+  const pickerOptions = () => // the labels of the picker's options
+    within(screen.getByLabelText('Subcategory')).getAllByRole('option').map((option) => option.textContent) // each label
+
+  it('lists None then the nine subcategories A to Z in Honors, with the item\'s own picked, and shows none for Accessories and Shirts', () => { // the picker follows the category
+    // catches: a picker that is always shown, lists the wrong subcategories, or starts on the wrong one.
+    openSheet() // Knot Tying, Honors, Recreation
+    expect(pickerOptions()).toEqual(['None', 'ADRA', 'Arts and Crafts', 'Health and Science', 'Household Arts', 'Nature', 'Outdoor Industries', 'Outreach', 'Recreation', 'Vocational']) // None first, then A to Z
+    expect(screen.getByLabelText('Subcategory')).toHaveDisplayValue('Recreation') // the item's own
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Accessories' } }) // another category
+    expect(screen.queryByLabelText('Subcategory')).not.toBeInTheDocument() // none for Accessories
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Shirts' } }) // and Shirts
+    expect(screen.queryByLabelText('Subcategory')).not.toBeInTheDocument() // none for Shirts
+  })
+
+  it('starts at the pending subcategory when one is set, and at None when the item has none', () => { // drafts start from pending ?? item
+    // catches: a picker that ignores a pending pick, or shows a name for an item with none.
+    openSheet({ pending: { subcategoryId: 2 } }) // an unsaved Arts and Crafts
+    expect(screen.getByLabelText('Subcategory')).toHaveDisplayValue('Arts and Crafts') // the pending pick
+    cleanup() // a fresh sheet
+    openSheet({ item: makeItem({ ...knot, subcategoryId: null, subcategory: null }) }) // an Honors item with none
+    expect(screen.getByLabelText('Subcategory')).toHaveDisplayValue('None') // None
+  })
+
+  it('passes the picked id to Done, and null for None', () => { // Done carries the pick
+    // catches: Done that sends the old subcategory or a name instead of an id.
+    const spies = openSheet() // Knot Tying
+    fireEvent.change(screen.getByLabelText('Subcategory'), { target: { value: '5' } }) // Nature
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // confirm
+    expect(spies.onDone).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'Honors', subcategoryId: 5 })) // the id
+    fireEvent.change(screen.getByLabelText('Subcategory'), { target: { value: '' } }) // None
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // confirm again
+    expect(spies.onDone).toHaveBeenLastCalledWith(expect.objectContaining({ subcategoryId: null })) // null
+  })
+
+  it('hides the picker for Shirts and hands null to Done, and shows None, not the old pick, when Honors is chosen again', () => { // a category change resets the pick
+    // catches: a subcategory kept across a category change, which the Worker would refuse as a misfit.
+    const spies = openSheet() // Knot Tying, Recreation
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Shirts' } }) // away
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // confirm
+    expect(spies.onDone).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'Shirts', subcategoryId: null })) // cleared
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Honors' } }) // back
+    expect(screen.getByLabelText('Subcategory')).toHaveDisplayValue('None') // not Recreation
+  })
+
+  it('never shows an error line for the subcategory, since None is allowed', () => { // optional field
+    // catches: a "Choose a subcategory." error blocking an Honors item saved with no subcategory.
+    const spies = openSheet({ item: makeItem({ ...knot, subcategoryId: null, subcategory: null }) }) // none picked
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // confirm
+    expect(screen.queryByText('Choose a subcategory.')).not.toBeInTheDocument() // no line
+    expect(spies.onDone).toHaveBeenCalledWith(expect.objectContaining({ subcategoryId: null })) // it went through
+  })
+
+  it('in Add shows the picker once Honors is chosen and sends the pick, and sends null for Shirts or None', async () => { // Add carries the pick
+    // catches: an Add sheet without the picker, or one that omits the key.
+    const spies = openSheet({ mode: 'add', item: undefined }) // the Add sheet
+    expect(screen.queryByLabelText('Subcategory')).not.toBeInTheDocument() // no category yet
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Test Patch' } }) // a name
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Honors' } }) // Honors
+    fireEvent.change(screen.getByLabelText('Subcategory'), { target: { value: '5' } }) // Nature
+    await act(async () => void fireEvent.click(screen.getByRole('button', { name: 'Add item' }))) // add
+    expect(spies.onAdd).toHaveBeenLastCalledWith({ name: 'Test Patch', category: 'Honors', subcategoryId: 5, priceCents: 450 }) // the pick
+    cleanup() // a fresh sheet
+    const next = openSheet({ mode: 'add', item: undefined }) // another Add
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Test Patch' } }) // a name
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Honors' } }) // Honors, left on None
+    await act(async () => void fireEvent.click(screen.getByRole('button', { name: 'Add item' }))) // add
+    expect(next.onAdd).toHaveBeenLastCalledWith({ name: 'Test Patch', category: 'Honors', subcategoryId: null, priceCents: 450 }) // None
   })
 })
 
@@ -357,6 +433,7 @@ describe('Picture section', () => {
         mode="edit"
         item={{ ...withPicture, image: 'items/knot-tying-1a2b3c4d.webp' }}
         categories={meta.categories}
+        subcategories={meta.subcategories} // the lists the picker reads
         currency={meta.currency}
         defaultPriceCents={meta.defaultPriceCents}
         onDone={spies.onDone}

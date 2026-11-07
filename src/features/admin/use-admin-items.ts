@@ -195,7 +195,7 @@ export function useAdminItems() {
    * @param value the wanted value
    */
   const edit = <
-    Field extends 'name' | 'category' | 'priceCents' | 'status' | 'stock',
+    Field extends 'name' | 'category' | 'subcategoryId' | 'priceCents' | 'status' | 'stock', // the fields a row edit can set, subcategory included
   >(
     row: AdminItem,
     field: Field,
@@ -214,20 +214,21 @@ export function useAdminItems() {
     edit(row, 'status', next)
 
   /**
-   * Edits a row's name, category, price and stock from the Item sheet.
+   * Edits a row's name, category, subcategory, price and stock from the Item sheet.
    * @param row the row as shown
-   * @param values the four values the sheet holds
+   * @param values the five values the sheet holds
    */
   const setDetails = (
     row: AdminItem,
-    values: { name: string; category: string; priceCents: number; stock: number }, // the sheet's four values
+    values: { name: string; category: string; subcategoryId: number | null; priceCents: number; stock: number }, // the sheet's five values
   ) => {
     setSnapshot(null) // a new edit closes Undo
     let next = setEdit(pendingRef.current, row, 'name', values.name) // the name
     next = setEdit(next, row, 'category', values.category) // the category
+    next = setEdit(next, row, 'subcategoryId', values.subcategoryId) // the subcategory
     next = setEdit(next, row, 'priceCents', values.priceCents) // the price
     next = setEdit(next, row, 'stock', values.stock) // the stock
-    commitPending(next) // one commit for the four
+    commitPending(next) // one commit for the five
   }
 
   /** Sends every pending change in one save and handles the outcome. */

@@ -1,7 +1,7 @@
 // The admin Items screen: Add item, search, category and sort over D1 in pages, one row each with its status and stock, Load more, the Item sheet, and the Save pill and notes at the bottom, with its loading, error, empty and signed-out states.
 
 import { useEffect, useState } from 'react' // which sheet is open, and the pending count report
-import type { PriceSettings } from '../../../workers/admin/src/admin-types.ts' // the saved currency and price
+import type { AdminItem, AdminMeta, PriceSettings } from '../../../workers/admin/src/admin-types.ts' // the saved currency and price
 import { PILL_ACTION, PILL_DOCK, PILL_NOTE } from '@/shared/ui/floating-pill-box.ts' // the floating pill's dock and note shapes
 import { AdminItemRow } from './AdminItemRow.tsx' // one row
 import { FIELD_BOX, NOTE_BUTTON, SOFT_BUTTON } from './admin-boxes.ts' // shared shapes
@@ -9,6 +9,7 @@ import { ItemSheet } from './ItemSheet.tsx' // Edit and Add
 import { LoadMore } from './LoadMore.tsx' // the end of the list
 import { SavePill } from './SavePill.tsx' // Discard and Save
 import { SortControl } from './SortControl.tsx' // the order
+import type { ItemEdits } from './pending-changes.ts' // the unsaved edits
 import type { ResizeDeps } from './resize-picture.ts' // the passed-in browser pieces
 import { useAdminItems } from './use-admin-items.ts' // the screen's state
 
@@ -23,6 +24,21 @@ const NOTES = {
 
 // Which sheet is open: Add, or Edit of one item.
 type Sheet = { mode: 'add' } | { mode: 'edit'; id: string }
+
+/**
+ * Finds the subcategory name a row shows: the item's own when nothing is edited, else the name of the shown subcategory when it belongs to the shown category, so a row never reads "Shirts · Nature".
+ * @param row the row as seen
+ * @param edits the row's unsaved edits, if any
+ * @param subcategories the meta's subcategories of each category, undefined until /api/meta answers
+ * @return the name to show, or null for none
+ */
+function subcategoryName(row: AdminItem, edits: ItemEdits | undefined, subcategories: AdminMeta['subcategories'] | undefined): string | null { // the name of a row's subcategory
+  if (edits?.category === undefined && edits?.subcategoryId === undefined) return row.subcategory // nothing edited: what the row holds
+  const id = edits?.subcategoryId !== undefined ? edits.subcategoryId : row.subcategoryId // the pending pick, else the row's own
+  if (id === null) return null // none, or cleared
+  const list = subcategories?.[edits?.category ?? row.category] ?? [] // the shown category's subcategories
+  return list.find((entry) => entry.id === id)?.name ?? null // the name, or none when the subcategory doesn't belong to the category
+}
 
 /**
  * The Items screen.
@@ -232,6 +248,7 @@ export function ItemsScreen({
               conflict={conflicts[row.id]} // its flag
               currency={currency} // for the price
               now={now} // for the date
+              subcategory={subcategoryName(row, pending[row.id]?.edits, meta?.subcategories)} // the name to show
               onEdit={() => setSheet({ mode: 'edit', id: row.id })} // the Item sheet
               onStatus={(next) => items.setStatus(row, next)} // a status edit
             />
@@ -263,6 +280,7 @@ export function ItemsScreen({
           key="add" // a fresh draft each time
           mode="add"
           categories={meta.categories}
+          subcategories={meta.subcategories} // the picker's lists
           currency={meta.currency}
           defaultPriceCents={meta.defaultPriceCents}
           onDone={() => undefined} // an Add never uses Done
@@ -279,6 +297,7 @@ export function ItemsScreen({
           item={editing}
           pending={pending[editing.id]?.edits}
           categories={meta.categories}
+          subcategories={meta.subcategories} // the picker's lists
           currency={meta.currency}
           defaultPriceCents={meta.defaultPriceCents}
           isNameTaken={(name) =>

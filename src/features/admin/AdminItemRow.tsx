@@ -1,4 +1,4 @@
-// One row of the Items screen: the item's picture, its name as plain text, a line "Category · price · changed date", its status control, the stock as text and an Edit button (the only way into the Item sheet), a Changed label while edited, and the latest values after a conflict.
+// One row of the Items screen: the item's picture, its name as plain text, a line "Category · Subcategory · price · changed date", its status control, the stock as text and an Edit button (the only way into the Item sheet), a Changed label while edited, and the latest values after a conflict.
 
 import type { AdminItem, ItemStatus } from '../../../workers/admin/src/admin-types.ts' // the row and status types
 import { formatPrice } from '@/shared/format/price.ts' // "RM 25.00"
@@ -17,6 +17,7 @@ const PICTURE_BASE = '/pictures' // the Admin Worker serves pictures from its ow
  * @param conflict the row's current values when a save found it changed, to flag
  * @param currency the ISO currency code for the price
  * @param now the current time, for the "changed" date's year
+ * @param subcategory the subcategory name to show: the pending one when edited, else the item's own; null shows none
  * @param onEdit called when the Edit button is pressed
  * @param onStatus called with the new status
  * @return a card with two lines on a phone and one from 768 px
@@ -27,6 +28,7 @@ export function AdminItemRow({
   conflict,
   currency,
   now,
+  subcategory, // the name to show, or null
   onEdit, // the Edit button
   onStatus, // the Status control
 }: {
@@ -35,6 +37,7 @@ export function AdminItemRow({
   conflict?: AdminItem // the current values after a refused save
   currency: string // the ISO code
   now: Date // the current time
+  subcategory: string | null // the subcategory name to show
   onEdit: () => void // the Edit button opens the sheet
   onStatus: (status: ItemStatus) => void // a status pick
 }) {
@@ -63,8 +66,7 @@ export function AdminItemRow({
       <div className="order-2 min-w-0 flex-1">
         <p className="font-medium wrap-break-word">{name}</p> {/* plain text: the Edit button is the way in */}
         <p className="text-text-muted flex flex-wrap items-center gap-x-2 text-sm">
-          {`${pending?.category ?? item.category} · ${price} · ${formatChangedShort(item.modifiedAt, now)}`}{' '}
-          {/* the Category label, the price and the date */}
+          {[pending?.category ?? item.category, subcategory, price, formatChangedShort(item.modifiedAt, now)].filter((part) => part !== null).join(' · ')}{' '}{/* the category, the subcategory when set, the price and the date, joined with dots */}
           {
             changed && (
               <span className="bg-bg-soft text-accent rounded-pill px-2 text-xs font-medium">Changed</span>

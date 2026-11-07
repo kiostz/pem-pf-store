@@ -55,7 +55,7 @@ export interface NewItem {
   name: string // 1-100 characters.
   category: string // One of the fixed list.
   priceCents: number // 0-99,999.
-  subcategoryId?: number | null // A subcategory of the category; absent or null means none.
+  subcategoryId: number | null // A subcategory of the category; null means none. The parser still reads an absent key as null.
 }
 
 // A delete request: the id and the row as the admin saw it.

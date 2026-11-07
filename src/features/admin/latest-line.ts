@@ -7,7 +7,7 @@ import { formatPrice } from '@/shared/format/price.ts' // "RM 25.00"
  * Writes an item's current values on one line.
  * @param row the item's latest values
  * @param currency the ISO currency code
- * @return "Camp Shirt · Shirt · RM 25.00 · Active · 9 in stock"
+ * @return "Knot Tying · Honors · Recreation · RM 4.00 · Active · 9 in stock", with no subcategory part when the item has none
  */
 export const describeLatest = (row: AdminItem, currency: string): string =>
-  `${row.name} · ${row.category} · ${formatPrice(row.priceCents / 100, currency)} · ${row.status === 'active' ? 'Active' : 'Hidden'} · ${row.stock} in stock` // name, category, price, status and stock
+  `${row.name} · ${row.category}${row.subcategory === null ? '' : ` · ${row.subcategory}`} · ${formatPrice(row.priceCents / 100, currency)} · ${row.status === 'active' ? 'Active' : 'Hidden'} · ${row.stock} in stock` // name, category, the subcategory when set, price, status and stock

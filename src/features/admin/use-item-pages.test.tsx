@@ -88,9 +88,9 @@ describe('useItemPages', () => {
     stubPages((url) => new Promise<Response>((resolve) => (answers[url] = resolve)))
     const { result } = renderHook(() => useItemPages())
     await act(async () => undefined)
-    act(() => result.current.setCategory('Nature'))
+    act(() => result.current.setCategory('Honors')) // the Honors category filter
     await act(async () => undefined)
-    await act(async () => answers['/api/items?sort=changed&category=Nature'](page(['new'])))
+    await act(async () => answers['/api/items?sort=changed&category=Honors'](page(['new']))) // the Honors category filter
     await act(async () => answers['/api/items?sort=changed'](page(['old'])))
     expect(result.current.rows.map((row) => row.id)).toEqual(['new'])
   })

@@ -54,13 +54,13 @@ describe('loadItemPage', () => {
     const result = await loadItemPage({
       sort: 'newest',
       q: 'knot tying',
-      category: 'Recreation',
+      category: 'Honors', // a category filter
       cursor: 'c1',
     })
     expect(result).toEqual({ kind: 'ok', items: [knot], nextCursor: 'abc' })
     const calls = spy.mock.calls as unknown as [string, RequestInit][]
     expect(calls[0][0]).toBe(
-      '/api/items?sort=newest&q=knot+tying&category=Recreation&cursor=c1',
+      '/api/items?sort=newest&q=knot+tying&category=Honors&cursor=c1', // the filter reaches the query
     )
     expect(calls[0][1]).toMatchObject({ redirect: 'manual' })
   })
@@ -131,11 +131,12 @@ describe('isAdminItem through loadItemPage', () => { // the subcategory fields o
   it('accepts a row with a subcategory pair and refuses a missing, text or half-set one', async () => { // row checks
     // catches: a page that trusts a row without subcategoryId, or one with a name but no id.
     const set = { ...knot, subcategoryId: 5, subcategory: 'Nature' } // both set
-    stubFetch(body([set, knot])) // a pair, and null with null
-    expect(await loadItemPage(query)).toEqual({ kind: 'ok', items: [set, knot], nextCursor: null }) // accepted
+    const none = { ...knot, subcategoryId: null, subcategory: null } // neither set
+    stubFetch(body([set, none])) // a pair, and null with null
+    expect(await loadItemPage(query)).toEqual({ kind: 'ok', items: [set, none], nextCursor: null }) // accepted
     const withoutId: Partial<typeof knot> = { ...knot } // a row from an old Worker
     delete withoutId.subcategoryId // the field is missing
-    for (const bad of [withoutId, { ...knot, subcategoryId: '5', subcategory: 'Nature' }, { ...knot, subcategoryId: 5 }, { ...knot, subcategory: 'Nature' }, { ...knot, subcategoryId: 0, subcategory: 'Nature' }]) { // each is refused
+    for (const bad of [withoutId, { ...knot, subcategoryId: '5', subcategory: 'Nature' }, { ...none, subcategoryId: 5 }, { ...none, subcategory: 'Nature' }, { ...knot, subcategoryId: 0, subcategory: 'Nature' }]) { // each is refused
       stubFetch(body([bad])) // the bad row
       expect(await loadItemPage(query), JSON.stringify(bad)).toEqual({ kind: 'error' }) // an error
     } // end of loop
@@ -232,7 +233,7 @@ describe('sendItemChanges', () => {
 })
 
 describe('addItem', () => {
-  const input = { name: 'Camp Shirt', category: 'Shirt', priceCents: 2500 } // a new item
+  const input = { name: 'Camp Shirt', category: 'Shirts', subcategoryId: null, priceCents: 2500 } // a new item with no subcategory
 
   it('posts the item and maps 201, name-taken, id-taken, signed-out and failures', async () => {
     // Catches an Add that cannot tell the two 409s apart, which need different words.
@@ -255,12 +256,26 @@ describe('addItem', () => {
   })
 })
 
+describe('addItem subcategory', () => { // the Add request's subcategory
+  it('posts the body with subcategoryId as given, null included', async () => { // the Add request carries the pick
+    // catches: an Add that drops the subcategory pick or turns null into a missing key.
+    const spy = stubFetch(Response.json({ item: knot }, { status: 201 })) // the answer
+    await addItem({ name: 'Test Patch', category: 'Honors', subcategoryId: 9, priceCents: 450 }) // a pick
+    await addItem({ name: 'Camp Hat', category: 'Shirts', subcategoryId: null, priceCents: 450 }) // none
+    const bodies = (spy.mock.calls as unknown as [string, RequestInit][]).map(([, init]) => JSON.parse(init.body as string)) // what went out
+    expect(bodies).toEqual([ // both bodies
+      { name: 'Test Patch', category: 'Honors', subcategoryId: 9, priceCents: 450 }, // a pick of Vocational
+      { name: 'Camp Hat', category: 'Shirts', subcategoryId: null, priceCents: 450 }, // None, sent as null
+    ]) // both keys present
+  })
+})
+
 describe('deleteItem', () => {
   const request = {
     id: 'camp-shirt',
     seen: {
       name: 'Camp Shirt',
-      category: 'Shirt',
+      category: 'Shirts', // a Shirts item in the delete request
       priceCents: 2500,
       status: 'hidden' as const,
       stock: 0,
@@ -469,7 +484,7 @@ describe('answers from an old Worker and orders without a buyer', () => {
     stubFetch(Response.json({ honors: [knot] }))
     expect(await sendItemChanges([{ id: 'knot-tying', stock: { from: 1, to: 2 } }])).toEqual({ kind: 'error' })
     stubFetch(Response.json({ honor: knot }, { status: 201 }))
-    expect(await addItem({ name: 'Knot Tying', category: 'Outdoor', priceCents: 400 })).toEqual({ kind: 'error' })
+    expect(await addItem({ name: 'Knot Tying', category: 'Honors', subcategoryId: null, priceCents: 400 })).toEqual({ kind: 'error' }) // an answer under the old key is an error
     stubFetch(Response.json({ honor: knot }))
     expect(await uploadPicture('knot-tying', null, new Blob(['x'], { type: 'image/webp' }))).toEqual({ kind: 'error' })
     stubFetch(Response.json({ error: 'conflict', honors: [knot], deletedIds: [] }, { status: 409 }))
