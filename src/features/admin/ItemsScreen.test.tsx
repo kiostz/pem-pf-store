@@ -1621,4 +1621,27 @@ describe('restock reloads and picture saves that arrive while an item save runs'
     await act(async () => { release(Response.json({ items: [{ ...rows[2], status: 'hidden', modifiedAt: '2026-11-07T01:00:00.000Z' }] })); await saving }) // the save's answer
     await waitFor(() => expect(pageUrls(spy)).toHaveLength(2)) // one reload after it
   })
+
+  it.each([ // a save that does not write
+    ['a 500', Response.json({}, { status: 500 }), 'failed'], // the Worker failed
+    ['a 403', Response.json({}, { status: 403 }), 'signed-out'], // the Access session ended
+  ])('still applies a picture saved during a save that ended in %s, and keeps the edit pending', async (_label, answer, ended) => { // the queue flushes on every ending
+    // catches: a queued picture update that is lost, or the row left on its old picture, when the save does not write
+    let release: (response: Response) => void = () => undefined // finishes the save
+    stubApi({ // the stub with a held save
+      changes: () => new Promise<Response>((resolve) => (release = resolve)), // the save waits
+      picture: () => Response.json({ item: { ...rows[2], image: 'items/knot-tying-1a2b3c4d.webp', modifiedAt: '2026-11-07T02:00:00.000Z' } }), // the picture is saved
+    }) // the stub is set
+    const { result } = renderHook(() => useAdminItems()) // the hook
+    await waitFor(() => expect(result.current.pages.rows).toHaveLength(4)) // the rows have loaded
+    const knot = result.current.pages.rows[2] // Knot Tying as listed
+    act(() => result.current.setStatus(knot, 'hidden')) // pending: Hidden
+    let saving: Promise<void> = Promise.resolve() // the running save
+    act(() => { saving = result.current.save() }) // starts the save
+    await act(async () => void (await result.current.uploadItemPicture(knot, new Blob(['x'])))) // the picture answers during it
+    await act(async () => { release(answer); await saving }) // the save ends without writing
+    await waitFor(() => expect(result.current.pages.rows[2].image).toBe('items/knot-tying-1a2b3c4d.webp')) // the picture shows
+    expect(result.current.saveState).toBe(ended) // the save's own outcome stands
+    expect(result.current.count).toBe(1) // the Hidden edit is still pending
+  })
 })

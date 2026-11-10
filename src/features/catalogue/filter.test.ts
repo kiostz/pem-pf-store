@@ -116,6 +116,12 @@ describe('filterItems with a subcategory', () => { // the Subcategory filter's n
     ).toEqual(['Knot Tying']) // only the one that matches all
   })
 
+  it('drops an item of the category that has no subcategory once a subcategory is picked', () => { // a null subcategory is not a match
+    // catches: an honor with no subcategory showing under a chip because null is treated as a wildcard
+    const list = [sub('Tied', 'Honors', 'Nature'), sub('Loose', 'Honors', null)] // one with, one without
+    expect(filterItems(list, { ...all, category: 'Honors', subcategory: 'Nature' }).map((listed) => listed.name)).toEqual(['Tied']) // only the Nature one
+  })
+
   it('keeps every subcategory, and items with none, when the subcategory is null', () => { // All chip
     // catches: a null subcategory hiding items that have none
     const list = [sub('A', 'Honors', 'Nature'), sub('B', 'Honors', null)] // one each

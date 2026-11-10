@@ -593,11 +593,11 @@ describe('Catalogue Subcategory filter', () => { // the chip row inside the tool
    */
   const chips = () => Array.from(screen.getByRole('group', { name: 'Subcategory' }).querySelectorAll('button')).map((button) => button.textContent) // the row's buttons
 
-  it.each([[null], ['Accessories']])('has no chip row for %j', async (category) => { // All categories and Accessories
-    // catches: a chip row where there is nothing to narrow
+  it.each([[null], ['Accessories'], ['Shirts']])('has no chip row for %j', async (category) => { // All categories, Accessories and Shirts
+    // catches: a chip row where there is nothing to narrow, such as an empty row under Shirts
     serveHonors() // the data
     render(<CatalogueWithCart initialCategory={category} />) // the screen
-    await screen.findByText('Scarf') // wait for the load
+    await screen.findByText(category === 'Shirts' ? 'Tee' : 'Scarf') // wait for the load, on an item the category lists
     expect(screen.queryByRole('group', { name: 'Subcategory' })).not.toBeInTheDocument() // none
   })
 
@@ -631,13 +631,14 @@ describe('Catalogue Subcategory filter', () => { // the chip row inside the tool
 
   it.each([ // the categories whose chips cannot apply
     ['Accessories', 'Nature'], // a category with no subcategories
+    ['Shirts', 'Nature'], // the other category with none
     [null, 'Nature'], // no category at all
   ])('shows every item of the category for %j with subcategory %j', async (category, subcategory) => { // the fallback
     // catches: an address with a stray subcategory hiding every item
     serveHonors() // the data
     render(<CatalogueWithCart initialCategory={category} initialSubcategory={subcategory} />) // the screen
-    await screen.findByText('Scarf') // wait for the load
-    const expected = category === 'Accessories' ? 1 : 7 // Accessories alone, or all
+    await screen.findByText(category === 'Shirts' ? 'Tee' : 'Scarf') // wait for the load, on an item the category lists
+    const expected = category === 'Accessories' || category === 'Shirts' ? 1 : 7 // the one item of Accessories or Shirts, or all
     expect(screen.getAllByRole('listitem')).toHaveLength(expected) // the subcategory was ignored
   })
 
