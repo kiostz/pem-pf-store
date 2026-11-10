@@ -16,6 +16,17 @@ describe('StockStepper', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
+  it('reports typing while a number is uncommitted, and stops when it commits', () => { // the sheet counts a typed number as a change
+    // catches: a stepper that hides an uncommitted number from the sheet, so a row move treats the stock as untouched
+    const onTypingChange = vi.fn() // the report
+    render(<StockStepper itemName="Knot Tying" stock={12} onChange={vi.fn()} onTypingChange={onTypingChange} />) // the stepper
+    const field = screen.getByRole('textbox', { name: 'Stock of Knot Tying' }) // the number field
+    fireEvent.change(field, { target: { value: '9' } }) // type
+    expect(onTypingChange).toHaveBeenLastCalledWith(true) // typing
+    fireEvent.blur(field) // commit
+    expect(onTypingChange).toHaveBeenLastCalledWith(false) // done
+  })
+
   it('steps by one with the two buttons', () => {
     // Catches buttons that step by the wrong amount or in the wrong direction.
     const onChange = vi.fn()

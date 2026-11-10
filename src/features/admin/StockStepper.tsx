@@ -12,16 +12,19 @@ const BUTTON_BOX = `${CONTROL_BOX} w-11 rounded-pill transition-transform durati
  * @param itemName the item's name, used in the labels
  * @param stock the stock now
  * @param onChange called with the new stock when a button or the typed number commits it
+ * @param onTypingChange called with true when the admin starts typing a number, and false when it is committed or dropped
  * @return a group with minus, the number field and plus
  */
 export function StockStepper({
   itemName,
   stock,
   onChange,
+  onTypingChange, // reports an uncommitted number
 }: {
   itemName: string // the item's name
   stock: number // the stock now
   onChange: (stock: number) => void // called on a real change
+  onTypingChange?: (typing: boolean) => void // an uncommitted number is being typed
 }) {
   const [draft, setDraft] = useState<string | null>(null) // what the admin is typing, null when not typing
 
@@ -29,6 +32,7 @@ export function StockStepper({
   const commit = () => {
     if (draft === null) return // nothing typed
     setDraft(null) // show the real stock again
+    onTypingChange?.(false) // nothing is waiting any more
     if (draft === '') return // a cleared field restores the earlier value
     const next = Math.min(Number(draft), MAX_STOCK) // never above the limit
     if (next !== stock) onChange(next) // only a real change
@@ -58,7 +62,10 @@ export function StockStepper({
         aria-label={`Stock of ${itemName}`} // names the item
         value={draft ?? String(stock)} // the typing, or the real stock
         onFocus={(event) => event.target.select()} // typing replaces the number
-        onChange={(event) => setDraft(event.target.value.replace(/\D/g, '')) /* digits only */}
+        onChange={(event) => { // every keystroke
+          setDraft(event.target.value.replace(/\D/g, '')) // digits only
+          onTypingChange?.(true) // an uncommitted number now exists
+        }}
         onBlur={commit} // leaving commits
         onKeyDown={(event) => { // Enter commits and never submits a wrapping form
           if (event.key !== 'Enter') return // only Enter

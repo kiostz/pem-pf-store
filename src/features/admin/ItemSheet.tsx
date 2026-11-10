@@ -19,6 +19,17 @@ const MAX_NAME = 100 // the Worker's limit
 const PICTURE_BASE = '/pictures' // the Admin Worker serves pictures from its own origin
 const SAVE_PICTURE = `${SOFT_BUTTON} border-accent border-2 bg-transparent! font-bold aria-disabled:opacity-60` // the picture's own commit: outlined, so Done stays the one filled action
 
+// The five fields the sheet edits, as values.
+type SheetFields = { name: string; category: string; subcategoryId: number | null; priceCents: number; stock: number } // the values of the five fields
+const SHEET_FIELDS = ['name', 'category', 'subcategoryId', 'priceCents', 'stock'] as const // each field, for the follow and the diff
+
+/**
+ * Takes the five sheet fields from a row.
+ * @param row the row
+ * @return its name, category, subcategory, price and stock
+ */
+const fieldsOf = (row: AdminItem): SheetFields => ({ name: row.name, category: row.category, subcategoryId: row.subcategoryId, priceCents: row.priceCents, stock: row.stock }) // the five values
+
 /**
  * Checks a typed name.
  * @param text what is in the field
@@ -47,7 +58,7 @@ function checkName(
  * @param currency the ISO currency code
  * @param defaultPriceCents the price an added item starts with
  * @param isNameTaken tells whether another item has a name (edit only; Add leaves it to the Worker)
- * @param onDone called with the edited values when an edit is confirmed
+ * @param onDone called with the fields changed in the sheet, and the stored value the admin saw for each, when an edit is confirmed
  * @param onAdd called with the new item; answers what happened
  * @param onDelete called with the row after the Delete dialog; answers what happened
  * @param onPicture called with the row and the resized picture; answers what happened (edit only)
@@ -79,7 +90,7 @@ export function ItemSheet({
   currency: string // the ISO code
   defaultPriceCents: number // the starting price of an added item
   isNameTaken?: (name: string) => boolean // another item has it
-  onDone: (values: { name: string; category: string; subcategoryId: number | null; priceCents: number; stock: number }) => void // an edit confirmed
+  onDone: (values: Partial<SheetFields>, saw: Partial<SheetFields>) => void // an edit confirmed: the fields the admin changed, and the stored value the admin saw for each
   onAdd: (item: NewItem) => Promise<AddOutcome> // an add
   onDelete: (item: AdminItem) => Promise<DeleteOutcome> // a delete
   onPicture: (item: AdminItem, picture: Blob) => Promise<PictureOutcome> // a picture save
@@ -97,6 +108,11 @@ export function ItemSheet({
     formatPriceInput(mode === 'edit' ? (pending?.priceCents ?? item!.priceCents) : defaultPriceCents),
   ) // the price draft
   const [stock, setStock] = useState(mode === 'edit' ? (pending?.stock ?? item!.stock) : 0) // the stock draft, used in Edit only
+  const [base, setBase] = useState<SheetFields>(() => ({ name, category, subcategoryId, priceCents: defaultPriceCents, stock, ...(mode === 'edit' ? { priceCents: pending?.priceCents ?? item!.priceCents } : {}) })) // what each field showed before the admin touched it: a field is changed when its draft differs
+  const [saw, setSaw] = useState<SheetFields | null>(() => (mode === 'edit' ? fieldsOf(item!) : null)) // the stored value the admin saw for each field: the guard of a change
+  const [lastItem, setLastItem] = useState<SheetFields | null>(saw) // the row's values the sheet last took in, to tell when the row moved
+  const [stockTyping, setStockTyping] = useState(false) // a stock number is typed and not yet committed, which counts as a change
+  const [updated, setUpdated] = useState(false) // the row's values moved while the sheet was open
   const [errors, setErrors] = useState<{ name?: string; category?: string; price?: string; form?: string }>({}) // the lines to show
   const [adding, setAdding] = useState(false) // an Add is running
   const [confirming, setConfirming] = useState(false) // the Delete dialog is open
@@ -114,6 +130,35 @@ export function ItemSheet({
   const [preview, setPreview] = useState<{ blob: Blob; url: string } | null>(null) // the resized picture waiting to be saved
   const [pictureNote, setPictureNote] = useState<'saved' | 'conflict' | null>(null) // the line after a finished save
   const [pictureFailure, setPictureFailure] = useState<'error' | 'signed-out' | 'bad-file' | null>(null) // why the picture was not saved
+
+  // When the row changes while the sheet is open, an untouched field takes the row's new value; a touched field keeps the admin's value and the stored value the admin saw (state adjusted during render).
+  if (mode === 'edit' && item !== undefined && lastItem !== null && saw !== null) { // an edit sheet with its row
+    const now = fieldsOf(item) // the row's values now
+    const moved = SHEET_FIELDS.filter((field) => now[field] !== lastItem[field]) // the fields the row moved
+    if (moved.length > 0) { // the row moved
+      const price = parsePrice(priceText) // the price draft
+      const touched = { // which fields the admin changed
+        name: name.trim() !== base.name, // typed over
+        category: category !== base.category, // picked over
+        subcategoryId: subcategoryId !== base.subcategoryId, // picked over
+        priceCents: !price.ok || price.cents !== base.priceCents, // typed over, or not a price yet
+        stock: stock !== base.stock || stockTyping, // stepped, or typed and not yet committed
+      }
+      const follow = moved.filter((field) => !touched[field] && pending?.[field] === undefined) // untouched, and not showing an earlier unsaved edit
+      const nextBase = { ...base } // the new baselines
+      const nextSaw = { ...saw } // the new seen values
+      for (const field of follow) (nextBase as Record<string, unknown>)[field] = (nextSaw as Record<string, unknown>)[field] = now[field] // the field follows the row
+      if (follow.includes('name')) setName(now.name) // the new name
+      if (follow.includes('category')) setCategory(now.category) // the new category
+      if (follow.includes('subcategoryId')) setSubcategoryId(now.subcategoryId) // the new subcategory
+      if (follow.includes('priceCents')) setPriceText(formatPriceInput(now.priceCents)) // the new price
+      if (follow.includes('stock')) setStock(now.stock) // the new stock
+      setBase(nextBase) // taken
+      setSaw(nextSaw) // taken
+      setLastItem(now) // processed
+      setUpdated(true) // the note shows
+    }
+  }
 
   // Tracks whether the sheet is on screen, and frees the preview's object URL when it goes.
   useEffect(() => {
@@ -169,7 +214,11 @@ export function ItemSheet({
     const values = validate() // the clean values
     if (values === null) return // a line is showing
     if (mode === 'edit') {
-      onDone(values) // the pending list takes it, stock included
+      const changed: Partial<SheetFields> = {} // only what the admin changed, so an untouched field is never sent
+      for (const field of SHEET_FIELDS) if (values[field] !== base[field]) (changed as Record<string, unknown>)[field] = values[field] // a changed field
+      const seenValues: Partial<SheetFields> = {} // the stored value the admin saw for each changed field
+      for (const field of Object.keys(changed) as (keyof SheetFields)[]) (seenValues as Record<string, unknown>)[field] = saw![field] // its guard
+      onDone(changed, seenValues) // the pending list takes just these, each guarded by what the admin saw
       onClose() // the sheet goes
       return // nothing to send: an edit waits for Save
     }
@@ -307,6 +356,14 @@ export function ItemSheet({
               </svg>
             </button>
           </div>
+          {/* Says the row moved while the sheet was open. */}
+          {/* The note shows once the row has moved. */}
+          {updated && ( // only once the row has moved
+            // the status line, read out when it appears
+            <p role="status" className="text-text-muted mt-2 text-sm"> {/* muted small text, like the picture lines */}
+              This item was updated. {/* untouched fields show the latest values; changed ones keep the admin's */}
+            </p>
+          )}
           {/* The three fields; a line under a field says what to fix. */}
           <div className="mt-3 flex flex-col gap-4">
             {/* The picture of an existing item: choose, preview, then save at once. */}
@@ -372,7 +429,7 @@ export function ItemSheet({
                     : pictureNote === 'saved'
                       ? 'Picture saved.'
                       : pictureNote === 'conflict'
-                        ? 'This item has been updated.'
+                        ? 'Picture not saved: this item changed. Choose it again to retry.' // a refused save: the picture is not stored
                         : ''}
                 </p>
                 {pictureFailure !== null && (
@@ -482,7 +539,7 @@ export function ItemSheet({
             {mode === 'edit' && item !== undefined && (
               <div>
                 <p className="mb-1 text-sm font-medium">Stock</p> {/* the section's label */}
-                <StockStepper itemName={name || item.name} stock={stock} onChange={setStock} /> {/* the number */}
+                <StockStepper itemName={name || item.name} stock={stock} onChange={setStock} onTypingChange={setStockTyping} /> {/* the number */}
               </div>
             )}
           </div>

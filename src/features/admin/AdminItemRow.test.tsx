@@ -99,24 +99,24 @@ describe('AdminItemRow', () => { // the row on its own
   })
 
   it('has one Edit button named for the shown name, which calls onEdit once', () => {
-    // the pencil
+    // the Edit button
     // catches: an unnamed icon button, or a label that ignores a pending rename
     const spies = renderRow({ pending: { name: 'Knots' } }) // a pending rename
-    expect(screen.getAllByRole('button', { name: /^Edit / })).toHaveLength(1) // one pencil
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Knots' })) // press the pencil, named for the pending rename
+    expect(screen.getAllByRole('button', { name: /^Edit / })).toHaveLength(1) // one Edit button
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Knots' })) // press the Edit button, named for the pending rename
     expect(spies.onEdit).toHaveBeenCalledTimes(1) // opens the sheet once
   })
 
   it('names the Edit button after the stored name when nothing is pending', () => {
     // the label without an edit
-    // catches: a missing accessible name on the pencil
+    // catches: a missing accessible name on the Edit button
     renderRow() // the row
     expect(screen.getByRole('button', { name: 'Edit Knot Tying' })).toBeInTheDocument() // named for the item
   })
 
   it('gives the Edit button a 44 px target, and the Status control still reports onStatus', () => {
     // targets and the switch
-    // catches: a pencil too small to tap, or a Status control the new layout cut off
+    // catches: an Edit button too small to tap, or a Status control the new layout cut off
     const spies = renderRow() // the row
     expect(screen.getByRole('button', { name: 'Edit Knot Tying' })).toHaveClass('size-11') // 44 px
     fireEvent.click(screen.getByRole('switch', { name: 'Active: Knot Tying' })) // flip the switch

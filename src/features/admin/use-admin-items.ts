@@ -72,7 +72,7 @@ export function useAdminItems() {
   const [metaAttempt, setMetaAttempt] = useState(0) // bumped by Try again to load the meta again
   const [changesView, setChangesView] = useState(false) // the list shows only the pending rows
   const count = countChanges(pending) // the edited fields
-  // While a save is in flight, a restock reload and a picture save's row update wait here and run once the save's answer has been applied, so a reload started after the save never reads D1 before the save's write. The other direction: a reload already running when a save starts could still answer after the save's answer with rows read before the write, so a save that starts while the list is loading queues one more reload behind itself, whose start aborts the running one. Together: no list answer that read before a save's write lands after that save's answer. Do not let reloads land mid-save.
+  // While a save is in flight, a restock reload and a picture save's row update wait here and run once the save's answer has been applied, so a reload started after the save never reads D1 before the save's write. A save that starts while the list is loading queues one more reload behind itself, whose start aborts the running one. A Load more already running when a save starts is not covered by the queue; that is harmless because a next page never holds a row that is already listed, so none the save touched.
   const savingRef = useRef(false) // a save is in flight
   const [flushTick, setFlushTick] = useState(0) // bumped when a save ends, so the queue is looked at after the render that follows
   const queued = useRef<{ reload: boolean; updates: (() => void)[] }>({ reload: false, updates: [] }) // what waits for the save: one reload, and the picture updates in arrival order
@@ -134,7 +134,7 @@ export function useAdminItems() {
     queued.current = { reload: false, updates: [] } // taken
     updates.forEach((update) => update()) // each picture update, in order
     if (reload) pages.retry() // the one reload
-  }, [saveState, flushTick, pages]) // runs after each render; it does nothing unless a save has ended with something waiting
+  }, [saveState, flushTick, pages]) // pages is a new object every render, so this runs after every render by design; it does nothing unless a save has ended with something waiting
 
   // Loads the meta once, and again after Try again while it is missing.
   useEffect(() => {
@@ -234,21 +234,27 @@ export function useAdminItems() {
     edit(row, 'status', next)
 
   /**
-   * Edits a row's name, category, subcategory, price and stock from the Item sheet.
-   * @param row the row as shown
-   * @param values the five values the sheet holds
+   * Edits the fields the admin changed in the Item sheet; a field left out keeps its pending or shown value.
+   * @param row the row as shown now
+   * @param values the changed fields among name, category, subcategory, price and stock
+   * @param saw the stored value the admin saw for each changed field; it becomes that field's `from`, so a value another admin changed since meets the stale-stock check even when the row already had pending edits
    */
   const setDetails = (
     row: AdminItem,
-    values: { name: string; category: string; subcategoryId: number | null; priceCents: number; stock: number }, // the sheet's five values
+    values: Partial<{ name: string; category: string; subcategoryId: number | null; priceCents: number; stock: number }>, // the fields the sheet changed
+    saw: Partial<{ name: string; category: string; subcategoryId: number | null; priceCents: number; stock: number }> = {}, // what the admin saw for each
   ) => {
     setSnapshot(null) // a new edit closes Undo
-    let next = setEdit(pendingRef.current, row, 'name', values.name) // the name
-    next = setEdit(next, row, 'category', values.category) // the category
-    next = setEdit(next, row, 'subcategoryId', values.subcategoryId) // the subcategory
-    next = setEdit(next, row, 'priceCents', values.priceCents) // the price
-    next = setEdit(next, row, 'stock', values.stock) // the stock
-    commitPending(next) // one commit for the five
+    let next = pendingRef.current // the edits so far
+    const entry = next[row.id] // the row's earlier edits, if any
+    const seen = { ...(entry?.seen ?? row), ...saw } // the snapshot: the admin's seen values for the changed fields; the rest as the row or its entry has them, with the latest picture and change time
+    if (entry !== undefined) next = { ...next, [row.id]: { ...entry, seen } } // the entry's snapshot takes the seen values too, so it cannot move under a sheet edit
+    if (values.name !== undefined) next = setEdit(next, seen, 'name', values.name) // the name
+    if (values.category !== undefined) next = setEdit(next, seen, 'category', values.category) // the category
+    if (values.subcategoryId !== undefined) next = setEdit(next, seen, 'subcategoryId', values.subcategoryId) // the subcategory, null being None
+    if (values.priceCents !== undefined) next = setEdit(next, seen, 'priceCents', values.priceCents) // the price
+    if (values.stock !== undefined) next = setEdit(next, seen, 'stock', values.stock) // the stock
+    commitPending(next) // one commit for the changed fields
   }
 
   /** Sends every pending change in one save and handles the outcome. */
@@ -261,6 +267,8 @@ export function useAdminItems() {
     if (pages.pageState === 'loading') queued.current.reload = true // a list request already running may have read before this save's write: a reload behind the save will abort it
     try { // so the flag below is cleared even when the save throws
       await runSave() // the request and its outcome
+    } catch { // an unexpected throw ends the save as failed
+      setSaveState('failed') // a throw ends in the failed note, so the list and Save work again
     } finally { // runs after a success, a conflict, a failure and a throw alike
       savingRef.current = false // the save is over, whatever it answered
       setFlushTick((tick) => tick + 1) // so the queue is looked at after the render that shows the answer

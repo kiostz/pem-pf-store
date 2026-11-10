@@ -322,7 +322,7 @@ export function ItemsScreen({
               ...Object.values(pending).map((entry) => ({ ...entry.seen, name: entry.edits.name ?? entry.seen.name })), // names waiting to be saved
             ].some((row) => row.id !== editing.id && row.name.toLowerCase() === name.toLowerCase())
           } // another listed, flagged or pending item has it
-          onDone={(values) => items.setDetails(editing, values)} // into the pending list
+          onDone={(values, saw) => items.setDetails(editing, values, saw)} // into the pending list, each change guarded by the value the admin saw
           onAdd={items.add} // never used in Edit
           onDelete={items.remove} // after the Delete dialog
           onPicture={items.uploadItemPicture} // saved at once

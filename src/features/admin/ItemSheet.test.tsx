@@ -66,7 +66,7 @@ describe('Edit sheet', () => {
     fireEvent.change(screen.getByLabelText('Price (RM)'), { target: { value: '5.5' } })
     fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Accessories' } }) // a category with no subcategories
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-    expect(spies.onDone).toHaveBeenCalledWith({ name: 'Knots', category: 'Accessories', subcategoryId: null, priceCents: 550, stock: 12 }) // Done hands back the edits and the unchanged stock
+    expect(spies.onDone).toHaveBeenCalledWith({ category: 'Accessories', subcategoryId: null, priceCents: 550 }, expect.anything()) // Done hands back only what changed in the sheet: not the pending name, not the stock
     expect(spies.onClose).toHaveBeenCalled()
   })
 
@@ -85,19 +85,19 @@ describe('Edit sheet', () => {
     const plus = openSheet() // stock 12
     fireEvent.click(screen.getByRole('button', { name: 'One more' })) // + once
     fireEvent.click(screen.getByRole('button', { name: 'Done' })) // hand the draft back
-    expect(plus.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 13 })) // 12 + 1
+    expect(plus.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 13 }), expect.anything()) // 12 + 1
     cleanup() // a fresh sheet
     const minus = openSheet({ item: { ...knot, stock: 0 } }) // stock 0
     fireEvent.click(screen.getByRole('button', { name: "Stock can't go below 0" })) // minus at the floor
     fireEvent.click(screen.getByRole('button', { name: 'Done' })) // hand the draft back
-    expect(minus.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 0 })) // still 0
+    expect(minus.onDone).toHaveBeenCalledWith({}, expect.anything()) // still 0, so nothing changed
     cleanup() // a fresh sheet
     const big = openSheet() // stock 12
     const field = screen.getByRole('textbox', { name: 'Stock of Knot Tying' }) // the number field
     fireEvent.change(field, { target: { value: '123456' } }) // far above the limit
     fireEvent.blur(field) // commit by leaving the field
     fireEvent.click(screen.getByRole('button', { name: 'Done' })) // hand the draft back
-    expect(big.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 9999 })) // clamped to the Worker's limit
+    expect(big.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 9999 }), expect.anything()) // clamped to the Worker's limit
   })
 
   it('passes a typed 7 to Done without Enter, because the click blurs the field first', () => { // stock in the Item sheet
@@ -107,7 +107,7 @@ describe('Edit sheet', () => {
     fireEvent.change(field, { target: { value: '7' } }) // type 7, no Enter
     fireEvent.blur(field) // what a real click on Done does first
     fireEvent.click(screen.getByRole('button', { name: 'Done' })) // hand the draft back
-    expect(spies.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 7 })) // the typed 7 arrived
+    expect(spies.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 7 }), expect.anything()) // the typed 7 arrived
   })
 
   it('commits a typed 7 on Enter without closing the sheet, and Done then passes 7', () => { // stock in the Item sheet
@@ -120,7 +120,7 @@ describe('Edit sheet', () => {
     expect(spies.onClose).not.toHaveBeenCalled() // the sheet is still open
     expect(field).toHaveValue('7') // the field shows the committed number
     fireEvent.click(screen.getByRole('button', { name: 'Done' })) // now hand the draft back
-    expect(spies.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 7 })) // Done passes the 7
+    expect(spies.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 7 }), expect.anything()) // Done passes the 7
   })
 
   it('restores the earlier stock when the field is cleared, and Done passes it unchanged', () => { // stock in the Item sheet
@@ -131,7 +131,7 @@ describe('Edit sheet', () => {
     fireEvent.blur(field) // commit by leaving the field
     expect(field).toHaveValue('12') // the earlier stock came back
     fireEvent.click(screen.getByRole('button', { name: 'Done' })) // hand the draft back
-    expect(spies.onDone).toHaveBeenCalledWith(expect.objectContaining({ stock: 12 })) // unchanged
+    expect(spies.onDone).toHaveBeenCalledWith({}, expect.anything()) // unchanged, so nothing is handed back
   })
 
   it('has no Stock stepper in Add, and keeps the start line', () => { // stock in the Item sheet
@@ -281,10 +281,10 @@ describe('Subcategory picker', () => { // shown when the chosen category has sub
     const spies = openSheet() // Knot Tying
     fireEvent.change(screen.getByLabelText('Subcategory'), { target: { value: '5' } }) // Nature
     fireEvent.click(screen.getByRole('button', { name: 'Done' })) // confirm
-    expect(spies.onDone).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'Honors', subcategoryId: 5 })) // the id
+    expect(spies.onDone).toHaveBeenLastCalledWith({ subcategoryId: 5 }, expect.anything()) // the id, and only it
     fireEvent.change(screen.getByLabelText('Subcategory'), { target: { value: '' } }) // None
     fireEvent.click(screen.getByRole('button', { name: 'Done' })) // confirm again
-    expect(spies.onDone).toHaveBeenLastCalledWith(expect.objectContaining({ subcategoryId: null })) // null
+    expect(spies.onDone).toHaveBeenLastCalledWith({ subcategoryId: null }, expect.anything()) // null, and only it
   })
 
   it('hides the picker for Shirts and hands null to Done, and shows None, not the old pick, when Honors is chosen again', () => { // a category change resets the pick
@@ -292,9 +292,29 @@ describe('Subcategory picker', () => { // shown when the chosen category has sub
     const spies = openSheet() // Knot Tying, Recreation
     fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Shirts' } }) // away
     fireEvent.click(screen.getByRole('button', { name: 'Done' })) // confirm
-    expect(spies.onDone).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'Shirts', subcategoryId: null })) // cleared
+    expect(spies.onDone).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'Shirts', subcategoryId: null }), expect.anything()) // cleared
     fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Honors' } }) // back
     expect(screen.getByLabelText('Subcategory')).toHaveDisplayValue('None') // not Recreation
+  })
+
+  it('hands back only the field that changed, leaving the other drafts out', () => { // Done carries changes, not drafts
+    // catches: a Done that sends untouched drafts, which a stale sheet would turn into false edits
+    const spies = openSheet() // Knot Tying, stock 12
+    fireEvent.change(screen.getByLabelText('Price (RM)'), { target: { value: '5.50' } }) // only the price
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // confirm
+    expect(spies.onDone).toHaveBeenCalledWith({ priceCents: 550 }, { priceCents: 400 }) // nothing else, and the stored price the admin saw
+  })
+
+  it('follows a row change for untouched fields, keeps a touched one, and hands Done the stored value the admin saw', () => { // the sheet shows the latest, a change is checked against what was seen
+    // catches: a sheet that keeps old drafts after the row moved, drops the admin's own change, or guards a change with the new value
+    const spies = openSheet() // Knot Tying, stock 12, price 4.00
+    fireEvent.change(screen.getByLabelText('Price (RM)'), { target: { value: '5.50' } }) // the admin touches the price
+    spies.rerender(<ItemSheet mode="edit" item={{ ...knot, stock: 5, priceCents: 900 }} categories={meta.categories} subcategories={meta.subcategories} currency={meta.currency} defaultPriceCents={meta.defaultPriceCents} onDone={spies.onDone} onAdd={spies.onAdd} onDelete={spies.onDelete} onPicture={spies.onPicture} onClose={spies.onClose} />) // another admin set stock 5 and price 9.00
+    expect(screen.getByText('This item was updated.')).toBeInTheDocument() // the note
+    expect(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })).toHaveValue('5') // the untouched stock followed
+    expect(screen.getByLabelText('Price (RM)')).toHaveValue('5.50') // the touched price stayed
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // confirm
+    expect(spies.onDone).toHaveBeenCalledWith({ priceCents: 550 }, { priceCents: 400 }) // only the price, guarded by the 4.00 the admin saw
   })
 
   it('never shows an error line for the subcategory, since None is allowed', () => { // optional field
@@ -302,7 +322,7 @@ describe('Subcategory picker', () => { // shown when the chosen category has sub
     const spies = openSheet({ item: makeItem({ ...knot, subcategoryId: null, subcategory: null }) }) // none picked
     fireEvent.click(screen.getByRole('button', { name: 'Done' })) // confirm
     expect(screen.queryByText('Choose a subcategory.')).not.toBeInTheDocument() // no line
-    expect(spies.onDone).toHaveBeenCalledWith(expect.objectContaining({ subcategoryId: null })) // it went through
+    expect(spies.onDone).toHaveBeenCalledWith({}, expect.anything()) // it went through, with no field changed
   })
 
   it('in Add shows the picker once Honors is chosen and sends the pick, and sends null for Shirts or None', async () => { // Add carries the pick
@@ -461,12 +481,12 @@ describe('Picture section', () => {
     expect(onPicture.mock.calls[1]).toEqual([knot, resized])
   })
 
-  it('says This item has been updated. on a conflict and drops the preview', async () => {
+  it('says the picture was not saved on a conflict and drops the preview', async () => { // the picture line on a refused save
     // Catches a refused upload shown as saved.
     openSheet({ pictureDeps, onPicture: vi.fn(() => Promise.resolve('conflict' as PictureOutcome)) })
     await choose()
     await act(async () => void fireEvent.click(screen.getByRole('button', { name: 'Save picture' })))
-    expect(screen.getByRole('status')).toHaveTextContent('This item has been updated.')
+    expect(screen.getByRole('status')).toHaveTextContent('Picture not saved: this item changed. Choose it again to retry.') // the line says the picture was refused
     expect(screen.queryByRole('button', { name: 'Save picture' })).not.toBeInTheDocument()
   })
 

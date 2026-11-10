@@ -31,7 +31,26 @@ describe('useAdminItems queue', () => { // what waits for a save
     act(() => { saving = result.current.save() }) // starts the save
     act(() => result.current.reloadList()) // a restock during it: queued
     expect(lists()).toBe(1) // it waits
-    await act(async () => { fail(new Error('boom')); await saving.catch(() => undefined) }) // the save throws
+    await act(async () => { fail(new Error('boom')); await saving }) // the save throws
     await waitFor(() => expect(lists()).toBe(2)) // the queued reload still runs
+  })
+
+  it('ends in failed after a throw, and the list and Save work again', async () => { // a throw must not leave the save stuck
+    // catches: a save that throws and leaves saveState at saving, so Save, Discard and Load more stay dead
+    vi.stubGlobal('fetch', (url: unknown) => Promise.resolve(String(url).startsWith('/api/meta') ? Response.json(meta) : Response.json({ items: rows, nextCursor: null }))) // meta or a page
+    vi.mocked(sendItemChanges).mockReset() // no earlier answer
+    vi.mocked(sendItemChanges).mockRejectedValueOnce(new Error('boom')) // the first save throws
+    vi.mocked(sendItemChanges).mockResolvedValueOnce({ kind: 'saved', items: [{ ...rows[2], status: 'hidden' }] }) // the second is answered
+    const { result } = renderHook(() => useAdminItems()) // the hook
+    await waitFor(() => expect(result.current.pages.rows).toHaveLength(4)) // the rows have loaded
+    act(() => result.current.setStatus(result.current.pages.rows[2], 'hidden')) // pending: Hidden
+    await act(async () => { await result.current.save() }) // the save throws
+    expect(result.current.saveState).toBe('failed') // not stuck at saving
+    expect(result.current.count).toBe(1) // the edit is still pending
+    await act(async () => { await result.current.save() }) // Save works again
+    expect(sendItemChanges).toHaveBeenCalledTimes(2) // it sent again
+    expect(result.current.saveState).toBe('saved') // and succeeded
+    await act(async () => result.current.reloadList()) // a reload runs at once, not queued
+    await waitFor(() => expect(result.current.pages.pageState).not.toBe('loading')) // the list answered
   })
 })

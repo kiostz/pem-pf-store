@@ -82,13 +82,13 @@ export function AdminItemRow({
         <span className="w-24 shrink-0 text-right text-sm tabular-nums">{`${pending?.stock ?? item.stock} in stock`}</span>
       </div>
       {/* The Edit button: the end of line 1 at 375 px, the end of the row from 768 px; after the Status control in the tab order. */}
-      <button // the pencil
+      <button // the Edit button
         type="button" // not a form submit
         aria-label={`Edit ${name}`} // an icon only, so the label names the item
         onClick={onEdit} // opens the Item sheet
         className="bg-bg-soft text-accent focus-visible:outline-focus-ring rounded-pill order-3 flex size-11 shrink-0 items-center justify-center transition-transform duration-(--duration-press) focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.97] md:order-4" // 44 px soft round button, ring outside, press feedback
       >
-        <svg // the pencil icon
+        <svg // the Edit button icon
           aria-hidden="true" // the label says it
           viewBox="0 0 24 24" // the Tabler grid
           className="size-6" // 24 px
@@ -98,7 +98,7 @@ export function AdminItemRow({
           strokeLinecap="round" // Tabler's caps
           strokeLinejoin="round" // Tabler's joins
         >
-          <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /> {/* the pencil */}
+          <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /> {/* the Edit button icon */}
           <path d="M13.5 6.5l4 4" /> {/* its tip */}
         </svg>
       </button>

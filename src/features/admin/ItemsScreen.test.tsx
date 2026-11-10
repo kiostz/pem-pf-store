@@ -77,7 +77,7 @@ const hideKnot = () => fireEvent.click(screen.getByRole('switch', { name: 'Activ
  * Opens a row's Item sheet with its Edit button.
  * @param name the item's name
  */
-const openSheet = (name: string) => fireEvent.click(screen.getByRole('button', { name: `Edit ${name}` })) // the pencil is the only way in
+const openSheet = (name: string) => fireEvent.click(screen.getByRole('button', { name: `Edit ${name}` })) // the Edit button is the only way in
 
 /**
  * Sets an item's stock in its Item sheet and presses Done.
@@ -1183,8 +1183,8 @@ describe('picture upload', () => {
     expect((call[1] as RequestInit).body).toBe(resized) // the resized bytes
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(screen.getByRole('button', { name: 'Save (1 change)' })).toBeInTheDocument() // the rename is still pending
-    const names = screen.getAllByRole('button', { name: /^Edit / }).map((b) => b.getAttribute('aria-label')) // every row, by its pencil label
-    expect(names).toEqual(['Edit Africa Lore', 'Edit Camp Shirt', 'Edit Knots', 'Edit Nature Walk']) // each pencil sits in the row it sat in
+    const names = screen.getAllByRole('button', { name: /^Edit / }).map((b) => b.getAttribute('aria-label')) // every row, by its Edit button label
+    expect(names).toEqual(['Edit Africa Lore', 'Edit Camp Shirt', 'Edit Knots', 'Edit Nature Walk']) // each Edit button sits in the row it sat in
     fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' }))
     await screen.findByText('Saved 1 change.')
     expect(postBodies(spy)[0]).toEqual({ changes: [{ id: 'knot-tying', name: { from: 'Knot Tying', to: 'Knots' } }] }) // the guard still names the old name
@@ -1252,6 +1252,159 @@ describe('picture upload', () => {
     expect(screen.queryByText('Camp Shirt')).not.toBeInTheDocument() // the row goes
   })
 
+  /**
+   * Makes a picture save get a 409 whose row moved on, then leaves the sheet open on it.
+   * @param moved the fields the other admin changed
+   * @return the fetch spy
+   */
+  async function openSheetAfterPictureConflict(moved: Partial<AdminItem>) { // the sheet's drafts are now older than the row
+    const spy = stubApi({ // the picture save conflicts, the changes save writes
+      picture: () => Response.json({ error: 'conflict', items: [{ ...knotWithPicture, ...moved }], deletedIds: [] }, { status: 409 }), // another admin changed the row
+      changes: () => Response.json({ items: [{ ...rows[2], ...moved, priceCents: 550 }] }), // the save writes
+    })
+    await openScreen(deps) // the list
+    await uploadForKnot() // the sheet opens and the picture save conflicts
+    expect(await screen.findByText('Picture not saved: this item changed. Choose it again to retry.')).toBeInTheDocument() // the picture was refused: the row moved
+    return spy // for the request bodies
+  }
+
+  it('sends no stock pair for a price-only Done after a picture conflict moved the stock', async () => { // a picture 409 leaves the sheet's drafts behind the row
+    // catches: a sheet that hands back its old stock draft, so the save records a stock edit the admin never made
+    const spy = await openSheetAfterPictureConflict({ stock: 5 }) // the stock moved from 12 to 5
+    fireEvent.change(screen.getByLabelText('Price (RM)'), { target: { value: '5.50' } }) // only the price
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // into the pending list
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // one change, not two
+    await screen.findByText('Saved 1 change.') // saved
+    const change = postBodies(spy)[0].changes[0] // the row's change
+    expect(change.priceCents).toEqual({ from: 400, to: 550 }) // the price edit
+    expect(change).not.toHaveProperty('stock') // no stock pair
+  })
+
+  it('sends no subcategory pair for a price-only Done after a picture conflict moved the subcategory', async () => { // a picture 409 leaves the sheet's drafts behind the row
+    // catches: a sheet that hands back its old subcategory draft, overwriting another admin's pick
+    const spy = await openSheetAfterPictureConflict({ subcategoryId: 7, subcategory: 'Outreach' }) // Recreation became Outreach
+    fireEvent.change(screen.getByLabelText('Price (RM)'), { target: { value: '5.50' } }) // only the price
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // into the pending list
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // one change
+    await screen.findByText('Saved 1 change.') // saved
+    expect(postBodies(spy)[0].changes[0]).not.toHaveProperty('subcategoryId') // no subcategory pair
+  })
+
+  /**
+   * Stubs the changes route like the Worker: a stock `from` of the latest stock passes, any other is refused with the latest row.
+   * @param latest the stock now stored
+   * @return the fetch spy
+   */
+  const guardStock = (latest: number) => stubApi({ // replaces the stub; the list stays loaded
+    picture: () => Response.json({}, { status: 500 }), // unused
+    changes: (_url, init) => JSON.parse(String(init?.body)).changes.find((change: { id: string }) => change.id === 'knot-tying').stock.from === latest // the guard reads the stock the request says it saw
+      ? Response.json({ items: [{ ...rows[2], stock: 9 }] }) // the guard passed: the stored stock is overwritten
+      : Response.json({ error: 'conflict', items: [{ ...rows[2], stock: latest }], deletedIds: [] }, { status: 409 }), // a stale `from` is refused
+  })
+
+  /** Chooses a file in the open sheet, presses Save picture and waits for the picture's conflict note. */
+  async function savePictureInSheet() { // the picture save of an already open sheet
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement // the hidden input
+    fireEvent.change(input, { target: { files: [new File(['x'], 'photo.png', { type: 'image/png' })] } }) // choose a file
+    fireEvent.click(await screen.findByRole('button', { name: 'Save picture' })) // save it
+    expect(await screen.findByText('Picture not saved: this item changed. Choose it again to retry.')).toBeInTheDocument() // the picture's own note: the row moved
+  }
+
+  /**
+   * Types a stock in the open sheet's stepper.
+   * @param value the stock to commit
+   */
+  function typeStockInSheet(value: string) { // sets the stepper without pressing Done
+    const input = screen.getByRole('textbox', { name: 'Stock of Knot Tying' }) // the number field
+    fireEvent.change(input, { target: { value } }) // type
+    fireEvent.blur(input) // commit
+  }
+
+  it('shows the latest stock and a note after a picture conflict, and a stock stepped then is guarded by it', async () => { // the sheet follows an untouched field
+    // catches: a stepper that keeps showing the old stock after the row moved, or a changed stock guarded by something else
+    const spy = await openSheetAfterPictureConflict({ stock: 5 }) // the stock moved from 12 to 5
+    expect(screen.getAllByText('This item was updated.')).toHaveLength(1) // one note says the item moved
+    expect(within(screen.getByRole('dialog')).queryByText('This item has been updated.')).not.toBeInTheDocument() // the picture line says only that the picture was not saved
+    expect(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })).toHaveValue('5') // the untouched stock follows the row
+    typeStockInSheet('9') // the admin's own stock
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // into the pending list
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // one change
+    await screen.findByText('Saved 1 change.') // saved
+    expect(postBodies(spy)[0].changes[0].stock).toEqual({ from: 5, to: 9 }) // the stock the admin saw
+  })
+
+  it('keeps a stock changed before the picture conflict, and its stale `from` meets the 409 with the edit still pending', async () => { // the admin touched it first
+    // catches: a stock changed on old values saved over another admin's newer stock without the conflict note
+    stubApi({ picture: () => Response.json({ error: 'conflict', items: [{ ...knotWithPicture, stock: 5 }], deletedIds: [] }, { status: 409 }) }) // the picture will conflict
+    await openScreen(deps) // the list
+    openSheet('Knot Tying') // the sheet, stock 12
+    typeStockInSheet('9') // the admin changes the stock first
+    await savePictureInSheet() // then the picture save reveals stock 5
+    expect(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })).toHaveValue('9') // the admin's value stays
+    const spy = guardStock(5) // the Worker guards like the real one
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // into the pending list
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // one change
+    expect(await screen.findByText(/^Some items changed since you opened this page/)).toBeInTheDocument() // the conflict note
+    expect(postBodies(spy)[0].changes[0].stock).toEqual({ from: 12, to: 9 }) // what the admin saw when they changed it
+    expect(screen.getByRole('button', { name: 'Save (1 change)' })).toBeInTheDocument() // the 9 is still pending
+    expect(screen.getAllByText('Latest: Knot Tying · Honors · Recreation · RM 4.00 · Active · 5 in stock').length).toBeGreaterThan(0) // the row shows the latest stock
+  })
+
+  it('counts a stock typed but not yet committed as changed, so a row move during typing leaves its guard at the stock seen', async () => { // the typing gap
+    // catches: a typed stock that follows the row to 5 while the field still shows 9, so Done saves {from: 5, to: 9} with no 409
+    let release: (response: Response) => void = () => undefined // answers the picture save
+    let asked = false // the picture request has reached the Worker
+    stubApi({ picture: () => new Promise<Response>((resolve) => { asked = true; release = resolve }) }) // the picture save is in flight
+    await openScreen(deps) // the list
+    openSheet('Knot Tying') // the sheet, stock 12
+    const file = document.querySelector('input[type="file"]') as HTMLInputElement // the hidden input
+    fireEvent.change(file, { target: { files: [new File(['x'], 'photo.png', { type: 'image/png' })] } }) // choose a file
+    fireEvent.click(await screen.findByRole('button', { name: 'Save picture' })) // the save starts
+    await waitFor(() => expect(asked).toBe(true)) // the save is in flight
+    fireEvent.change(screen.getByRole('textbox', { name: 'Stock of Knot Tying' }), { target: { value: '9' } }) // the admin types 9 and has not left the field
+    await act(async () => release(Response.json({ error: 'conflict', items: [{ ...knotWithPicture, stock: 5 }], deletedIds: [] }, { status: 409 }))) // the answer reveals stock 5
+    expect(await screen.findByText('This item was updated.')).toBeInTheDocument() // the sheet saw the row move
+    const spy = guardStock(5) // the Worker guards like the real one
+    fireEvent.blur(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })) // the typed 9 commits
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // into the pending list
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1 change)' })) // one change
+    expect(await screen.findByText(/^Some items changed since you opened this page/)).toBeInTheDocument() // the conflict note
+    expect(postBodies(spy)[0].changes[0].stock).toEqual({ from: 12, to: 9 }) // what the admin saw
+    expect(screen.getByRole('button', { name: 'Save (1 change)' })).toBeInTheDocument() // the 9 is still pending
+  })
+
+  it('follows an untouched stock when the row already has a pending edit, and guards it by the stock seen', async () => { // a status flip is pending
+    // catches: a pending snapshot that moves to the latest stock under a sheet edit, so the stock saves with no 409
+    stubApi({ picture: () => Response.json({ error: 'conflict', items: [{ ...knotWithPicture, stock: 5 }], deletedIds: [] }, { status: 409 }) }) // the picture will conflict
+    await openScreen(deps) // the list
+    hideKnot() // a pending status flip
+    await uploadForKnot() // the sheet opens, the picture save reveals stock 5
+    expect(await screen.findByText('This item was updated.')).toBeInTheDocument() // the sheet says so
+    expect(screen.getByRole('textbox', { name: 'Stock of Knot Tying' })).toHaveValue('5') // the untouched stock follows
+    const spy = guardStock(5) // the Worker guards like the real one
+    typeStockInSheet('9') // the admin's stock
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // into the pending list
+    fireEvent.click(screen.getByRole('button', { name: 'Save (2 changes)' })) // the flip and the stock
+    await screen.findByText('Saved 2 changes.') // saved
+    expect(postBodies(spy)[0].changes[0].stock).toEqual({ from: 5, to: 9 }) // the stock the admin saw
+  })
+
+  it('answers a stock changed first on a row with a pending edit with the 409, and keeps both edits pending', async () => { // the pending-row order
+    // catches: a pending row whose snapshot moved to stock 5 under the admin's change, so the 9 saves silently
+    stubApi({ picture: () => Response.json({ error: 'conflict', items: [{ ...knotWithPicture, stock: 5 }], deletedIds: [] }, { status: 409 }) }) // the picture will conflict
+    await openScreen(deps) // the list
+    hideKnot() // a pending status flip
+    openSheet('Knot Tying') // the sheet, stock 12
+    typeStockInSheet('9') // the admin changes the stock first
+    await savePictureInSheet() // then the picture save reveals stock 5
+    const spy = guardStock(5) // the Worker guards like the real one
+    fireEvent.click(screen.getByRole('button', { name: 'Done' })) // into the pending list
+    fireEvent.click(screen.getByRole('button', { name: 'Save (2 changes)' })) // the flip and the stock
+    expect(await screen.findByText(/^Some items changed since you opened this page/)).toBeInTheDocument() // the conflict note
+    expect(postBodies(spy)[0].changes[0].stock).toEqual({ from: 12, to: 9 }) // what the admin saw
+    expect(screen.getByRole('button', { name: 'Save (2 changes)' })).toBeInTheDocument() // both edits are still pending
+  })
+
   it('shows the existing signed-out note when the session has ended', async () => {
     // Catches an expired session that reads as a plain failure.
     stubApi({ picture: () => Response.json({}, { status: 403 }) })
@@ -1271,14 +1424,14 @@ describe('picture upload', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('applies the current row on a conflict and says the item was updated', async () => {
+  it('applies the current row on a conflict and says the picture was not saved', async () => { // the stored picture shows
     // Catches a refused upload that leaves the sheet showing the old picture.
     stubApi({
       picture: () => Response.json({ error: 'conflict', items: [knotWithPicture], deletedIds: [] }, { status: 409 }),
     })
     await openScreen(deps)
     await uploadForKnot()
-    expect(await screen.findByText('This item has been updated.')).toBeInTheDocument()
+    expect(await screen.findByText('Picture not saved: this item changed. Choose it again to retry.')).toBeInTheDocument() // the picture line
     expect(document.querySelector('dialog img')).toHaveAttribute('src', '/pictures/items/knot-tying-1a2b3c4d.webp')
   })
 })
@@ -1355,7 +1508,7 @@ describe('picture upload interruptions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save picture' }))
     await screen.findByRole('alert')
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByText('This item has been updated.')).toBeInTheDocument()
+    expect(await screen.findByText('Picture not saved: this item changed. Choose it again to retry.')).toBeInTheDocument() // the picture line
     expect(document.querySelector('dialog img')).toHaveAttribute('src', '/pictures/items/knot-tying-1a2b3c4d.webp')
     expect(String((spy.mock.calls.filter(([url]) => String(url).startsWith('/api/items/picture')).at(-1) as unknown[])[0])).toBe('/api/items/picture?id=knot-tying&seen=') // the retry still names the key the admin saw
   })
@@ -1393,7 +1546,7 @@ describe('read-only rows and the Edit button', () => { // the rows and the sheet
     stubApi() // the default four items
     await openScreen() // the Items screen with its rows loaded
     expect(screen.queryAllByRole('group', { name: /^Stock of / })).toHaveLength(0) // no row carries a stepper
-    expect(screen.getAllByRole('button', { name: /^Edit / })).toHaveLength(4) // one pencil per row
+    expect(screen.getAllByRole('button', { name: /^Edit / })).toHaveLength(4) // one Edit button per row
     expect(screen.queryByRole('button', { name: 'Knot Tying' })).toBeNull() // the name is text, not a control
     expect(screen.getByText('12 in stock')).toBeInTheDocument() // the stock reads as text
   })
@@ -1402,15 +1555,15 @@ describe('read-only rows and the Edit button', () => { // the rows and the sheet
     // catches: focus lost to the page top after the sheet closes
     stubApi() // the default four items
     await openScreen() // the Items screen with its rows loaded
-    const edit = screen.getByRole('button', { name: 'Edit Knot Tying' }) // Knot Tying's pencil
+    const edit = screen.getByRole('button', { name: 'Edit Knot Tying' }) // Knot Tying's Edit button
     edit.focus() // what a keyboard or tap does before pressing
     fireEvent.click(edit) // open the sheet
     expect(screen.getByRole('heading', { name: 'Edit item' })).toBeInTheDocument() // the sheet opened
     fireEvent.click(screen.getByRole('button', { name: 'Close' })) // close it with the button
-    expect(edit).toHaveFocus() // Close returned focus to the pencil
+    expect(edit).toHaveFocus() // Close returned focus to the Edit button
     fireEvent.click(edit) // open the sheet again
     fireEvent(screen.getByRole('dialog'), new Event('close')) // what Escape does to a dialog
-    expect(edit).toHaveFocus() // Escape returned focus to the pencil too
+    expect(edit).toHaveFocus() // Escape returned focus to the Edit button too
   })
 
   it('shows a sheet stock edit on the row as Changed and saves it as one stock pair', async () => { // rows and the Edit button

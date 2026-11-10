@@ -6,7 +6,7 @@ export type Item = {
   id: string
   // Display name, e.g. "Knot Tying".
   name: string
-  // Category it belongs to, e.g. "Nature".
+  // Category it belongs to, e.g. "Honors".
   category: string
   // Subcategory name within the category, e.g. "Nature" under Honors, or null for none.
   subcategory: string | null
